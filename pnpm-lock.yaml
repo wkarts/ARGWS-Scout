@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  deepmerge-ts: ^8.0.0
+
 importers:
   .:
     dependencies:
@@ -57,8 +60,8 @@ importers:
         specifier: ^13.0.1
         version: 13.1.1
       "@fastify/jwt":
-        specifier: ^9.1.0
-        version: 9.1.0
+        specifier: ^10.2.2
+        version: 10.2.2
       "@fastify/rate-limit":
         specifier: ^10.3.0
         version: 10.3.0
@@ -979,10 +982,10 @@ packages:
         integrity: sha512-bSat5DTq8geASv8G6P0KW1UbltZ+xGD/zyd9S72pT7ogAHehcsWL85GdjMRCjDsExJvaEvgEZ52qU/2HXirVCw==,
       }
 
-  "@fastify/jwt@9.1.0":
+  "@fastify/jwt@10.2.2":
     resolution:
       {
-        integrity: sha512-CiGHCnS5cPMdb004c70sUWhQTfzrJHAeTywt7nVw6dAiI0z1o4WRvU94xfijhkaId4bIxTCOjFgn4sU+Gvk43w==,
+        integrity: sha512-UOYY5db2ttuWk2FcN5L6rawE0OFa4+QRJdsYEiHCBmf1GFLC9/k73f/mmv2dxIhS0b/02/62T0Hs6sk+w18Tyg==,
       }
 
   "@fastify/merge-json-schemas@0.2.1":
@@ -1942,12 +1945,12 @@ packages:
       }
     engines: { node: ">=6" }
 
-  deepmerge-ts@7.1.5:
+  deepmerge-ts@8.0.2:
     resolution:
       {
-        integrity: sha512-HOJkrhaYsweh+W+e74Yn7YStZOilkoPb6fycpwNLKzSPtruFs48nYis0zy5yJz1+ktUhHxoRDJ27RQAWLIJVJw==,
+        integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==,
       }
-    engines: { node: ">=16.0.0" }
+    engines: { node: ">=16.9.0" }
 
   defu@6.1.7:
     resolution:
@@ -2137,10 +2140,10 @@ packages:
         integrity: sha512-eRSayARSbbwlBjpP4vnTTIRD5QPcIrmihPxDeN1DtKnHPg66UuJLx+8hlK1kaFdjvzyQ/dzALoi4vwAQ+T+iZA==,
       }
 
-  fast-jwt@5.0.6:
+  fast-jwt@6.3.3:
     resolution:
       {
-        integrity: sha512-LPE7OCGUl11q3ZgW681cEU2d0d2JZ37hhJAmetCgNyW8waVaJVZXhyFF6U2so1Iim58Yc7pfxJe2P7MNetQH2g==,
+        integrity: sha512-pQDXx7IHeZT4jSmpE9o80RrBqfrG4fPrl8anazSM5vErIdK1iCc13z/EWX+H0j7liWSRnwTpHswIKMeLYGAckw==,
       }
     engines: { node: ">=20" }
 
@@ -3718,12 +3721,12 @@ snapshots:
       fastify-plugin: 6.0.0
       helmet: 8.3.0
 
-  "@fastify/jwt@9.1.0":
+  "@fastify/jwt@10.2.2":
     dependencies:
       "@fastify/error": 4.2.0
       "@lukeed/ms": 2.0.2
-      fast-jwt: 5.0.6
-      fastify-plugin: 5.1.0
+      fast-jwt: 6.3.3
+      fastify-plugin: 6.0.0
       steed: 1.1.3
 
   "@fastify/merge-json-schemas@0.2.1":
@@ -3801,7 +3804,7 @@ snapshots:
   "@prisma/config@6.19.3":
     dependencies:
       c12: 3.1.0
-      deepmerge-ts: 7.1.5
+      deepmerge-ts: 8.0.2
       effect: 3.21.0
       empathic: 2.0.0
     transitivePeerDependencies:
@@ -4278,7 +4281,7 @@ snapshots:
 
   deep-eql@5.0.2: {}
 
-  deepmerge-ts@7.1.5: {}
+  deepmerge-ts@8.0.2: {}
 
   defu@6.1.7: {}
 
@@ -4421,12 +4424,13 @@ snapshots:
       json-schema-ref-resolver: 3.0.0
       rfdc: 1.4.1
 
-  fast-jwt@5.0.6:
+  fast-jwt@6.3.3:
     dependencies:
       "@lukeed/ms": 2.0.2
       asn1.js: 5.4.1
       ecdsa-sig-formatter: 1.0.11
       mnemonist: 0.40.5
+      safe-regex2: 5.1.1
 
   fast-querystring@1.1.2:
     dependencies:

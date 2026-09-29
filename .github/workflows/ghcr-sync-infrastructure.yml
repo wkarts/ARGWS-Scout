@@ -1,6 +1,10 @@
 name: GHCR infrastructure images
 on:
   workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/ghcr-sync-infrastructure.yml
   schedule:
     - cron: "17 4 * * 1"
 permissions:
@@ -13,8 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - source: docker.io/library/postgres:17.11-alpine3.233.23
-            target: argws-scout-postgres:17.11-alpine3.233.233.23
+          - source: docker.io/library/postgres:17.11-alpine3.23
+            target: argws-scout-postgres:17.11-alpine3.23
           - source: docker.io/library/redis:7.4.9-alpine
             target: argws-scout-redis:7.4.9-alpine
           - source: docker.io/library/rabbitmq:4.3.6-management-alpine

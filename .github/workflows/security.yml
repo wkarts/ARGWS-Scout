@@ -10,7 +10,6 @@ jobs:
   codeql:
     permissions:
       contents: read
-      security-events: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,9 +17,28 @@ jobs:
         with:
           languages: javascript-typescript
       - uses: github/codeql-action/analyze@v3
+        with:
+          output: ${{ runner.temp }}/argws-scout-codeql
+          upload: never
+      - name: Preserve SARIF report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif
+          path: ${{ runner.temp }}/argws-scout-codeql/**/*.sarif
+          if-no-files-found: error
+          retention-days: 14
   dependencies:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high

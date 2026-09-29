@@ -15,27 +15,41 @@ jobs:
         with:
           fetch-depth: 0
           ref: "${{ github.event.workflow_run.head_sha }}"
-      - name: Validate stable version and packages
+      - name: Validate version and workspace contract
         id: version
         shell: bash
         run: |
           set -euo pipefail
           version="$(tr -d '\r\n' < VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "main must use stable SemVer, got $version" >&2; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || { echo "Unsupported release SemVer: $version" >&2; exit 1; }
           for manifest in package.json apps/*/package.json packages/*/package.json; do
             actual="$(node -p "JSON.parse(require('fs').readFileSync('$manifest', 'utf8')).version")"
             [[ "$actual" == "$version" ]] || { echo "$manifest has $actual; expected $version" >&2; exit 1; }
           done
           echo "value=$version" >> "$GITHUB_OUTPUT"
-      - name: Create Git tag after image publication
+      - name: Create release after image publication
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          RELEASE_VERSION: "${{ steps.version.outputs.value }}"
+          RELEASE_COMMIT: "${{ github.event.workflow_run.head_sha }}"
+        shell: bash
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v$RELEASE_VERSION" >/dev/null 2>&1; then
-            echo "v$RELEASE_VERSION already released."
+          set -euo pipefail
+          release_tag="v$RELEASE_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$release_tag" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/tags/$release_tag:refs/tags/$release_tag"
+            tagged_commit="$(git rev-parse "$release_tag^{commit}")"
+            [[ "$tagged_commit" == "$RELEASE_COMMIT" ]] || { echo "$release_tag already points at $tagged_commit, expected $RELEASE_COMMIT." >&2; exit 1; }
+          else
+            git tag -a "$release_tag" -m "ARGWS Scout $release_tag"
+            git push origin "refs/tags/$release_tag"
+          fi
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            echo "Release $release_tag already exists."
             exit 0
           fi
-          git tag "v$RELEASE_VERSION"
-          git push origin "v$RELEASE_VERSION"
-          gh release create "v$RELEASE_VERSION" --title "ARGWS Scout v$RELEASE_VERSION" --generate-notes
+          release_args=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "$release_tag" --title "ARGWS Scout $release_tag" --generate-notes "${release_args[@]}"

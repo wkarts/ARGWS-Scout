@@ -40,8 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/$owner/argws-scout-${{ matrix.component }}"
           branch="${{ github.event.workflow_run.head_branch }}"
+          version="$(tr -d '\r\n' < VERSION)"
           components=("${{ matrix.component }}")
           if [[ "${{ matrix.component }}" == runtime ]]; then
             components=(runtime api migrate dispatcher worker scheduler webhook-worker)
@@ -56,10 +56,12 @@ jobs:
               image="ghcr.io/$owner/argws-scout-$component"
               if [[ "$branch" == develop ]]; then
                 echo "$image:develop"
-              else
-                version="$(tr -d '\r\n' < VERSION)"
                 echo "$image:$version"
-                echo "$image:stable"
+              else
+                echo "$image:$version"
+                if [[ "$version" != *-* ]]; then
+                  echo "$image:stable"
+                fi
               fi
             done
             echo 'TAGS'
@@ -72,6 +74,35 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for pinned GHCR base images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          images=(
+            "ghcr.io/$owner/argws-scout-postgres:17.11-alpine3.23"
+            "ghcr.io/$owner/argws-scout-redis:7.4.9-alpine"
+            "ghcr.io/$owner/argws-scout-rabbitmq:4.3.6-management-alpine"
+            "ghcr.io/$owner/argws-scout-garage:v2.4.1"
+            "ghcr.io/$owner/argws-scout-node:24.21.0-bookworm-slim"
+            "ghcr.io/$owner/argws-scout-nginx:1.30.5-alpine"
+            "ghcr.io/$owner/argws-scout-playwright:v1.63.0-noble"
+            "ghcr.io/$owner/argws-scout-alpine:3.23"
+          )
+          for image in "${images[@]}"; do
+            ready=false
+            for attempt in {1..40}; do
+              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+                ready=true
+                break
+              fi
+              sleep 15
+            done
+            if [[ "$ready" != true ]]; then
+              echo "Pinned GHCR base image is unavailable: $image" >&2
+              exit 1
+            fi
+          done
       - name: Build and publish ${{ matrix.component }}
         uses: docker/build-push-action@v6
         with:

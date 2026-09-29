@@ -90,12 +90,21 @@ jobs:
               mounts = model["services"][name].get("volumes", [])
               assert any(mount.get("type") == "bind" and pathlib.Path(mount.get("source", "")).is_relative_to(folder) and mount.get("target") == target for mount in mounts), f"{folder}: {name} must use a relative bind mount"
           assert model["services"]["garage-init"].get("network_mode") == "service:garage", f"{folder}: Garage bootstrap must stay inside the private stack network"
-          print(f"{folder}: one loopback port and five relative persistent bind mounts")
+          env = dict(line.split("=", 1) for line in (folder / ".env.example").read_text().splitlines() if line and not line.startswith("#") and "=" in line)
+          release_version = pathlib.Path("VERSION").read_text().strip()
+          channel = folder.name
+          expected_tag = ("stable" if "-alpha." not in release_version else release_version) if channel == "production" else "develop"
+          assert env.get("SCOUT_VERSION") == release_version, f"{folder}: SCOUT_VERSION must match VERSION"
+          assert env.get("SCOUT_TAG") == expected_tag, f"{folder}: SCOUT_TAG must be {expected_tag}"
+          application_images = {"ARGWS_SCOUT_API_IMAGE", "ARGWS_SCOUT_MIGRATION_IMAGE", "ARGWS_SCOUT_DISPATCHER_IMAGE", "ARGWS_SCOUT_WORKER_IMAGE", "ARGWS_SCOUT_SCHEDULER_IMAGE", "ARGWS_SCOUT_WEBHOOK_WORKER_IMAGE", "ARGWS_SCOUT_MANAGER_IMAGE", "ARGWS_SCOUT_DOCS_IMAGE", "ARGWS_SCOUT_BROWSER_WORKER_IMAGE", "ARGWS_SCOUT_GARAGE_INIT_IMAGE"}
+          image_values = [env[key] for key in application_images]
+          assert all(value.endswith(f":{expected_tag}") for value in image_values), f"{folder}: application image tags must match {expected_tag}"
+          print(f"{folder}: one loopback port, five relative persistent binds, and {expected_tag} image tags")
           PY
             done
           done
-      - name: Require stable versions on main
+      - name: Require a releasable version on main
         if: github.event_name == 'push' && github.ref_name == 'main'
         run: |
           version="$(tr -d '\r\n' < VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "main must use stable SemVer before images are published." >&2; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || { echo "main must use a stable or alpha SemVer version before images are published." >&2; exit 1; }

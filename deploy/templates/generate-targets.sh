@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+version="$(tr -d '\r\n' < "$root/VERSION")"
+if [[ "$version" =~ -alpha\.[0-9]+$ ]]; then
+  release_tag="$version"
+else
+  release_tag="stable"
+fi
 for target in docker dockge cloudpanel portainer; do
   for channel in develop production; do
     destination="$root/deploy/$target/$channel"
@@ -13,7 +19,15 @@ for target in docker dockge cloudpanel portainer; do
       fi
     done
     if [ "$channel" = production ]; then
-      sed -i 's/^SCOUT_ENV=develop$/SCOUT_ENV=production/;s/^SCOUT_VERSION=0.2.0-alpha.2$/SCOUT_VERSION=0.2.0/;s/^SCOUT_TAG=develop$/SCOUT_TAG=stable/;s/:develop$/:stable/;s|^SCOUT_PUBLIC_URL=.*$|SCOUT_PUBLIC_URL=https://scout.example.com|;s/^SCOUT_COOKIE_SECURE=false$/SCOUT_COOKIE_SECURE=true/;s/^SCOUT_ALLOW_HTTP=true$/SCOUT_ALLOW_HTTP=false/' "$destination/.env.example"
+      sed -i \
+        -e 's/^SCOUT_ENV=develop$/SCOUT_ENV=production/' \
+        -e "s/^SCOUT_VERSION=.*/SCOUT_VERSION=$version/" \
+        -e "s/^SCOUT_TAG=.*/SCOUT_TAG=$release_tag/" \
+        -e "s/:develop$/:$release_tag/" \
+        -e 's|^SCOUT_PUBLIC_URL=.*$|SCOUT_PUBLIC_URL=https://scout.example.com|' \
+        -e 's/^SCOUT_COOKIE_SECURE=false$/SCOUT_COOKIE_SECURE=true/' \
+        -e 's/^SCOUT_ALLOW_HTTP=true$/SCOUT_ALLOW_HTTP=false/' \
+        "$destination/.env.example"
     fi
     chmod 750 "$destination"/*.sh "$destination/prepare-env.py"
   done
