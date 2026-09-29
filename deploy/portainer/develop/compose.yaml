@@ -1,0 +1,264 @@
+name: argws-scout-${SCOUT_ENV:-develop}
+
+services:
+  postgres:
+    image: ${ARGWS_SCOUT_POSTGRES_IMAGE:?Define GHCR Postgres image}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-scout}
+      POSTGRES_USER: ${POSTGRES_USER:-scout}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD}
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    logging: &default-logging
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+    networks: [scout]
+
+  redis:
+    image: ${ARGWS_SCOUT_REDIS_IMAGE:?Define GHCR Redis image}
+    restart: unless-stopped
+    command:
+      [
+        redis-server,
+        --appendonly,
+        "yes",
+        --requirepass,
+        "${REDIS_PASSWORD:?Generate REDIS_PASSWORD}",
+      ]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate REDIS_PASSWORD}
+    volumes:
+      - ./volumes/redis:/data
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+    networks: [scout]
+
+  rabbitmq:
+    image: ${ARGWS_SCOUT_RABBITMQ_IMAGE:?Define GHCR RabbitMQ image}
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-scout}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Generate RABBITMQ_PASSWORD}
+    volumes:
+      - ./volumes/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+    logging: *default-logging
+    networks: [scout]
+
+  garage:
+    image: ${ARGWS_SCOUT_GARAGE_IMAGE:?Define GHCR Garage image}
+    restart: unless-stopped
+    entrypoint: [/garage]
+    command: [-c, /etc/garage.toml, server, --single-node]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - ./volumes/garage/meta:/var/lib/garage/meta
+      - ./volumes/garage/data:/var/lib/garage/data
+    healthcheck:
+      test: [CMD, /garage, -c, /etc/garage.toml, status]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    logging: *default-logging
+    networks: [scout]
+
+  garage-init:
+    image: ${ARGWS_SCOUT_GARAGE_INIT_IMAGE:?Define GHCR Garage bootstrap image}
+    restart: "no"
+    network_mode: "service:garage"
+    depends_on:
+      garage: { condition: service_healthy }
+    entrypoint: [/bin/sh, -ec]
+    command: >-
+      if ! garage key info "$${S3_ACCESS_KEY_ID}" >/dev/null 2>&1; then
+        garage key import --yes -n argws-scout "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}";
+      fi;
+      if ! garage bucket info "$${S3_BUCKET}" >/dev/null 2>&1; then
+        garage bucket create "$${S3_BUCKET}";
+      fi;
+      garage bucket allow --read --write "$${S3_BUCKET}" --key "$${S3_ACCESS_KEY_ID}"
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-scout-artifacts}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Generate S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+    logging: *default-logging
+
+  migrate:
+    image: ${ARGWS_SCOUT_MIGRATION_IMAGE:?Define GHCR migration image}
+    restart: "no"
+    command: [sh, -lc, "pnpm db:generate && pnpm db:migrate"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+    networks: [scout]
+
+  api:
+    image: ${ARGWS_SCOUT_API_IMAGE:?Define GHCR API image}
+    restart: unless-stopped
+    command: [pnpm, --filter, "@argws/scout-api", start]
+    env_file: [.env]
+    environment: &app-environment
+      NODE_ENV: production
+      SCOUT_ENV: ${SCOUT_ENV:-develop}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.2.0-alpha.2}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      S3_ENDPOINT: http://garage:3900
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-scout-artifacts}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      SCOUT_CORS_ORIGINS: ${SCOUT_PUBLIC_URL:?Set SCOUT_PUBLIC_URL}
+      SCOUT_COOKIE_SECURE: ${SCOUT_COOKIE_SECURE:-true}
+      SCOUT_ALLOW_HTTP: ${SCOUT_ALLOW_HTTP:-false}
+      SCOUT_TRUST_PROXY_HOPS: ${SCOUT_TRUST_PROXY_HOPS:-1}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      garage-init: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+    logging: *default-logging
+    networks: [scout]
+
+  manager:
+    image: ${ARGWS_SCOUT_MANAGER_IMAGE:?Define GHCR Manager image}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SCOUT_MANAGER_PORT:-8080}:80"
+    depends_on:
+      api: { condition: service_healthy }
+      docs: { condition: service_started }
+    healthcheck:
+      test: [CMD-SHELL, "wget -qO- http://127.0.0.1/health >/dev/null"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks: [scout]
+
+  docs:
+    image: ${ARGWS_SCOUT_DOCS_IMAGE:?Define GHCR Docs image}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [scout]
+
+  dispatcher:
+    image: ${ARGWS_SCOUT_DISPATCHER_IMAGE:?Define GHCR dispatcher image}
+    restart: unless-stopped
+    command: [pnpm, --filter, "@argws/scout-dispatcher", start]
+    env_file: [.env]
+    environment:
+      <<: *app-environment
+    depends_on:
+      api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    logging: *default-logging
+    networks: [scout]
+
+  worker:
+    image: ${ARGWS_SCOUT_WORKER_IMAGE:?Define GHCR HTTP worker image}
+    restart: unless-stopped
+    command: [pnpm, --filter, "@argws/scout-worker", start]
+    env_file: [.env]
+    environment:
+      <<: *app-environment
+    depends_on:
+      api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      garage-init: { condition: service_completed_successfully }
+    logging: *default-logging
+    networks: [scout]
+
+  browser-worker:
+    image: ${ARGWS_SCOUT_BROWSER_WORKER_IMAGE:?Define GHCR browser worker image}
+    restart: unless-stopped
+    init: true
+    shm_size: 1gb
+    mem_limit: 2g
+    cpus: 2
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    tmpfs: [/tmp:rw, noexec, nosuid, size=512m]
+    command: [pnpm, --filter, "@argws/scout-browser-worker", start]
+    env_file: [.env]
+    environment:
+      <<: *app-environment
+      SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}
+    depends_on:
+      api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      garage-init: { condition: service_completed_successfully }
+    logging: *default-logging
+    networks: [scout]
+
+  scheduler:
+    image: ${ARGWS_SCOUT_SCHEDULER_IMAGE:?Define GHCR scheduler image}
+    restart: unless-stopped
+    command: [pnpm, --filter, "@argws/scout-scheduler", start]
+    env_file: [.env]
+    environment:
+      <<: *app-environment
+    depends_on:
+      api: { condition: service_healthy }
+    logging: *default-logging
+    networks: [scout]
+
+  webhook-worker:
+    image: ${ARGWS_SCOUT_WEBHOOK_WORKER_IMAGE:?Define GHCR webhook worker image}
+    restart: unless-stopped
+    command: [pnpm, --filter, "@argws/scout-webhook-worker", start]
+    env_file: [.env]
+    environment:
+      <<: *app-environment
+    depends_on:
+      api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    logging: *default-logging
+    networks: [scout]
+
+networks:
+  scout:
+    name: argws-scout-${SCOUT_ENV:-develop}-network
+    driver: bridge

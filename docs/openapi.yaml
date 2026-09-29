@@ -1,0 +1,508 @@
+openapi: 3.1.0
+info:
+  title: ARGWS Scout API
+  version: 0.2.0-alpha.2
+  description: REST API independente para tenants, instâncias, fontes, jobs, tokens e webhooks.
+servers:
+  - url: /v1
+security:
+  - ScoutSession: []
+  - ScoutToken: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: Autentica usuário ou inicia desafio MFA.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, writeOnly: true }
+                tenantSlug: { type: string }
+      responses:
+        "200":
+          description: Sessão ou indicação MFA_REQUIRED/MFA_SETUP_REQUIRED.
+        "401":
+          description: Credenciais inválidas.
+  /auth/mfa/setup:
+    post:
+      security: [{ PreAuth: [] }]
+      summary: Cria segredo TOTP pendente e QR de configuração.
+      responses:
+        "200": { description: QR Code e segredo manual. }
+  /auth/mfa/confirm:
+    post:
+      security: [{ PreAuth: [] }]
+      summary: Confirma TOTP e completa configuração obrigatória.
+      requestBody:
+        $ref: "#/components/requestBodies/MfaCode"
+      responses:
+        "200": { description: MFA ativada e sessão criada. }
+  /auth/mfa/verify:
+    post:
+      security: [{ PreAuth: [] }]
+      summary: Confirma código TOTP durante login.
+      requestBody:
+        $ref: "#/components/requestBodies/MfaCode"
+      responses:
+        "200": { description: Sessão criada. }
+  /auth/refresh:
+    post:
+      security: []
+      summary: Rotaciona sessão usando cookie HTTP-only.
+      responses:
+        "200": { description: Sessão renovada. }
+        "401": { description: Refresh expirado ou revogado. }
+  /auth/logout:
+    post:
+      security: []
+      summary: Revoga refresh atual e limpa cookies.
+      responses:
+        "204": { description: Sessão encerrada. }
+  /auth/me:
+    get:
+      summary: Retorna usuário, perfil, role e tenant ativo.
+      responses:
+        "200": { description: Identidade autenticada. }
+  /profile:
+    patch:
+      summary: Atualiza nome e dados não sensíveis do perfil.
+      requestBody:
+        $ref: "#/components/requestBodies/ProfileUpdate"
+      responses:
+        "200": { description: Perfil atualizado. }
+  /overview:
+    get:
+      summary: Retorna contadores e jobs recentes do tenant.
+      responses:
+        "200": { description: Visão geral. }
+  /instances:
+    get:
+      summary: Lista instâncias ativas do tenant.
+      responses:
+        "200": { description: Lista de instâncias. }
+    post:
+      summary: Cria instância genérica.
+      requestBody:
+        $ref: "#/components/requestBodies/InstanceCreate"
+      responses:
+        "201": { description: Instância criada. }
+  /instances/{instanceId}:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Retorna instância, fontes, jobs recentes e schedules.
+      responses:
+        "200": { description: Instância encontrada. }
+    patch:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Atualiza dados ou desativa instância.
+      responses:
+        "200": { description: Instância atualizada. }
+  /instances/{instanceId}/sources:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Lista fontes.
+      responses:
+        "200": { description: Fontes da instância. }
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Cria fonte HTTP ou Playwright com host allowlist.
+      requestBody:
+        $ref: "#/components/requestBodies/SourceCreate"
+      responses:
+        "201": { description: Fonte criada. }
+  /instances/{instanceId}/jobs:
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Cria job e outbox atomicamente.
+      requestBody:
+        $ref: "#/components/requestBodies/JobCreate"
+      responses:
+        "202": { description: Job aceito para execução. }
+  /jobs:
+    get:
+      summary: Lista jobs recentes; results:read libera conteúdo para tokens.
+      responses:
+        "200": { description: Jobs com cursor. }
+  /jobs/{jobId}:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: jobId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Retorna estado, resultado, source e tentativas.
+      responses:
+        "200": { description: Job encontrado. }
+  /jobs/{jobId}/artifacts/{artifactId}:
+    get:
+      parameters:
+        - {
+            in: path,
+            name: jobId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            in: path,
+            name: artifactId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      summary: Faz stream de artifact após checagem results:read.
+      responses:
+        "200": { description: Bytes do arquivo. }
+  /instances/{instanceId}/tokens:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Lista metadados sem segredo.
+      responses:
+        "200": { description: Tokens ativos. }
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Cria token por escopo; mostra segredo uma vez.
+      requestBody:
+        $ref: "#/components/requestBodies/TokenCreate"
+      responses:
+        "201": { description: Token criado. }
+  /instances/{instanceId}/schedules:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Lista schedules cron.
+      responses:
+        "200": { description: Schedules. }
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Agenda execução recorrente.
+      requestBody:
+        $ref: "#/components/requestBodies/ScheduleCreate"
+      responses:
+        "201": { description: Schedule criado. }
+  /instances/{instanceId}/webhooks:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Lista webhooks sem segredo.
+      responses:
+        "200": { description: Webhooks da instância. }
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: instanceId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Cria endpoint HTTPS para eventos de job.
+      requestBody:
+        $ref: "#/components/requestBodies/WebhookCreate"
+      responses:
+        "201": { description: Segredo de webhook mostrado uma única vez. }
+  /webhooks/{webhookId}/deliveries:
+    get:
+      parameters:
+        [
+          {
+            in: path,
+            name: webhookId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Lista tentativas recentes de entrega.
+      responses:
+        "200": { description: Histórico de deliveries. }
+  /users:
+    get:
+      summary: Lista membros da organização; OWNER e ADMIN.
+      responses:
+        "200": { description: Usuários e papéis do tenant. }
+    post:
+      summary: Adiciona usuário à organização.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 16, writeOnly: true }
+                role: { type: string, enum: [ADMIN, OPERATOR, VIEWER] }
+      responses:
+        "201": { description: Usuário vinculado. }
+  /users/{userId}/mfa/reset:
+    post:
+      parameters:
+        [
+          {
+            in: path,
+            name: userId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      summary: Redefine MFA e revoga sessões do membro; somente OWNER.
+      responses:
+        "204": { description: MFA redefinido e sessões revogadas. }
+  /audit:
+    get:
+      summary: Lista ações administrativas recentes; OWNER e ADMIN.
+      parameters:
+        [
+          {
+            in: query,
+            name: cursor,
+            required: false,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        "200": { description: Página de eventos de auditoria. }
+  /ops/health:
+    get:
+      summary: Sonda dependências, backlog e runtime da API; OWNER e ADMIN.
+      responses:
+        "200":
+          description: Diagnóstico operacional do tenant.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, checkedAt, dependencies, activity, runtime]
+                properties:
+                  status: { type: string, enum: [healthy, degraded] }
+                  checkedAt: { type: string, format: date-time }
+                  dependencies:
+                    {
+                      type: object,
+                      additionalProperties:
+                        { type: string, enum: [ok, unavailable] },
+                    }
+                  activity:
+                    { type: object, additionalProperties: { type: integer } }
+                  runtime: { type: object, additionalProperties: true }
+components:
+  securitySchemes:
+    ScoutSession: { type: apiKey, in: cookie, name: scout_access }
+    ScoutToken: { type: http, scheme: bearer, bearerFormat: Scout API token }
+    PreAuth: { type: http, scheme: bearer, bearerFormat: MFA pre-auth token }
+  requestBodies:
+    MfaCode:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string, pattern: "^[0-9]{6}$" }
+    ProfileUpdate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              profile: { type: object, additionalProperties: true }
+    InstanceCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              slug: { type: string, maxLength: 63 }
+              description: { type: string, maxLength: 500 }
+              metadata: { type: object, additionalProperties: true }
+    SourceCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, engine, url, allowedHosts]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              engine: { type: string, enum: [HTTP, PLAYWRIGHT] }
+              url:
+                {
+                  type: string,
+                  format: uri,
+                  description: "Aceita templates {{input.campo}}.",
+                }
+              allowedHosts:
+                type: array
+                minItems: 1
+                maxItems: 20
+                items: { type: string, format: hostname }
+              selector: { type: string, maxLength: 500 }
+              respectRobots: { type: boolean, default: true }
+              captureScreenshot: { type: boolean, default: false }
+              requestIntervalMs:
+                { type: integer, minimum: 1000, maximum: 300000, default: 5000 }
+    JobCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [sourceId]
+            properties:
+              sourceId: { type: string, format: uuid }
+              input: { type: object, additionalProperties: true }
+    TokenCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, scopes]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              scopes:
+                type: array
+                minItems: 1
+                maxItems: 5
+                items:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        instances:read,
+                        sources:read,
+                        jobs:create,
+                        jobs:read,
+                        results:read,
+                      ],
+                  }
+              expiresAt: { type: string, format: date-time }
+    ScheduleCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [sourceId, name, cron]
+            properties:
+              sourceId: { type: string, format: uuid }
+              name: { type: string, minLength: 2, maxLength: 120 }
+              cron: { type: string, minLength: 9, maxLength: 100 }
+              timezone: { type: string, default: America/Bahia }
+              input: { type: object, additionalProperties: true }
+    WebhookCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, url, events]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              url:
+                {
+                  type: string,
+                  format: uri,
+                  description: "Destino HTTPS público.",
+                }
+              events:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items: { type: string, enum: [job.completed, job.failed] }

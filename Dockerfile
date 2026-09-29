@@ -1,7 +1,11 @@
-FROM alpine:latest
+ARG NODE_BASE=node:24.21.0-bookworm-slim
+FROM ${NODE_BASE}
 
-LABEL org.opencontainers.image.source="https://github.com/wkarts/ARGWS-Scout"
-LABEL org.opencontainers.image.description="Imagem Docker inicial do projeto"
-LABEL org.opencontainers.image.licenses="Proprietary"
-
-CMD ["sh", "-c", "echo Repository preconfigured for GHCR && sleep 5"]
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" NODE_ENV=production
+RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile && pnpm db:generate && chown -R node:node /app
+USER node
+EXPOSE 8080
+CMD ["pnpm", "--filter", "@argws/scout-api", "start"]

@@ -1,34 +1,16 @@
-# Sistema
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-logs/
-
-# Ambiente
+node_modules/
+**/node_modules/
+dist/
+coverage/
 .env
 .env.*
 !.env.example
+.DS_Store
+*.log
+playwright-report/
+test-results/
+*.tsbuildinfo
+.turbo/
 
-# Node/PHP/Python/Rust comuns
-node_modules/
-vendor/
-__pycache__/
-target/
-dist/
-build/
-coverage/
-
-# IDE
-.vscode/
-.idea/
-
-# Docker local
-docker-compose.override.yml
-
-# Temporarios
-tmp/
-temp/
-*.tmp
+**/volumes/
+**/backups/

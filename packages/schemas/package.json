@@ -1,0 +1,15 @@
+{
+  "name": "@argws/scout-schemas",
+  "version": "0.2.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}

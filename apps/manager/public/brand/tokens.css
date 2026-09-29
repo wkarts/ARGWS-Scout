@@ -1,0 +1,16 @@
+:root {
+  --scout-deep-navy: #0e1220;
+  --scout-scout-blue: #2563eb;
+  --scout-sky: #06b6d4;
+  --scout-violet: #8b5cf6;
+  --scout-success: #10b981;
+  --scout-warning: #f59e0b;
+  --scout-danger: #ef4444;
+  --scout-white: #ffffff;
+  --scout-surface: #f7f9fc;
+  --scout-text: #0f172a;
+  --scout-muted: #64748b;
+  --scout-border: #dbe4ef;
+  --scout-font-sans:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
