@@ -1,0 +1,7 @@
+ARG NGINX_BASE=nginx:1.30.5-alpine
+FROM ${NGINX_BASE}
+COPY apps/docs/index.html /usr/share/nginx/html/index.html
+COPY apps/manager/public/brand /usr/share/nginx/html/brand
+COPY docs /usr/share/nginx/html/guides
+COPY docs/openapi.yaml /usr/share/nginx/html/api/openapi.yaml
+EXPOSE 80

@@ -1,0 +1,246 @@
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { Plus, RefreshCw, ScrollText, UsersRound } from "@lucide/vue";
+import { api } from "../api";
+
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  mfaEnabled: boolean;
+  disabledAt: string | null;
+  createdAt: string;
+};
+type AuditRow = {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+const props = defineProps<{ role: string }>();
+const emit = defineEmits<{
+  error: [message: string];
+  notify: [message: string];
+}>();
+const users = ref<UserRow[]>([]);
+const auditRows = ref<AuditRow[]>([]);
+const activeTab = ref<"users" | "audit">("users");
+const busy = ref(false);
+const userForm = ref({ name: "", email: "", password: "", role: "OPERATOR" });
+function prettyDate(value?: string | null) {
+  return value
+    ? new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "—";
+}
+function roleLabel(role: string) {
+  return (
+    {
+      OWNER: "Proprietário",
+      ADMIN: "Administrador",
+      OPERATOR: "Operador",
+      VIEWER: "Leitor",
+    }[role] ?? role
+  );
+}
+async function load() {
+  if (!["OWNER", "ADMIN"].includes(props.role)) return;
+  busy.value = true;
+  try {
+    const [userResponse, auditResponse] = await Promise.all([
+      api<{ data: UserRow[] }>("/users"),
+      api<{ data: AuditRow[] }>("/audit"),
+    ]);
+    users.value = userResponse.data;
+    auditRows.value = auditResponse.data;
+  } catch (error) {
+    emit(
+      "error",
+      error instanceof Error ? error.message : "Falha ao consultar acessos.",
+    );
+  } finally {
+    busy.value = false;
+  }
+}
+async function createUser() {
+  busy.value = true;
+  try {
+    await api("/users", {
+      method: "POST",
+      body: JSON.stringify(userForm.value),
+    });
+    userForm.value = { name: "", email: "", password: "", role: "OPERATOR" };
+    await load();
+    emit("notify", "Usuário adicionado à organização.");
+  } catch (error) {
+    emit(
+      "error",
+      error instanceof Error ? error.message : "Falha ao criar usuário.",
+    );
+  } finally {
+    busy.value = false;
+  }
+}
+async function resetMfa(user: UserRow) {
+  if (!window.confirm("Revogar sessões e redefinir MFA de " + user.email + "?"))
+    return;
+  try {
+    await api("/users/" + user.id + "/mfa/reset", {
+      method: "POST",
+      body: "{}",
+    });
+    await load();
+    emit("notify", "MFA redefinido e sessões revogadas.");
+  } catch (error) {
+    emit(
+      "error",
+      error instanceof Error ? error.message : "Falha ao redefinir MFA.",
+    );
+  }
+}
+onMounted(() => void load());
+</script>
+
+<template>
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <h2>Governança da organização</h2>
+        <p>Identidades, papéis e trilha de ações administrativas.</p>
+      </div>
+      <button class="button subtle" :disabled="busy" @click="load">
+        <RefreshCw :size="15" /> Atualizar
+      </button>
+    </div>
+    <div class="tabs">
+      <button
+        :class="{ active: activeTab === 'users' }"
+        @click="activeTab = 'users'"
+      >
+        <UsersRound :size="15" /> Usuários <span>{{ users.length }}</span>
+      </button>
+      <button
+        :class="{ active: activeTab === 'audit' }"
+        @click="activeTab = 'audit'"
+      >
+        <ScrollText :size="15" /> Auditoria
+      </button>
+    </div>
+    <template v-if="activeTab === 'users'">
+      <form class="access-create" @submit.prevent="createUser">
+        <label
+          >Nome<input
+            v-model="userForm.name"
+            required
+            minlength="2"
+            maxlength="120"
+            placeholder="Nome completo"
+        /></label>
+        <label
+          >E-mail<input
+            v-model="userForm.email"
+            required
+            type="email"
+            placeholder="pessoa@empresa.com"
+        /></label>
+        <label
+          >Senha inicial<input
+            v-model="userForm.password"
+            required
+            type="password"
+            minlength="16"
+            placeholder="Mínimo de 16 caracteres"
+        /></label>
+        <label
+          >Papel<select v-model="userForm.role">
+            <option value="ADMIN">Administrador</option>
+            <option value="OPERATOR">Operador</option>
+            <option value="VIEWER">Leitor</option>
+          </select></label
+        >
+        <button class="button primary" :disabled="busy">
+          <Plus :size="15" /> Adicionar
+        </button>
+      </form>
+      <div v-if="users.length" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>USUÁRIO</th>
+              <th>PAPEL</th>
+              <th>MFA</th>
+              <th>CRIADO EM</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id">
+              <td>
+                <div class="cell-primary">{{ user.name }}</div>
+                <div class="cell-secondary">{{ user.email }}</div>
+              </td>
+              <td>{{ roleLabel(user.role) }}</td>
+              <td>
+                <span
+                  class="status-pill"
+                  :class="user.mfaEnabled ? 'succeeded' : 'running'"
+                  ><i></i>{{ user.mfaEnabled ? "Ativo" : "Pendente" }}</span
+                >
+              </td>
+              <td>{{ prettyDate(user.createdAt) }}</td>
+              <td>
+                <button
+                  v-if="props.role === 'OWNER' && user.mfaEnabled"
+                  class="button outline small-button"
+                  @click="resetMfa(user)"
+                >
+                  Redefinir MFA
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="empty-state compact">
+        <h3>Nenhum usuário adicional</h3>
+        <p>Adicione pessoas com o menor papel necessário para suas tarefas.</p>
+      </div>
+    </template>
+    <div v-else-if="auditRows.length" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>DATA</th>
+            <th>AÇÃO</th>
+            <th>RECURSO</th>
+            <th>IDENTIFICADOR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in auditRows" :key="entry.id">
+            <td>{{ prettyDate(entry.createdAt) }}</td>
+            <td>
+              <code>{{ entry.action }}</code>
+            </td>
+            <td>{{ entry.resourceType }}</td>
+            <td>
+              <code>{{ entry.resourceId ?? "—" }}</code>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div v-else class="empty-state compact">
+      <h3>Sem eventos de auditoria</h3>
+      <p>
+        Criações, alterações administrativas e ações críticas serão registradas
+        aqui.
+      </p>
+    </div>
+  </section>
+</template>

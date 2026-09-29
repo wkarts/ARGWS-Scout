@@ -1,0 +1,101 @@
+name: Quality gates
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Code, database and release contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11-alpine3.23
+        env:
+          POSTGRES_DB: scout
+          POSTGRES_USER: scout
+          POSTGRES_PASSWORD: scout
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U scout -d scout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://scout:scout@localhost:5432/scout?schema=public
+      SCOUT_BOOTSTRAP_ADMIN_EMAIL: admin@example.test
+      SCOUT_BOOTSTRAP_ADMIN_PASSWORD: ci-only-password-that-is-not-used-in-production
+      SCOUT_JWT_SECRET: ci-only-secret-with-enough-bytes-for-testing
+      SCOUT_ENCRYPTION_KEY_BASE64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      POSTGRES_PASSWORD: scout
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Apply migrations and bootstrap test tenant
+        run: pnpm db:migrate && pnpm db:seed
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm format:check
+      - name: Enforce SemVer and workspace version contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$|^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION must be SemVer alpha or stable: $version" >&2; exit 1; }
+          for manifest in package.json apps/*/package.json packages/*/package.json; do
+            actual="$(node -p "JSON.parse(require('fs').readFileSync('$manifest', 'utf8')).version")"
+            [[ "$actual" == "$version" ]] || { echo "$manifest has $actual, expected $version" >&2; exit 1; }
+          done
+          if [[ "${{ github.event_name }}" == pull_request && "${{ github.event.pull_request.base.ref }}" == main && "${{ github.head_ref }}" != develop ]]; then
+            echo "Stable releases must come from a reviewed develop → main pull request." >&2
+            exit 1
+          fi
+          if [[ "${{ github.event_name }}" == push && "${{ github.ref_name }}" == main ]] && git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "Version v$version was already released; bump VERSION before publishing." >&2
+            exit 1
+          fi
+      - name: Validate all deployment targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in docker dockge cloudpanel portainer; do
+            for channel in develop production; do
+              folder="deploy/$target/$channel"
+              cp "$folder/.env.example" "$folder/.env"
+              docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
+              docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
+              python3 - "$folder" /tmp/scout-compose.json <<'PY'
+          import json, pathlib, sys
+          folder, model_path = pathlib.Path(sys.argv[1]).resolve(), pathlib.Path(sys.argv[2])
+          model = json.loads(model_path.read_text())
+          published = [(name, port) for name, service in model["services"].items() for port in service.get("ports", [])]
+          assert len(published) == 1, f"{folder}: expected one published port, got {published}"
+          service, port = published[0]
+          assert service == "manager" and port.get("host_ip") == "127.0.0.1", (folder, service, port)
+          expected_mounts = (("postgres", "/var/lib/postgresql/data"), ("redis", "/data"), ("rabbitmq", "/var/lib/rabbitmq"), ("garage", "/var/lib/garage/meta"), ("garage", "/var/lib/garage/data"))
+          for name, target in expected_mounts:
+              mounts = model["services"][name].get("volumes", [])
+              assert any(mount.get("type") == "bind" and pathlib.Path(mount.get("source", "")).is_relative_to(folder) and mount.get("target") == target for mount in mounts), f"{folder}: {name} must use a relative bind mount"
+          assert model["services"]["garage-init"].get("network_mode") == "service:garage", f"{folder}: Garage bootstrap must stay inside the private stack network"
+          print(f"{folder}: one loopback port and five relative persistent bind mounts")
+          PY
+            done
+          done
+      - name: Require stable versions on main
+        if: github.event_name == 'push' && github.ref_name == 'main'
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "main must use stable SemVer before images are published." >&2; exit 1; }

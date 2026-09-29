@@ -1,0 +1,26 @@
+name: Security
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+permissions:
+  contents: read
+jobs:
+  codeql:
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+  dependencies:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4

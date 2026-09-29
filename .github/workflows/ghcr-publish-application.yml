@@ -1,0 +1,90 @@
+name: GHCR application images
+on:
+  workflow_run:
+    workflows: ["Quality gates"]
+    types: [completed]
+    branches: [develop, main]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: runtime
+            dockerfile: Dockerfile
+            platforms: linux/amd64,linux/arm64
+          - component: manager
+            dockerfile: Dockerfile.manager
+            platforms: linux/amd64,linux/arm64
+          - component: docs
+            dockerfile: Dockerfile.docs
+            platforms: linux/amd64,linux/arm64
+          - component: browser-worker
+            dockerfile: Dockerfile.browser-worker
+            platforms: linux/amd64
+          - component: garage-init
+            dockerfile: Dockerfile.garage-init
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ github.event.workflow_run.head_sha }}"
+      - name: Select channel tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/argws-scout-${{ matrix.component }}"
+          branch="${{ github.event.workflow_run.head_branch }}"
+          components=("${{ matrix.component }}")
+          if [[ "${{ matrix.component }}" == runtime ]]; then
+            components=(runtime api migrate dispatcher worker scheduler webhook-worker)
+          fi
+          if [[ "$branch" != develop && "$branch" != main ]]; then
+            echo "Unsupported source branch: $branch" >&2
+            exit 1
+          fi
+          {
+            echo 'value<<TAGS'
+            for component in "${components[@]}"; do
+              image="ghcr.io/$owner/argws-scout-$component"
+              if [[ "$branch" == develop ]]; then
+                echo "$image:develop"
+              else
+                version="$(tr -d '\r\n' < VERSION)"
+                echo "$image:$version"
+                echo "$image:stable"
+              fi
+            done
+            echo 'TAGS'
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish ${{ matrix.component }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.tags.outputs.value }}
+          build-args: |
+            NODE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-node:24.21.0-bookworm-slim
+            NGINX_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-nginx:1.30.5-alpine
+            PLAYWRIGHT_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-playwright:v1.63.0-noble
+            GARAGE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-garage:v2.4.1
+            TOOLS_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-alpine:3.23
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}

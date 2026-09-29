@@ -1,0 +1,47 @@
+name: GHCR infrastructure images
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+permissions:
+  contents: read
+  packages: write
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - source: docker.io/library/postgres:17.11-alpine3.233.23
+            target: argws-scout-postgres:17.11-alpine3.233.233.23
+          - source: docker.io/library/redis:7.4.9-alpine
+            target: argws-scout-redis:7.4.9-alpine
+          - source: docker.io/library/rabbitmq:4.3.6-management-alpine
+            target: argws-scout-rabbitmq:4.3.6-management-alpine
+          - source: docker.io/dxflrs/garage:v2.4.1
+            target: argws-scout-garage:v2.4.1
+          - source: docker.io/library/node:24.21.0-bookworm-slim
+            target: argws-scout-node:24.21.0-bookworm-slim
+          - source: docker.io/library/nginx:1.30.5-alpine
+            target: argws-scout-nginx:1.30.5-alpine
+          - source: docker.io/library/alpine:3.23
+            target: argws-scout-alpine:3.23
+          - source: mcr.microsoft.com/playwright:v1.63.0-noble
+            target: argws-scout-playwright:v1.63.0-noble
+    steps:
+      - name: Install Skopeo
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | skopeo login --authfile "$RUNNER_TEMP/auth.json" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+      - name: Mirror manifest and image layers
+        env:
+          IMAGE_SOURCE: ${{ matrix.source }}
+          IMAGE_TARGET: ${{ matrix.target }}
+          IMAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          owner="$(echo "$IMAGE_OWNER" | tr '[:upper:]' '[:lower:]')"
+          skopeo copy --all --preserve-digests --authfile "$RUNNER_TEMP/auth.json" \
+            "docker://$IMAGE_SOURCE" "docker://ghcr.io/$owner/$IMAGE_TARGET"

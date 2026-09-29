@@ -1,0 +1,15 @@
+{
+  "name": "@argws/scout-core",
+  "version": "0.2.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@argws/scout-schemas": "workspace:*"
+  }
+}

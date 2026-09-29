@@ -1,0 +1,41 @@
+name: SemVer release
+on:
+  workflow_run:
+    workflows: ["GHCR application images"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "${{ github.event.workflow_run.head_sha }}"
+      - name: Validate stable version and packages
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "main must use stable SemVer, got $version" >&2; exit 1; }
+          for manifest in package.json apps/*/package.json packages/*/package.json; do
+            actual="$(node -p "JSON.parse(require('fs').readFileSync('$manifest', 'utf8')).version")"
+            [[ "$actual" == "$version" ]] || { echo "$manifest has $actual; expected $version" >&2; exit 1; }
+          done
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: Create Git tag after image publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "v$RELEASE_VERSION already released."
+            exit 0
+          fi
+          git tag "v$RELEASE_VERSION"
+          git push origin "v$RELEASE_VERSION"
+          gh release create "v$RELEASE_VERSION" --title "ARGWS Scout v$RELEASE_VERSION" --generate-notes

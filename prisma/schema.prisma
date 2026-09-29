@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum SourceEngine {
+  HTTP
+  PLAYWRIGHT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENDING
+  SUCCEEDED
+  FAILED
+}
+
+model Tenant {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(120)
+  slug        String       @unique @db.VarChar(63)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  sessions    AuthSession[]
+  instances   Instance[]
+  webhooks    Webhook[]
+  schedules   Schedule[]
+  outbox      Outbox[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id                    String          @id @default(uuid()) @db.Uuid
+  email                 String          @unique @db.VarChar(254)
+  name                  String          @db.VarChar(120)
+  passwordHash          String          @db.VarChar(255)
+  profile               Json            @default("{}")
+  totpSecretEncrypted   String?         @db.Text
+  totpPendingEncrypted  String?         @db.Text
+  mfaEnabled            Boolean         @default(false)
+  disabledAt            DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  memberships           Membership[]
+  sessions              AuthSession[]
+  jobs                  Job[]
+  auditLogs             AuditLog[]
+}
+
+model Membership {
+  tenantId  String     @db.Uuid
+  userId    String     @db.Uuid
+  role      TenantRole @default(VIEWER)
+  createdAt DateTime   @default(now())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, userId])
+  @@index([userId, role])
+}
+
+model AuthSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tenantId   String    @db.Uuid
+  refreshHash String   @unique @db.Char(64)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model Instance {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  name        String       @db.VarChar(120)
+  slug        String       @db.VarChar(63)
+  description String?      @db.VarChar(500)
+  enabled     Boolean      @default(true)
+  metadata    Json         @default("{}")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sources     Source[]
+  jobs        Job[]
+  apiTokens   ApiToken[]
+  schedules   Schedule[]
+  webhooks    Webhook[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, enabled, createdAt])
+}
+
+model Source {
+  id                String       @id @default(uuid()) @db.Uuid
+  instanceId        String       @db.Uuid
+  name              String       @db.VarChar(120)
+  engine            SourceEngine
+  urlTemplate       String       @db.VarChar(2048)
+  allowedHosts      String[]
+  selector          String?      @db.VarChar(500)
+  respectRobots     Boolean      @default(true)
+  captureScreenshot Boolean      @default(false)
+  requestIntervalMs Int          @default(5000)
+  enabled           Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  instance          Instance     @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  jobs              Job[]
+  schedules         Schedule[]
+
+  @@index([instanceId, enabled])
+}
+
+model Job {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  instanceId  String       @db.Uuid
+  sourceId    String       @db.Uuid
+  createdById String?      @db.Uuid
+  status      JobStatus    @default(QUEUED)
+  input       Json         @default("{}")
+  result      Json?
+  errorCode   String?      @db.VarChar(80)
+  errorMessage String?     @db.VarChar(1000)
+  attempts    Int          @default(0)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  instance    Instance     @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  source      Source       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  attemptsLog JobAttempt[]
+  artifacts   Artifact[]
+
+  @@index([tenantId, createdAt])
+  @@index([instanceId, status, createdAt])
+  @@index([sourceId, status])
+}
+
+model JobAttempt {
+  id          String   @id @default(uuid()) @db.Uuid
+  jobId       String   @db.Uuid
+  attempt     Int
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      String   @db.VarChar(20)
+  errorCode   String?  @db.VarChar(80)
+  errorMessage String? @db.VarChar(1000)
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, attempt])
+  @@index([jobId, startedAt])
+}
+
+model Artifact {
+  id          String   @id @default(uuid()) @db.Uuid
+  jobId       String   @db.Uuid
+  kind        String   @db.VarChar(40)
+  objectKey   String   @unique @db.VarChar(1024)
+  fileName    String   @db.VarChar(255)
+  contentType String   @db.VarChar(120)
+  sha256      String   @db.Char(64)
+  sizeBytes   BigInt
+  createdAt   DateTime @default(now())
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+model ApiToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  instanceId  String    @db.Uuid
+  name        String    @db.VarChar(120)
+  prefix      String    @unique @db.VarChar(20)
+  tokenHash   String    @unique @db.Char(64)
+  scopes      String[]
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  instance    Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, revokedAt])
+}
+
+model Schedule {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  instanceId  String    @db.Uuid
+  sourceId    String    @db.Uuid
+  name        String    @db.VarChar(120)
+  cron        String    @db.VarChar(100)
+  timezone    String    @default("America/Bahia") @db.VarChar(80)
+  input       Json      @default("{}")
+  enabled     Boolean   @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instance    Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  source      Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt])
+  @@index([tenantId, instanceId])
+}
+
+model Webhook {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @db.Uuid
+  instanceId      String?           @db.Uuid
+  name            String            @db.VarChar(120)
+  url             String            @db.VarChar(2048)
+  secretEncrypted String            @db.Text
+  events          String[]
+  enabled         Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instance        Instance?         @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  deliveries      WebhookDelivery[]
+
+  @@index([tenantId, enabled])
+  @@index([instanceId, enabled])
+}
+
+model WebhookDelivery {
+  id              String         @id @default(uuid()) @db.Uuid
+  webhookId       String         @db.Uuid
+  eventId         String         @db.Uuid
+  eventType       String         @db.VarChar(80)
+  payload         Json
+  status          DeliveryStatus @default(PENDING)
+  attempts        Int            @default(0)
+  nextAttemptAt   DateTime       @default(now())
+  leaseUntil      DateTime?
+  lastStatusCode  Int?
+  responseExcerpt String?        @db.VarChar(1000)
+  lastError       String?        @db.VarChar(1000)
+  deliveredAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  webhook         Webhook        @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@unique([webhookId, eventId])
+  @@index([status, nextAttemptAt, leaseUntil])
+}
+
+model Outbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String?   @db.Uuid
+  eventType     String    @db.VarChar(80)
+  routingKey    String    @db.VarChar(100)
+  aggregateId   String?   @db.Uuid
+  payload       Json
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  publishedAt   DateTime?
+  lastError     String?   @db.VarChar(1000)
+  createdAt     DateTime  @default(now())
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([publishedAt, nextAttemptAt, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  actorUserId  String?  @db.Uuid
+  action       String   @db.VarChar(120)
+  resourceType String   @db.VarChar(80)
+  resourceId   String?  @db.VarChar(80)
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor        User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+}

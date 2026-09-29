@@ -1,0 +1,10 @@
+ARG PLAYWRIGHT_BASE=mcr.microsoft.com/playwright:v1.63.0-noble
+FROM ${PLAYWRIGHT_BASE}
+
+ENV PNPM_HOME="/home/pwuser/.local/share/pnpm" PATH="/home/pwuser/.local/share/pnpm:$PATH" NODE_ENV=production
+RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile && pnpm db:generate && chown -R pwuser:pwuser /app
+USER pwuser
+CMD ["pnpm", "--filter", "@argws/scout-browser-worker", "start"]

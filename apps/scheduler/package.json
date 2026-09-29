@@ -1,0 +1,20 @@
+{
+  "name": "@argws/scout-scheduler",
+  "version": "0.2.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/scheduler.ts",
+    "start": "tsx src/scheduler.ts",
+    "build": "tsup src/scheduler.ts --format esm --platform node --target node22 --out-dir dist --clean false",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@argws/scout-core": "workspace:*",
+    "@prisma/client": "^6.16.2",
+    "cron-parser": "^5.3.1"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0"
+  }
+}
