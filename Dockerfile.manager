@@ -1,3 +1,4 @@
+# Build arguments consumed by FROM must be declared before the first stage.
 ARG NODE_BASE=node:24.21.0-bookworm-slim
 ARG NGINX_BASE=nginx:1.30.5-alpine
 FROM ${NODE_BASE} AS build
