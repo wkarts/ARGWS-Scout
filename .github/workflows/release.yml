@@ -3,19 +3,43 @@ on:
   workflow_run:
     workflows: ["GHCR application images"]
     types: [completed]
-    branches: [main]
 permissions:
+  actions: read
   contents: write
 jobs:
   release:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: release-source
+      - name: Read originating quality run
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          data = json.loads(Path("release-source/source.json").read_text(encoding="utf-8"))
+          required = ("source_branch", "source_sha", "source_event", "source_conclusion", "source_run_id")
+          missing = [key for key in required if not data.get(key)]
+          if missing:
+              raise SystemExit("Missing source metadata: " + ", ".join(missing))
+          for key in required:
+              print("{}={}".format(key, data[key]))
+          PY
       - uses: actions/checkout@v4
+        if: steps.source.outputs.source_branch == 'main' && steps.source.outputs.source_event == 'push' && steps.source.outputs.source_conclusion == 'success'
         with:
           fetch-depth: 0
-          ref: "${{ github.event.workflow_run.head_sha }}"
+          ref: ${{ steps.source.outputs.source_sha }}
       - name: Validate version and workspace contract
+        if: steps.source.outputs.source_branch == 'main' && steps.source.outputs.source_event == 'push' && steps.source.outputs.source_conclusion == 'success'
         id: version
         shell: bash
         run: |
@@ -28,20 +52,23 @@ jobs:
           done
           echo "value=$version" >> "$GITHUB_OUTPUT"
       - name: Create release after image publication
+        if: steps.source.outputs.source_branch == 'main' && steps.source.outputs.source_event == 'push' && steps.source.outputs.source_conclusion == 'success'
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           RELEASE_VERSION: "${{ steps.version.outputs.value }}"
-          RELEASE_COMMIT: "${{ github.event.workflow_run.head_sha }}"
+          RELEASE_COMMIT: ${{ steps.source.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           release_tag="v$RELEASE_VERSION"
           if git ls-remote --exit-code --tags origin "refs/tags/$release_tag" >/dev/null 2>&1; then
             git fetch --no-tags origin "refs/tags/$release_tag:refs/tags/$release_tag"
             tagged_commit="$(git rev-parse "$release_tag^{commit}")"
             [[ "$tagged_commit" == "$RELEASE_COMMIT" ]] || { echo "$release_tag already points at $tagged_commit, expected $RELEASE_COMMIT." >&2; exit 1; }
           else
-            git tag -a "$release_tag" -m "ARGWS Scout $release_tag"
+            git tag -a "$release_tag" "$RELEASE_COMMIT" -m "ARGWS Scout $release_tag"
             git push origin "refs/tags/$release_tag"
           fi
           if gh release view "$release_tag" >/dev/null 2>&1; then

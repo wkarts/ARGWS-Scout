@@ -8,6 +8,35 @@ permissions:
   contents: read
   packages: write
 jobs:
+  release-source:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture the source quality run
+        env:
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-source
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          keys = ("SOURCE_BRANCH", "SOURCE_SHA", "SOURCE_EVENT", "SOURCE_CONCLUSION", "SOURCE_RUN_ID")
+          data = {key.lower(): os.environ[key] for key in keys}
+          Path("release-source/source.json").write_text(json.dumps(data, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-source
+          path: release-source/source.json
+          if-no-files-found: error
+          retention-days: 7
   publish:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
