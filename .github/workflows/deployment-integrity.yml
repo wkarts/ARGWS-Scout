@@ -29,4 +29,3 @@ jobs:
               python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done
-
