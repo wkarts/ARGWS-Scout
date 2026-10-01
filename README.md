@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-Esta baseline é 0.2.0-alpha.2. Continua alpha e precisa de homologação de carga, acesso de rede e recuperação no ambiente de destino antes de produção.
+Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
 
 ## O que a Scout já entrega
 
@@ -87,6 +87,6 @@ Consulte docs/security.md, docs/architecture.md e docs/operations.md. Use polít
 
 ## Limites atuais
 
-Esta alpha ainda não inclui cofre externo de credenciais, catálogo hospedado de conectores, retenção automática de artefatos, federação SSO, métricas Prometheus, alta disponibilidade multi-nó ou prova de carga de produção. Senhas de integração e tokens são limitados ao modelo atual. Não colete conteúdo sem autorização ou fora das regras do site de origem.
+Esta versão ainda não inclui cofre externo de credenciais, catálogo hospedado de conectores, retenção automática de artefatos, federação SSO, métricas Prometheus, alta disponibilidade multi-nó ou prova de carga de produção. Senhas de integração e tokens são limitados ao modelo atual. Não colete conteúdo sem autorização ou fora das regras do site de origem.
 
 ARGWS Scout é um produto separado. Não importa runtime, banco, fila, autenticação ou código de ARGWS Connect|API; a comparação com Connect|API foi usada para melhorar a operação, o Manager e o fluxo de distribuição.
