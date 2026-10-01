@@ -1,6 +1,6 @@
 # Fontes e connectors
 
-Uma fonte pertence a uma instância e usa engine `HTTP` ou `PLAYWRIGHT`. Na alpha, configura hostname permitido, URL pública, seletor CSS ou caminho JSON, robots.txt, intervalo mínimo e screenshot browser opcional. Templates aceitam `{{input.campo}}`; os valores são codificados antes de validar a URL final.
+Uma fonte pertence a uma instância e usa engine `HTTP` ou `PLAYWRIGHT`. Configure hostname permitido, URL pública, seletor CSS ou caminho JSON, robots.txt, intervalo mínimo e screenshot browser opcional. Templates aceitam `{{input.campo}}`; os valores são codificados antes de validar a URL final.
 
 ## Contrato TypeScript
 
@@ -27,4 +27,4 @@ export const productSearch = defineConnector({
 });
 ```
 
-O exemplo mostra o contrato; não faz uma requisição sozinho. Vault/UI para credenciais autenticadas, catálogo assinado, instalação dinâmica de plugins e gestão de cookies ficam fora desta alpha. Não colete conteúdo protegido ou fora da política do site.
+O exemplo mostra o contrato; não faz uma requisição sozinho. Conectores com credenciais autenticadas, catálogo assinado, instalação dinâmica de plugins e gestão de cookies ainda não estão disponíveis. Não colete conteúdo protegido ou fora da política do site.

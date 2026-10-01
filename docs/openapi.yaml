@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: ARGWS Scout API
-  version: 0.2.0-alpha.2
-  description: REST API independente para tenants, instâncias, fontes, jobs, tokens e webhooks.
+  version: 0.2.0
+  description: REST API para tenants, coleta web e publicação WhatsApp via Connect API.
 servers:
   - url: /v1
 security:
@@ -201,6 +201,127 @@ paths:
       summary: Faz stream de artifact após checagem results:read.
       responses:
         "200": { description: Bytes do arquivo. }
+  /whatsapp:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Retorna estado sem segredos, instâncias e permissões WhatsApp da organização.
+      responses:
+        "200": { description: Configuração mascarada e catálogo de instâncias. }
+  /whatsapp/config:
+    put:
+      security: [{ ScoutSession: [] }]
+      summary: Testa e salva a URL e a chave administrativa da Connect API.
+      description: OWNER/ADMIN. O segredo é cifrado no backend e não volta na resposta.
+      requestBody:
+        $ref: "#/components/requestBodies/WhatsAppConnectConfig"
+      responses:
+        "200": { description: Conexão validada e catálogo sincronizado. }
+        "400": { description: URL ou credenciais inválidas. }
+        "502":
+          { description: Connect API inacessível ou rejeitou a solicitação. }
+  /whatsapp/sync:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Sincroniza metadados e tokens de instâncias WhatsApp.
+      description: OWNER/ADMIN. Tokens remotos são cifrados antes de persistir.
+      responses:
+        "200": { description: Catálogo sincronizado. }
+        "409": { description: Connect API ainda não configurada. }
+  /whatsapp/instances:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Cria uma instância WhatsApp Baileys com token individual gerado pela Scout.
+      description: OWNER/ADMIN. A chave administrativa só é usada pelo backend.
+      requestBody:
+        $ref: "#/components/requestBodies/WhatsAppInstanceCreate"
+      responses:
+        "201": { description: Instância criada; o token não é retornado. }
+        "409":
+          {
+            description: Instância já vinculada ou Connect API não configurada.,
+          }
+        "502":
+          {
+            description: Resultado remoto incerto; sincronize antes de repetir.,
+          }
+  /whatsapp/instances/import:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Valida e vincula uma instância existente por seu token próprio.
+      description: OWNER/ADMIN. O token nunca é retornado nem persistido em claro.
+      requestBody:
+        $ref: "#/components/requestBodies/WhatsAppInstanceImport"
+      responses:
+        "201": { description: Instância vinculada. }
+        "404": { description: Instância ou token não encontrados. }
+  /whatsapp/default:
+    put:
+      security: [{ ScoutSession: [] }]
+      summary: Define ou limpa a instância padrão da organização.
+      description: OWNER/ADMIN. O envio ainda aceita uma instância escolhida por publicação.
+      requestBody:
+        $ref: "#/components/requestBodies/WhatsAppDefault"
+      responses:
+        "200": { description: Instância padrão atualizada. }
+  /whatsapp/instances/{name}/{action}:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Pareia, consulta estado, reinicia ou desconecta uma instância.
+      description: OWNER/ADMIN. Usa o token individual da instância.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - {
+            in: path,
+            name: action,
+            required: true,
+            schema: { type: string, enum: [connect, status, restart, logout] },
+          }
+      responses:
+        "200":
+          {
+            description: Resultado Connect API; tokens são removidos da resposta Scout.,
+          }
+        "404": { description: Instância não vinculada à organização. }
+  /whatsapp/instances/{name}:
+    delete:
+      security: [{ ScoutSession: [] }]
+      summary: Exclui permanentemente uma instância remota.
+      description: OWNER/ADMIN. A exclusão é auditada e remove a instância do seletor.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Instância removida. }
+  /whatsapp/publications:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Lista o histórico recente de publicações WhatsApp sem revelar números completos nem mensagem.
+      responses:
+        "200": { description: Até 50 envios recentes da organização. }
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Publica o resultado de uma coleta concluída em uma instância e número escolhidos.
+      description: OWNER/ADMIN/OPERATOR. UNKNOWN significa que o resultado externo é incerto; a Scout não repete automaticamente.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 80 }
+      requestBody:
+        $ref: "#/components/requestBodies/WhatsAppPublicationCreate"
+      responses:
+        "201":
+          { description: Tentativa registrada como SENT, FAILED ou UNKNOWN. }
+        "200":
+          {
+            description: Chave de idempotência já processada; o resultado salvo é retornado sem reenvio.,
+          }
+        "400":
+          { description: Chave de idempotência, número ou mensagem inválidos. }
+        "404": { description: Job concluído não encontrado no tenant. }
+        "409":
+          {
+            description: Chave repetida com outro conteúdo ou instância indisponível.,
+          }
   /instances/{instanceId}/tokens:
     get:
       parameters:
@@ -506,3 +627,63 @@ components:
                 minItems: 1
                 maxItems: 2
                 items: { type: string, enum: [job.completed, job.failed] }
+    WhatsAppConnectConfig:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [baseUrl]
+            properties:
+              baseUrl:
+                {
+                  type: string,
+                  format: uri,
+                  description: "Endpoint HTTPS público da Connect API.",
+                }
+              apiKey:
+                {
+                  type: string,
+                  writeOnly: true,
+                  description: "Chave administrativa; pode ser omitida para manter a chave cifrada atual.",
+                }
+    WhatsAppInstanceCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+    WhatsAppInstanceImport:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, token]
+            properties:
+              name: { type: string, minLength: 2, maxLength: 120 }
+              token: { type: string, minLength: 8, writeOnly: true }
+    WhatsAppDefault:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [instanceName]
+            properties:
+              instanceName: { type: [string, "null"], maxLength: 120 }
+    WhatsAppPublicationCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [jobId, instanceName, number, text]
+            properties:
+              jobId: { type: string, format: uuid }
+              instanceName: { type: string, minLength: 2, maxLength: 120 }
+              number: { type: string, minLength: 8, maxLength: 24 }
+              text: { type: string, minLength: 1, maxLength: 4096 }

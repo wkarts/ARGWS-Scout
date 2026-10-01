@@ -34,6 +34,14 @@ enum DeliveryStatus {
   FAILED
 }
 
+enum WhatsAppPublicationStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  UNKNOWN
+}
+
 model Tenant {
   id          String       @id @default(uuid()) @db.Uuid
   name        String       @db.VarChar(120)
@@ -47,6 +55,9 @@ model Tenant {
   schedules   Schedule[]
   outbox      Outbox[]
   auditLogs   AuditLog[]
+  connectApi  ConnectApiConfig?
+  connectInstances ConnectApiInstance[]
+  whatsAppPublications WhatsAppPublication[]
 }
 
 model User {
@@ -65,6 +76,7 @@ model User {
   sessions              AuthSession[]
   jobs                  Job[]
   auditLogs             AuditLog[]
+  whatsAppPublications  WhatsAppPublication[]
 }
 
 model Membership {
@@ -157,6 +169,7 @@ model Job {
   createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   attemptsLog JobAttempt[]
   artifacts   Artifact[]
+  whatsAppPublications WhatsAppPublication[]
 
   @@index([tenantId, createdAt])
   @@index([instanceId, status, createdAt])
@@ -303,4 +316,58 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@index([actorUserId, createdAt])
+}
+
+model ConnectApiConfig {
+  tenantId            String   @id @db.Uuid
+  baseUrl             String   @db.VarChar(2048)
+  apiKeyEncrypted     String   @db.Text
+  defaultInstanceName String?  @db.VarChar(120)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model ConnectApiInstance {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  name             String   @db.VarChar(120)
+  integration      String   @default("WHATSAPP-BAILEYS") @db.VarChar(40)
+  tokenEncrypted   String?  @db.Text
+  connectionState String?  @db.VarChar(40)
+  number           String?  @db.VarChar(32)
+  profileName      String?  @db.VarChar(120)
+  present          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId, present, connectionState])
+}
+
+model WhatsAppPublication {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  tenantId           String                     @db.Uuid
+  jobId              String?                    @db.Uuid
+  createdById        String?                    @db.Uuid
+  requestId          String                     @db.VarChar(80)
+  instanceName       String                     @db.VarChar(120)
+  recipientEncrypted String                     @db.Text
+  messageEncrypted   String                     @db.Text
+  status             WhatsAppPublicationStatus @default(PENDING)
+  statusCode         Int?
+  errorCode          String?                    @db.VarChar(80)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  sentAt             DateTime?
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job                Job?                       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  createdBy          User?                      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId, createdAt])
+  @@index([jobId, createdAt])
 }
