@@ -40,7 +40,7 @@ jobs:
         env:
           REGISTRY_AUTH_FILE: ${{ runner.temp }}/ghcr-auth.json
           IMAGE_OWNER: ${{ github.repository_owner }}
-          REFRESH: ${{ (github.event_name == 'workflow_dispatch' && inputs.refresh_existing) || (github.event_name == 'workflow_call' && inputs.refresh_existing) || github.event_name == 'schedule' }}
+          REFRESH: ${{ inputs.refresh_existing || github.event_name == 'schedule' }}
         run: |
           args=(--mode ensure --owner "$IMAGE_OWNER")
           if [[ "$REFRESH" == true ]]; then args+=(--refresh-existing); fi
