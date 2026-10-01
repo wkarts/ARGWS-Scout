@@ -11,7 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate every platform and channel
+      - name: Check bundle and retention contracts
+        run: |
+          python3 test/deployment-contract.py
+          python3 test/actions-cache-retention.py
+          python3 scripts/ghcr-bases.py --mode validate --owner wkarts
+      - name: Validate every deployment target and channel
         shell: bash
         run: |
           set -euo pipefail
@@ -19,22 +24,8 @@ jobs:
             for channel in develop production; do
               folder="deploy/$target/$channel"
               cp "$folder/.env.example" "$folder/.env"
-              docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
-              docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
-              python3 - "$folder" /tmp/scout-compose.json <<'PY'
-          import json, pathlib, sys
-          folder, model_path = pathlib.Path(sys.argv[1]).resolve(), pathlib.Path(sys.argv[2])
-          model = json.loads(model_path.read_text())
-          published = [(name, port) for name, service in model["services"].items() for port in service.get("ports", [])]
-          assert len(published) == 1, f"{folder}: expected one published port, got {published}"
-          service, port = published[0]
-          assert service == "manager" and port.get("host_ip") == "127.0.0.1", (folder, service, port)
-          expected_mounts = (("postgres", "/var/lib/postgresql/data"), ("redis", "/data"), ("rabbitmq", "/var/lib/rabbitmq"), ("garage", "/var/lib/garage/meta"), ("garage", "/var/lib/garage/data"))
-          for name, container_path in expected_mounts:
-              mounts = model["services"][name].get("volumes", [])
-              assert any(mount.get("type") == "bind" and pathlib.Path(mount.get("source", "")).is_relative_to(folder) and mount.get("target") == container_path for mount in mounts), f"{folder}: {name} must use a relative bind mount"
-          assert model["services"]["garage-init"].get("network_mode") == "service:garage", f"{folder}: Garage bootstrap must stay inside the private stack network"
-          print(f"{folder}: one loopback port and five relative persistent bind mounts")
-          PY
+              docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
+              docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
+              python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done

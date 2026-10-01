@@ -3,6 +3,7 @@ name: argws-scout-${SCOUT_ENV:-develop}
 services:
   postgres:
     image: ${ARGWS_SCOUT_POSTGRES_IMAGE:?Define GHCR Postgres image}
+    pull_policy: always
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-scout}
@@ -23,6 +24,7 @@ services:
 
   redis:
     image: ${ARGWS_SCOUT_REDIS_IMAGE:?Define GHCR Redis image}
+    pull_policy: always
     restart: unless-stopped
     command:
       [
@@ -46,6 +48,7 @@ services:
 
   rabbitmq:
     image: ${ARGWS_SCOUT_RABBITMQ_IMAGE:?Define GHCR RabbitMQ image}
+    pull_policy: always
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-scout}
@@ -62,6 +65,7 @@ services:
 
   garage:
     image: ${ARGWS_SCOUT_GARAGE_IMAGE:?Define GHCR Garage image}
+    pull_policy: always
     restart: unless-stopped
     entrypoint: [/garage]
     command: [-c, /etc/garage.toml, server, --single-node]
@@ -69,9 +73,11 @@ services:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
     volumes:
-      - ./garage.toml:/etc/garage.toml:ro
       - ./volumes/garage/meta:/var/lib/garage/meta
       - ./volumes/garage/data:/var/lib/garage/data
+    configs:
+      - source: garage-config
+        target: /etc/garage.toml
     healthcheck:
       test: [CMD, /garage, -c, /etc/garage.toml, status]
       interval: 10s
@@ -83,6 +89,7 @@ services:
 
   garage-init:
     image: ${ARGWS_SCOUT_GARAGE_INIT_IMAGE:?Define GHCR Garage bootstrap image}
+    pull_policy: always
     restart: "no"
     network_mode: "service:garage"
     depends_on:
@@ -102,12 +109,14 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-scout-artifacts}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Generate S3_SECRET_ACCESS_KEY}
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
-    volumes:
-      - ./garage.toml:/etc/garage.toml:ro
+    configs:
+      - source: garage-config
+        target: /etc/garage.toml
     logging: *default-logging
 
   migrate:
     image: ${ARGWS_SCOUT_MIGRATION_IMAGE:?Define GHCR migration image}
+    pull_policy: always
     restart: "no"
     command: [sh, -lc, "pnpm db:generate && pnpm db:migrate"]
     env_file: [.env]
@@ -118,8 +127,23 @@ services:
     logging: *default-logging
     networks: [scout]
 
+  bootstrap:
+    image: ${ARGWS_SCOUT_MIGRATION_IMAGE:?Define GHCR migration image}
+    pull_policy: always
+    profiles: [maintenance]
+    restart: "no"
+    command: [pnpm, db:seed]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    logging: *default-logging
+    networks: [scout]
+
   api:
     image: ${ARGWS_SCOUT_API_IMAGE:?Define GHCR API image}
+    pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-api", start]
     env_file: [.env]
@@ -162,6 +186,7 @@ services:
 
   manager:
     image: ${ARGWS_SCOUT_MANAGER_IMAGE:?Define GHCR Manager image}
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "127.0.0.1:${SCOUT_MANAGER_PORT:-8080}:80"
@@ -178,12 +203,14 @@ services:
 
   docs:
     image: ${ARGWS_SCOUT_DOCS_IMAGE:?Define GHCR Docs image}
+    pull_policy: always
     restart: unless-stopped
     logging: *default-logging
     networks: [scout]
 
   dispatcher:
     image: ${ARGWS_SCOUT_DISPATCHER_IMAGE:?Define GHCR dispatcher image}
+    pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-dispatcher", start]
     env_file: [.env]
@@ -197,6 +224,7 @@ services:
 
   worker:
     image: ${ARGWS_SCOUT_WORKER_IMAGE:?Define GHCR HTTP worker image}
+    pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-worker", start]
     env_file: [.env]
@@ -212,6 +240,7 @@ services:
 
   browser-worker:
     image: ${ARGWS_SCOUT_BROWSER_WORKER_IMAGE:?Define GHCR browser worker image}
+    pull_policy: always
     restart: unless-stopped
     init: true
     shm_size: 1gb
@@ -235,6 +264,7 @@ services:
 
   scheduler:
     image: ${ARGWS_SCOUT_SCHEDULER_IMAGE:?Define GHCR scheduler image}
+    pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-scheduler", start]
     env_file: [.env]
@@ -247,6 +277,7 @@ services:
 
   webhook-worker:
     image: ${ARGWS_SCOUT_WEBHOOK_WORKER_IMAGE:?Define GHCR webhook worker image}
+    pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-webhook-worker", start]
     env_file: [.env]
@@ -262,3 +293,21 @@ networks:
   scout:
     name: argws-scout-${SCOUT_ENV:-develop}-network
     driver: bridge
+
+configs:
+  garage-config:
+    content: |
+      metadata_dir = "/var/lib/garage/meta"
+      data_dir = "/var/lib/garage/data"
+      db_engine = "lmdb"
+      replication_factor = 1
+      rpc_bind_addr = "[::]:3901"
+      rpc_public_addr = "garage:3901"
+
+      [s3_api]
+      api_bind_addr = "[::]:3900"
+      s3_region = "us-east-1"
+      root_domain = ".s3.garage"
+
+      [admin]
+      api_bind_addr = "[::]:3903"

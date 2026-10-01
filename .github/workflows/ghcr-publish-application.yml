@@ -6,7 +6,6 @@ on:
     branches: [develop, main]
 permissions:
   contents: read
-  packages: write
 jobs:
   release-source:
     if: github.event.workflow_run.conclusion == 'success'
@@ -37,7 +36,20 @@ jobs:
           path: release-source/source.json
           if-no-files-found: error
           retention-days: 7
+  ensure-bases:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'main')
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ghcr-sync-infrastructure.yml
+    with:
+      refresh_existing: false
+    secrets: inherit
   publish:
+    needs: [ensure-bases]
+    permissions:
+      contents: read
+      packages: write
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     strategy:
@@ -85,7 +97,6 @@ jobs:
               image="ghcr.io/$owner/argws-scout-$component"
               if [[ "$branch" == develop ]]; then
                 echo "$image:develop"
-                echo "$image:$version"
               else
                 echo "$image:$version"
                 if [[ "$version" != *-* ]]; then
@@ -96,7 +107,6 @@ jobs:
             echo 'TAGS'
           } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
       - name: Authenticate to GHCR
         uses: docker/login-action@v3
         with:
@@ -117,6 +127,7 @@ jobs:
             "ghcr.io/$owner/argws-scout-nginx:1.30.5-alpine"
             "ghcr.io/$owner/argws-scout-playwright:v1.63.0-noble"
             "ghcr.io/$owner/argws-scout-alpine:3.23"
+            "ghcr.io/$owner/argws-scout-buildkit:buildx-stable-1"
           )
           for image in "${images[@]}"; do
             ready=false
@@ -132,6 +143,9 @@ jobs:
               exit 1
             fi
           done
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=ghcr.io/${{ github.repository_owner }}/argws-scout-buildkit:buildx-stable-1
       - name: Build and publish ${{ matrix.component }}
         uses: docker/build-push-action@v6
         with:
@@ -146,5 +160,33 @@ jobs:
             PLAYWRIGHT_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-playwright:v1.63.0-noble
             GARAGE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-garage:v2.4.1
             TOOLS_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-alpine:3.23
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          cache-from: type=gha,scope=argws-scout-buildkit-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=argws-scout-buildkit-${{ matrix.component }}
+
+  cache-retention:
+    needs: [publish]
+    if: needs.publish.result == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'main')
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions: { actions: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Clean stale BuildKit caches only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          PUBLISH_RUN_ID: ${{ github.run_id }}
+        run: python3 scripts/actions-cache-retention.py --apply
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-cache-retention-${{ github.run_id }}
+          path: build-cache-retention.json
+          if-no-files-found: ignore
+          retention-days: 30

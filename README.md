@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-Esta baseline é 0.2.0-alpha.2. Continua alpha e precisa de homologação de carga, acesso de rede e recuperação no ambiente de destino antes de produção.
+Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
 
 ## O que a Scout já entrega
 
@@ -35,7 +35,7 @@ O histórico operacional do Manager usa as rotas da API. Para uma instalação m
 - packages: schemas, SDK de conectores, execução HTTP/browser, extração, core e utilitários compartilhados.
 - prisma: modelo PostgreSQL, migrações e seed inicial.
 - deploy/docker, deploy/dockge, deploy/cloudpanel e deploy/portainer: canais develop e production independentes.
-- deploy/templates: fonte versionada dos arquivos dos oito pacotes de instalação.
+- ops/deployment: fonte Compose e configuração operacional; pacotes de deploy sem scripts auxiliares.
 - .github/workflows: quality gates, implantação, segurança, espelhamento GHCR, publicação de aplicação e release.
 
 ## Fluxo local
@@ -59,16 +59,16 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pasta contém compose.yaml, .env.example, geração local de segredos, preflight, implantação, bootstrap do OWNER, status/logs, backup PostgreSQL + Garage e restauração com confirmação explícita. Os dados de PostgreSQL, Redis, RabbitMQ e Garage permanecem em diretórios relativos à stack. O único bind publicado é 127.0.0.1:8080 para o gateway Manager; CloudPanel termina TLS e faz o proxy reverso até essa porta.
+Cada pacote contém apenas compose.yaml e .env.example. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte docs/deployment.md. Os dados de PostgreSQL, Redis, RabbitMQ e Garage permanecem em diretórios relativos à stack. O único bind publicado é 127.0.0.1:8080 para o gateway Manager; CloudPanel termina TLS e faz o proxy reverso até essa porta.
 
 Para instalar um alvo:
 
-1. Abra a pasta do alvo/canal no servidor.
-2. Revise .env.example, URL pública, dono e tags GHCR.
-3. Execute ./prepare-env.py e revise .env, que recebe modo 0600.
-4. Execute ./preflight.sh, ./deploy.sh e ./bootstrap.sh.
+1. Copie `.env.example` para `.env` e preencha URL, segredos e tags.
+2. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet`.
+3. Baixe e inicie os serviços com `docker compose --env-file .env -f compose.yaml pull` e `docker compose --env-file .env -f compose.yaml up -d`.
+4. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`.
 
-Em produção, defina SCOUT_PUBLIC_URL para o domínio HTTPS, SCOUT_COOKIE_SECURE=true e SCOUT_ALLOW_HTTP=false. Os pacotes GHCR podem ser públicos para pulls sem credencial; se forem privados, deploy.sh aceita GHCR_USERNAME e GHCR_TOKEN como variáveis temporárias e remove o Docker config temporário no fim. O token nunca é gravado na pasta da aplicação.
+Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS, `SCOUT_COOKIE_SECURE=true` e `SCOUT_ALLOW_HTTP=false`. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
 
 ## Imagens e entrega
 
@@ -87,6 +87,6 @@ Consulte docs/security.md, docs/architecture.md e docs/operations.md. Use polít
 
 ## Limites atuais
 
-Esta alpha ainda não inclui cofre externo de credenciais, catálogo hospedado de conectores, retenção automática de artefatos, federação SSO, métricas Prometheus, alta disponibilidade multi-nó ou prova de carga de produção. Senhas de integração e tokens são limitados ao modelo atual. Não colete conteúdo sem autorização ou fora das regras do site de origem.
+Esta versão ainda não inclui cofre externo de credenciais, catálogo hospedado de conectores, retenção automática de artefatos, federação SSO, métricas Prometheus, alta disponibilidade multi-nó ou prova de carga de produção. Senhas de integração e tokens são limitados ao modelo atual. Não colete conteúdo sem autorização ou fora das regras do site de origem.
 
 ARGWS Scout é um produto separado. Não importa runtime, banco, fila, autenticação ou código de ARGWS Connect|API; a comparação com Connect|API foi usada para melhorar a operação, o Manager e o fluxo de distribuição.

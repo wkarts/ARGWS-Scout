@@ -1,4 +1,4 @@
-ARG NODE_BASE=node:24.21.0-bookworm-slim
+ARG NODE_BASE=ghcr.io/wkarts/argws-scout-node:24.21.0-bookworm-slim
 FROM ${NODE_BASE}
 
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" NODE_ENV=production
