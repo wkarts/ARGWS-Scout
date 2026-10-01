@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  MessageCircle,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -35,6 +36,7 @@ import {
 import { api, ApiError } from "./api";
 import AccessConsole from "./views/AccessConsole.vue";
 import OperationsConsole from "./views/OperationsConsole.vue";
+import WhatsAppConsole from "./views/WhatsAppConsole.vue";
 
 type Me = {
   user: {
@@ -110,6 +112,14 @@ type DeliveryRow = {
   deliveredAt: string | null;
   createdAt: string;
 };
+type WhatsAppInstanceOption = {
+  id: string;
+  name: string;
+  integration: string;
+  connectionState: string | null;
+  present: boolean;
+  usable: boolean;
+};
 
 const loading = ref(false);
 const busy = ref(false);
@@ -124,6 +134,9 @@ const schedules = ref<Schedule[]>([]);
 const webhooks = ref<WebhookRow[]>([]);
 const apiTokens = ref<ApiTokenRow[]>([]);
 const deliveries = ref<DeliveryRow[]>([]);
+const whatsappInstances = ref<WhatsAppInstanceOption[]>([]);
+const whatsappConfigured = ref(false);
+const whatsappDefault = ref<string | null>(null);
 const selectedWebhookId = ref("");
 const jobStatusFilter = ref("ALL");
 const overviewStats = ref({
@@ -147,6 +160,9 @@ const showScheduleForm = ref(false);
 const showWebhookForm = ref(false);
 const showProfile = ref(false);
 const showMfaDialog = ref(false);
+const showPublicationForm = ref(false);
+const publishing = ref(false);
+const publicationForm = ref({ instanceName: "", number: "", text: "" });
 const mfaSetup = ref({ qrCodeDataUrl: "", manualKey: "", code: "" });
 const showTokenDialog = ref(false);
 const issuedToken = ref("");
@@ -188,6 +204,7 @@ const title = computed(
       jobs: "Execuções",
       schedules: "Agendamentos",
       webhooks: "Webhooks",
+      whatsapp: "WhatsApp",
       access: "Acesso e auditoria",
       operations: "Saúde da plataforma",
       settings: "Configurações",
@@ -231,6 +248,10 @@ function notify(message: string) {
     toast.value = "";
   }, 3200);
 }
+function afterWhatsAppChange(message: string) {
+  notify(message);
+  void loadData();
+}
 function initials(value: string) {
   return value
     .split(/\s+/)
@@ -264,16 +285,25 @@ async function loadData() {
   loading.value = true;
   error.value = "";
   try {
-    const [overview, instanceResponse, jobResponse] = await Promise.all([
-      api<{
-        stats: typeof overviewStats.value;
-        recentJobs: Job[];
-      }>("/overview"),
-      api<{ data: Instance[] }>("/instances"),
-      api<{ data: Job[] }>("/jobs"),
-    ]);
+    const [overview, instanceResponse, jobResponse, whatsappResponse] =
+      await Promise.all([
+        api<{
+          stats: typeof overviewStats.value;
+          recentJobs: Job[];
+        }>("/overview"),
+        api<{ data: Instance[] }>("/instances"),
+        api<{ data: Job[] }>("/jobs"),
+        api<{
+          configured: boolean;
+          defaultInstanceName: string | null;
+          instances: WhatsAppInstanceOption[];
+        }>("/whatsapp"),
+      ]);
     instances.value = instanceResponse.data;
     jobs.value = jobResponse.data;
+    whatsappConfigured.value = whatsappResponse.configured;
+    whatsappInstances.value = whatsappResponse.instances;
+    whatsappDefault.value = whatsappResponse.defaultInstanceName;
     overviewStats.value = overview.stats;
     if (selectedInstance.value)
       selectedInstance.value =
@@ -695,6 +725,77 @@ async function copyValue(value: string) {
 }
 function openJob(job: Job) {
   selectedJob.value = job;
+  showPublicationForm.value = false;
+}
+function openWhatsAppPublication(job: Job) {
+  const result = job.result?.data ?? job.result ?? {};
+  const collected =
+    typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  const header = `ARGWS Scout · ${job.source?.name ?? "Coleta"}\n${prettyDate(job.finishedAt ?? job.createdAt)}\n\n`;
+  publicationForm.value = {
+    instanceName:
+      whatsappDefault.value ??
+      whatsappInstances.value.find((item) => item.usable)?.name ??
+      "",
+    number: "",
+    text: `${header}${collected}`.slice(0, 4096),
+  };
+  showPublicationForm.value = true;
+}
+async function publishJobToWhatsApp() {
+  if (!selectedJob.value) return;
+  const instance = whatsappInstances.value.find(
+    (item) => item.name === publicationForm.value.instanceName,
+  );
+  if (!instance?.usable) {
+    error.value = "Selecione uma instância WhatsApp vinculada e disponível.";
+    return;
+  }
+  const number = publicationForm.value.number.trim();
+  if (
+    !window.confirm(
+      `Enviar esta mensagem pelo WhatsApp ${instance.name} para ${number}?`,
+    )
+  )
+    return;
+  publishing.value = true;
+  error.value = "";
+  try {
+    const requestId =
+      globalThis.crypto?.randomUUID?.() ??
+      `scout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const response = await api<{
+      publication: { status: string };
+      message?: string;
+    }>("/whatsapp/publications", {
+      method: "POST",
+      headers: { "idempotency-key": requestId },
+      body: JSON.stringify({
+        jobId: selectedJob.value.id,
+        instanceName: instance.name,
+        number,
+        text: publicationForm.value.text,
+      }),
+    });
+    showPublicationForm.value = false;
+    if (response.publication.status === "SENT")
+      notify("Publicação enviada pelo WhatsApp.");
+    else if (response.publication.status === "UNKNOWN")
+      notify(
+        "Envio sem confirmação. Confira o WhatsApp antes de tentar novamente.",
+      );
+    else if (["PENDING", "SENDING"].includes(response.publication.status))
+      notify("Essa solicitação de envio ainda está em processamento.");
+    else
+      notify("A Connect API registrou a falha. Consulte o histórico WhatsApp.");
+    if (response.message && response.publication.status !== "SENT")
+      error.value = response.message;
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Falha ao enviar pelo WhatsApp.";
+  } finally {
+    publishing.value = false;
+  }
 }
 function screenshotArtifactId(job: Job | null) {
   const data = job?.result?.data;
@@ -858,6 +959,12 @@ onMounted(() => {
           @click="selectSection('jobs')"
         >
           <Activity :size="18" /> Execuções
+        </button>
+        <button
+          :class="{ active: activeSection === 'whatsapp' }"
+          @click="selectSection('whatsapp')"
+        >
+          <MessageCircle :size="18" /> WhatsApp
         </button>
         <button
           :class="{ active: activeSection === 'schedules' }"
@@ -1734,6 +1841,14 @@ onMounted(() => {
           </section></template
         >
 
+        <template v-else-if="activeSection === 'whatsapp'">
+          <WhatsAppConsole
+            :role="me.role"
+            @error="error = $event"
+            @notify="afterWhatsAppChange"
+          />
+        </template>
+
         <template v-else-if="activeSection === 'access'"
           ><AccessConsole
             :role="me.role"
@@ -2133,6 +2248,95 @@ onMounted(() => {
         >
           <Eye :size="15" /> Ver screenshot
         </button>
+        <div
+          v-if="
+            selectedJob.status === 'SUCCEEDED' &&
+            ['OWNER', 'ADMIN', 'OPERATOR'].includes(me.role)
+          "
+          class="whatsapp-publication"
+        >
+          <button
+            v-if="!showPublicationForm"
+            class="button primary"
+            :disabled="
+              !whatsappConfigured ||
+              !whatsappInstances.some((item) => item.usable)
+            "
+            @click="openWhatsAppPublication(selectedJob)"
+          >
+            <MessageCircle :size="16" /> Publicar pelo WhatsApp
+          </button>
+          <p v-if="!whatsappConfigured" class="muted">
+            Configure a Connect API no menu WhatsApp para publicar esta coleta.
+          </p>
+          <p
+            v-else-if="!whatsappInstances.some((item) => item.usable)"
+            class="muted"
+          >
+            Crie ou vincule uma instância WhatsApp antes de publicar.
+          </p>
+          <div v-if="showPublicationForm" class="whatsapp-publication-form">
+            <label
+              >Instância<select v-model="publicationForm.instanceName" required>
+                <option
+                  v-for="instance in whatsappInstances.filter(
+                    (item) => item.usable,
+                  )"
+                  :key="instance.id"
+                  :value="instance.name"
+                >
+                  {{ instance.name
+                  }}{{
+                    instance.connectionState === "open" ? " · conectada" : ""
+                  }}
+                </option>
+              </select></label
+            >
+            <label
+              >Número WhatsApp<input
+                v-model="publicationForm.number"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                placeholder="+55 75 99999-9999"
+                required
+            /></label>
+            <label
+              >Mensagem<textarea
+                v-model="publicationForm.text"
+                rows="8"
+                maxlength="4096"
+                required
+              />
+            </label>
+            <div class="publication-footer">
+              <small
+                >{{ publicationForm.text.length }}/4096 caracteres · O envio
+                será registrado no histórico.</small
+              >
+              <div class="modal-actions">
+                <button
+                  class="button subtle"
+                  :disabled="publishing"
+                  @click="showPublicationForm = false"
+                >
+                  Cancelar</button
+                ><button
+                  class="button primary"
+                  :disabled="
+                    publishing ||
+                    !publicationForm.instanceName ||
+                    !publicationForm.number.trim() ||
+                    !publicationForm.text.trim()
+                  "
+                  @click="publishJobToWhatsApp"
+                >
+                  {{ publishing ? "Enviando…" : "Confirmar envio" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
         <pre class="json-result">{{
           JSON.stringify(
             selectedJob.result ?? {
@@ -2176,7 +2380,7 @@ onMounted(() => {
     </div>
     <div v-if="toast" class="toast"><Check :size="16" /> {{ toast }}</div>
     <footer class="app-footer">
-      <span>ARGWS Scout <i>·</i> {{ "0.2.0-alpha.2" }}</span
+      <span>ARGWS Scout <i>·</i> {{ "0.3.0" }}</span
       ><span
         >Web Intelligence & Automation <i>·</i>
         <a href="/docs/" target="_blank"

@@ -4,7 +4,7 @@
 
 - Usuários usam e-mail e senha Argon2id; o seed exige senha inicial de pelo menos 16 caracteres.
 - Sessão usa cookie HTTP-only, access de 15 minutos e refresh rotativo de até 30 dias.
-- TOTP é exigido para a conta OWNER no primeiro login por padrão; os demais perfis podem ativar MFA no Manager. Uma conta com MFA habilitada sempre precisa informar o código no login. Recuperação por backup codes ainda não está nesta alpha.
+- TOTP é exigido para a conta OWNER no primeiro login por padrão; os demais perfis podem ativar MFA no Manager. Uma conta com MFA habilitada sempre precisa informar o código no login. Recuperação por backup codes ainda não está disponível.
 - Membership define OWNER, ADMIN, OPERATOR e VIEWER por tenant. Tokens de API são por instância, guardados como hash SHA-256 e limitados por escopo; o segredo é mostrado uma única vez.
 - Segredos TOTP pendentes e webhooks usam AES-256-GCM, com chave de 32 bytes mantida fora do banco.
 
@@ -22,4 +22,4 @@ Mantenha `SCOUT_CORS_ORIGINS` restrito, `SCOUT_COOKIE_SECURE=true` com HTTPS e `
 
 ## Retenção
 
-Resultados vivem no PostgreSQL; screenshots no Garage/S3. Esta alpha não expira dados automaticamente. Defina retenção, backup cifrado e exclusão antes de habilitar coleta contínua.
+Resultados vivem no PostgreSQL; screenshots no Garage/S3. A plataforma não expira dados automaticamente. Defina retenção, backup cifrado e exclusão antes de habilitar coleta contínua.

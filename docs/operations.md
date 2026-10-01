@@ -30,7 +30,7 @@ Os scripts de deploy fazem dump PostgreSQL e snapshot Garage em diretório versi
 
 Restauração substitui o banco corrente e requer flag explícita --confirm-replace-current-data. A pasta Garage anterior é mantida como recuperação local. Proteja o arquivo .env e backups com o mesmo cuidado que credenciais de aplicação.
 
-### Migração das alphas que usavam MinIO
+### Migração das versões anteriores que usavam MinIO
 
 Faça e confira um backup antes da mudança. Para a migração, mantenha o serviço `minio` antigo ativo enquanto inicia somente `garage` e `garage-init` com o Compose novo, sem `--remove-orphans`. O container antigo e o novo Garage ficam na rede isolada do projeto.
 

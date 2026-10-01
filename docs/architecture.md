@@ -12,8 +12,8 @@ Scheduler → PostgreSQL/Outbox → Dispatcher
 ```
 
 - **Manager:** Vue 3, autenticação de usuário, tenant ativo, configuração e leitura de resultados.
-- **API:** Fastify, contratos Zod/OpenAPI, sessões, autorização, tenants, instâncias, fontes, jobs e auditoria. Não carrega Chromium.
-- **PostgreSQL:** fonte de verdade para tenant, memberships, configurações, jobs, tentativas, schedules, tokens, webhooks e outbox.
+- **API:** Fastify, contratos Zod/OpenAPI, sessões, autorização, tenants, instâncias, fontes, jobs, auditoria e integração server-to-server com Connect API. Não carrega Chromium.
+- **PostgreSQL:** fonte de verdade para tenant, memberships, configurações, jobs, tentativas, schedules, tokens, webhooks, outbox, credenciais Connect API cifradas e histórico cifrado de publicação.
 - **Outbox/Dispatcher:** job e evento de domínio são gravados com a alteração de estado no banco; o dispatcher publica de forma repetível. Consumers fazem claim condicional e idempotente.
 - **HTTP Worker:** requests limitados, URL/redirect/robots/SSRF validados, extração de HTML/JSON.
 - **Browser Worker:** imagem/container separado com Playwright e recursos próprios.
@@ -28,7 +28,7 @@ Scheduler → PostgreSQL/Outbox → Dispatcher
 
 ## Independência
 
-Não há pacote, autenticação, banco, fila, imagem ou código da ARGWS Connect API no grafo de dependências da Scout. Sistemas externos integram-se pelos mesmos contratos REST e Webhooks.
+Não há pacote, imagem, banco, fila ou código da ARGWS Connect API no grafo de dependências/deploy da Scout. A integração WhatsApp é opcional e usa contratos REST configurados por organização; a API Scout valida a URL, guarda a chave administrativa cifrada e usa o token próprio de cada instância nas ações vinculadas a ela.
 
 ## Entrega
 

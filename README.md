@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
+A próxima release estável 0.3.0 adiciona a integração WhatsApp à primeira versão estável 0.2.0. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
 
 ## O que a Scout já entrega
 
@@ -14,6 +14,8 @@ Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, c
 - Jobs assíncronos com outbox transacional, tentativas, cancelamento de jobs enfileirados, resultados JSON e artefatos.
 - Scheduler com cron e timezone, pausa e retomada de rotinas.
 - Webhooks assinados por HMAC, retries, idempotência e histórico de entrega.
+- Manager WhatsApp integrado diretamente à Connect API para criar, sincronizar, parear, selecionar e remover instâncias por organização.
+- Publicação manual de coletas concluídas em número escolhido, com confirmação, segredo cifrado, histórico e idempotência sem reenvio automático ambíguo.
 - Tokens por instância, escopos explícitos, expiração, último uso e revogação.
 - Trilha de auditoria das ações administrativas.
 - Manager com dashboard de volume e taxa de sucesso em 24 horas, busca e filtros de jobs, ações por fonte, tokens, entregas, usuários, auditoria e diagnóstico de dependências.
@@ -22,7 +24,7 @@ Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, c
 
 ## Gerenciador
 
-O Manager agrupa operação em Visão geral, Instâncias, Execuções, Agendamentos, Webhooks, Acesso e auditoria, Saúde da plataforma e Configurações. OWNER e ADMIN veem governança e sondagem de dependências. O painel de saúde testa PostgreSQL, Redis, RabbitMQ e Garage, e mostra backlog de jobs, falhas recentes, uptime e memória da API.
+O Manager agrupa operação em Visão geral, Instâncias, Execuções, WhatsApp, Agendamentos, Webhooks, Acesso e auditoria, Saúde da plataforma e Configurações. OWNER e ADMIN administram a conexão Connect API e instâncias; OWNER, ADMIN e OPERATOR podem publicar coletas concluídas após revisar instância, telefone e mensagem. O painel de saúde testa PostgreSQL, Redis, RabbitMQ e Garage, e mostra backlog de jobs, falhas recentes, uptime e memória da API. Consulte [o guia WhatsApp](docs/whatsapp-connect-api.md) para configuração e operação.
 
 O histórico operacional do Manager usa as rotas da API. Para uma instalação maior, logs de worker e proxy ficam nos logs dos serviços Docker; a página de saúde não substitui um stack externo de métricas e alertas.
 
