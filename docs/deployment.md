@@ -10,7 +10,7 @@ O Manager publica somente `127.0.0.1:8080`; CloudPanel termina TLS e encaminha o
 
 ## Bases e fluxo
 
-A publicação chama o workflow reutilizável de espelhamento GHCR antes de compilar. O workflow sincroniza Node, Nginx, Playwright, Alpine, BuildKit, PostgreSQL, Redis, RabbitMQ e Garage; tags existentes são preservadas e só atualizadas por dispatch com `refresh_existing=true`.
+A publicação chama o workflow reutilizável de espelhamento GHCR antes de compilar. O workflow sincroniza Node, Nginx, Playwright, Alpine, BuildKit, PostgreSQL, Redis, RabbitMQ e Garage; preserva os mirrors existentes no fluxo normal, atualiza semanalmente as tags de versão fixada e aceita refresh manual por dispatch com `refresh_existing=true`.
 
 `develop` publica o canal de teste. Uma PR revisada de `develop` para `main` publica SemVer e canal estável após os gates. O BuildKit mantém cache por componente e limpa caches próprios sem acesso há duas horas depois de publicação validada. Tags, imagens de release e histórico de releases não são alvos dessa limpeza.
 
