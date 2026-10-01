@@ -1,17 +1,38 @@
 # Deploy ARGWS Scout
 
-Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}` tem somente `compose.yaml` e `.env.example`. Não há scripts do host, configuração montada nem build no servidor. Os serviços usam imagens GHCR.
+Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}` contém apenas `compose.yaml` e `.env.example`. Os manifests não fazem build no host nem pedem scripts, arquivos de configuração ou serviços externos. Aplicação e dependências de infraestrutura são baixadas do GHCR.
 
-## Instalação
+## Perfil por plataforma
 
-Copie `.env.example` para `.env`, preencha URL e segredos, valide com `docker compose --env-file .env -f compose.yaml config --quiet`, baixe as imagens e suba a stack com `pull` e `up -d`. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`. MFA é obrigatório no primeiro acesso. Os pulls sem credencial exigem pacotes GHCR com leitura pública; caso sejam privados, configure a autenticação GHCR no host antes do pull.
+| Plataforma     | Persistência                                               | Entrada de variáveis                                                                          | Porta padrão do Manager           |
+| -------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- |
+| Docker Compose | Diretórios `./volumes` ao lado do Compose                  | Copie `.env.example` para `.env`                                                              | develop `8080`, production `8180` |
+| Dockge         | Diretórios `./volumes` dentro da pasta gerenciada do stack | Mantenha `.env` ao lado do Compose                                                            | develop `8081`, production `8181` |
+| CloudPanel     | Diretórios `./volumes` da stack                            | `.env` ao lado do Compose; proxy CloudPanel para `127.0.0.1`                                  | develop `8082`, production `8182` |
+| Portainer      | Volumes Docker com nome do projeto                         | Docker Standalone: carregue `.env.example` como variáveis do stack; o Compose usa `stack.env` | develop `8083`, production `8183` |
 
-O Manager publica somente `127.0.0.1:8080`; CloudPanel termina TLS e encaminha o domínio para essa porta. PostgreSQL, Redis, RabbitMQ e Garage ficam na rede Compose e persistem em volumes relativos. Garage usa configuração inline no Compose; nenhum `garage.toml` é necessário. Requisito: Docker Compose v2.23.1+.
+Cada arquivo tem `COMPOSE_PROJECT_NAME` próprio por plataforma e ambiente. Preserve esse valor ao atualizar: ele identifica rede e volumes e evita colisão entre staging e produção. Docker, Dockge e CloudPanel mantêm os dados nos diretórios relativos da stack; Portainer usa volumes nomeados. As portas de loopback também são isoladas para permitir que vários stacks compartilhem o mesmo host.
 
-## Bases e fluxo
+No Dockge, use a ação de atualização da stack para baixar imagens e recriar os serviços depois de alterar `SCOUT_TAG`; o diretório `./volumes` permanece associado à pasta da stack. Na CloudPanel, atualize a mesma stack com `docker compose pull` e `docker compose up -d` após trocar `SCOUT_TAG`.
 
-A publicação chama o workflow reutilizável de espelhamento GHCR antes de compilar. O workflow sincroniza Node, Nginx, Playwright, Alpine, BuildKit, PostgreSQL, Redis, RabbitMQ e Garage; preserva os mirrors existentes no fluxo normal, atualiza semanalmente as tags de versão fixada e aceita refresh manual por dispatch com `refresh_existing=true`.
+Em instalações Portainer existentes da 0.3.0, pare a stack e faça backup antes da atualização: os novos volumes nomeados não reaproveitam automaticamente os bind mounts antigos em `./volumes`. Copie ou restaure PostgreSQL, Redis, RabbitMQ e Garage nos volumes `${COMPOSE_PROJECT_NAME}-postgres`, `-redis`, `-rabbitmq`, `-garage-meta` e `-garage-data` antes do primeiro deploy; mantenha `COMPOSE_PROJECT_NAME` estável.
 
-`develop` publica o canal de teste. Uma PR revisada de `develop` para `main` publica SemVer e canal estável após os gates. O BuildKit mantém cache por componente e limpa caches próprios sem acesso há duas horas depois de publicação validada. Tags, imagens de release e histórico de releases não são alvos dessa limpeza.
+O bundle de Portainer é para endpoint **Docker Standalone**. Docker Swarm tem outra semântica de stack, variáveis e volumes e não é suportado por estes manifests. No Portainer, dê ao stack o mesmo nome definido em `COMPOSE_PROJECT_NAME` e importe o `.env.example` na seção de variáveis do stack. O manifest passa essas variáveis aos containers por `stack.env`, que o Portainer fornece no modo Docker Standalone. Para atualizar, edite `SCOUT_TAG`, faça pull das imagens e redeploy do stack.
 
-Use `docker compose ps`, `logs`, `exec` e `run` para operação. Faça backup do banco e do volume Garage antes de atualizar e teste a restauração em homologação.
+## Instalação e atualização
+
+Para Docker Compose, Dockge e CloudPanel, coloque os dois arquivos na mesma pasta, copie `.env.example` para `.env`, gere e preencha cada segredo, ajuste `SCOUT_PUBLIC_URL` e mantenha `COMPOSE_PROJECT_NAME`. Para atualização pelo terminal, execute `docker compose pull` e `docker compose up -d`; isso aplica o novo `SCOUT_TAG` sem recriar os volumes. O OWNER inicial é criado uma vez com `docker compose --profile maintenance run --rm bootstrap`.
+
+Na CloudPanel, configure o domínio HTTPS para encaminhar ao `127.0.0.1` na porta indicada pelo `SCOUT_MANAGER_PORT`. Nenhum container de proxy adicional é necessário. O acesso público às imagens GHCR exige pacotes com leitura pública; se os pacotes forem privados, autentique o host no GHCR antes de baixar.
+
+Os `.env.example` trazem marcadores, não segredos prontos para produção. Use uma chave Base64 aleatória de 32 bytes em `SCOUT_ENCRYPTION_KEY_BASE64`; a API agora valida essa chave durante a inicialização para evitar que o Manager abra e falhe apenas ao salvar credenciais da Connect API.
+
+As dez imagens da Scout usam `SCOUT_IMAGE_OWNER` e `SCOUT_TAG`; os serviços de base (PostgreSQL, Redis, RabbitMQ e Garage) mantêm tags próprias e fixas. Para atualizar uma produção, troque somente `SCOUT_TAG` pela versão publicada e use pull/redeploy. `develop` acompanha a tag móvel `develop`. O Compose pede pull em cada atualização. Faça backup do banco e do Garage antes de trocar a versão, depois valide API, Manager, coleta e envio WhatsApp.
+
+## Bases, publicação e cache
+
+O workflow sincroniza bases PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, Nginx, Playwright e BuildKit para GHCR antes de compilar a aplicação. Mantém tags de base fixadas e só as atualiza por revisão ou refresh manual. Uma PR revisada de `develop` para `main` publica imagens SemVer após os quality gates; a release do Git é criada depois que as imagens terminam de publicar.
+
+O BuildKit mantém cache por componente. Após uma publicação validada, a política remove somente caches próprios sem acesso há duas horas; não remove tags ou imagens de release.
+
+Não execute `docker compose down --volumes` para atualizar ou reverter: isso remove os dados persistentes. Use `pull` e `up -d`; o nome `COMPOSE_PROJECT_NAME` identifica as redes e volumes que devem sobreviver à atualização.

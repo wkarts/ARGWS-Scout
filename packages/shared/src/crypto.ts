@@ -20,6 +20,10 @@ function encryptionKey(): Buffer {
   return key;
 }
 
+export function validateEncryptionKey(): void {
+  void encryptionKey();
+}
+
 export function encryptSecret(plaintext: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);

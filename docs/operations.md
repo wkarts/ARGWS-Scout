@@ -2,17 +2,17 @@
 
 ## Perfis de instalação
 
-O Compose raiz é o ambiente de desenvolvimento local e mapeia Postgres, Redis, RabbitMQ e S3 somente para loopback para permitir os processos Node em modo watch. Os pacotes GHCR de deployment não mapeiam portas de infraestrutura e ficam separados em deploy/docker, deploy/dockge, deploy/cloudpanel e deploy/portainer, cada um com develop e production. Siga deploy/README.md para gerar segredos, verificar preflight, inicializar OWNER, atualizar, fazer backup ou restaurar.
+O Compose raiz é o ambiente de desenvolvimento local e mapeia Postgres, Redis, RabbitMQ e S3 somente para loopback para permitir os processos Node em modo watch. Os pacotes GHCR de deploy ficam separados em deploy/docker, deploy/dockge, deploy/cloudpanel e deploy/portainer, cada um com develop e production. Cada pacote tem somente Compose e `.env.example`; use [o guia de deploy](deployment.md) para preencher segredos, inicializar OWNER, atualizar e fazer backup/restauração.
 
 Em produção, use domínio HTTPS, SCOUT_COOKIE_SECURE=true, SCOUT_ALLOW_HTTP=false, CORS restrito e SCOUT_TRUST_PROXY_HOPS compatível com o proxy. Só Manager publica porta e o bind é 127.0.0.1. CloudPanel termina TLS e encaminha para o gateway.
 
 ## Serviços e verificação
 
-O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migração, dispatcher, worker HTTP, browser worker, scheduler e webhook worker. As sondagens da API verificam Postgres e Redis para readiness; a área Saúde da plataforma verifica também RabbitMQ e Garage. Containers têm política de restart, healthchecks onde a imagem suporta e limites de log. Dados persistentes usam bind mounts relativos por serviço.
+O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migração, dispatcher, worker HTTP, browser worker, scheduler e webhook worker. As sondagens da API verificam Postgres e Redis para readiness; a área Saúde da plataforma verifica também RabbitMQ e Garage. Containers têm política de restart, healthchecks onde a imagem suporta e limites de log. Docker, Dockge e CloudPanel usam bind mounts relativos; Portainer usa volumes nomeados com prefixo do projeto.
 
-Comandos úteis na raiz para desenvolvimento: docker compose ps; docker compose logs -f api dispatcher worker browser-worker scheduler webhook-worker; docker compose exec api pnpm db:seed. Em Dockge/Portainer use logs e estado do stack; deploy.sh e status.sh continuam acessíveis na pasta hospedada.
+Comandos úteis na raiz para desenvolvimento: `docker compose ps`, `docker compose logs -f api dispatcher worker browser-worker scheduler webhook-worker` e `docker compose exec api pnpm db:seed`. Em Dockge/Portainer use o estado e os logs do stack. Os pacotes publicados não dependem de scripts hospedados no servidor.
 
-## Limites alfa por serviço
+## Limites funcionais por serviço
 
 - API: limite global de 120 requests/minuto por chave/IP em Redis; login tem limite menor.
 - HTTP: timeout 20 s, resposta até 2 MiB, intervalo mínimo de 1 s por fonte.

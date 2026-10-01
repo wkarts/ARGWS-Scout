@@ -1,4 +1,4 @@
-name: argws-scout-${SCOUT_ENV:-develop}
+name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}
 
 services:
   postgres:
@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-scout}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD}
     volumes:
-      - ./volumes/postgres:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -37,7 +37,7 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate REDIS_PASSWORD}
     volumes:
-      - ./volumes/redis:/data
+      - redis-data:/data
     healthcheck:
       test: [CMD-SHELL, 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 10s
@@ -54,7 +54,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-scout}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Generate RABBITMQ_PASSWORD}
     volumes:
-      - ./volumes/rabbitmq:/var/lib/rabbitmq
+      - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: [CMD, rabbitmq-diagnostics, -q, ping]
       interval: 15s
@@ -68,18 +68,18 @@ services:
     pull_policy: always
     restart: unless-stopped
     entrypoint: [/garage]
-    command: [-c, /etc/garage.toml, server, --single-node]
+    command: [-c, /etc/garage-config/garage.toml, server, --single-node]
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
     volumes:
-      - ./volumes/garage/meta:/var/lib/garage/meta
-      - ./volumes/garage/data:/var/lib/garage/data
-    configs:
-      - source: garage-config
-        target: /etc/garage.toml
+      - garage-meta-data:/var/lib/garage/meta
+      - garage-object-data:/var/lib/garage/data
+      - garage-config-data:/etc/garage-config:ro
+    depends_on:
+      garage-config-init: { condition: service_completed_successfully }
     healthcheck:
-      test: [CMD, /garage, -c, /etc/garage.toml, status]
+      test: [CMD, /garage, -c, /etc/garage-config/garage.toml, status]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -87,8 +87,35 @@ services:
     logging: *default-logging
     networks: [scout]
 
+  garage-config-init:
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-develop}
+    pull_policy: always
+    restart: "no"
+    network_mode: none
+    entrypoint: [/bin/sh, -ec]
+    command: |
+      cat > /config/garage.toml <<'EOF'
+      metadata_dir = "/var/lib/garage/meta"
+      data_dir = "/var/lib/garage/data"
+      db_engine = "lmdb"
+      replication_factor = 1
+      rpc_bind_addr = "[::]:3901"
+      rpc_public_addr = "garage:3901"
+
+      [s3_api]
+      api_bind_addr = "[::]:3900"
+      s3_region = "us-east-1"
+      root_domain = ".s3.garage"
+
+      [admin]
+      api_bind_addr = "[::]:3903"
+      EOF
+    volumes:
+      - garage-config-data:/config
+    logging: *default-logging
+
   garage-init:
-    image: ${ARGWS_SCOUT_GARAGE_INIT_IMAGE:?Define GHCR Garage bootstrap image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: "no"
     network_mode: "service:garage"
@@ -96,30 +123,29 @@ services:
       garage: { condition: service_healthy }
     entrypoint: [/bin/sh, -ec]
     command: >-
-      if ! garage key info "$${S3_ACCESS_KEY_ID}" >/dev/null 2>&1; then
-        garage key import --yes -n argws-scout "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}";
+      if ! garage -c /etc/garage-config/garage.toml key info "$${S3_ACCESS_KEY_ID}" >/dev/null 2>&1; then
+        garage -c /etc/garage-config/garage.toml key import --yes -n argws-scout "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}";
       fi;
-      if ! garage bucket info "$${S3_BUCKET}" >/dev/null 2>&1; then
-        garage bucket create "$${S3_BUCKET}";
+      if ! garage -c /etc/garage-config/garage.toml bucket info "$${S3_BUCKET}" >/dev/null 2>&1; then
+        garage -c /etc/garage-config/garage.toml bucket create "$${S3_BUCKET}";
       fi;
-      garage bucket allow --read --write "$${S3_BUCKET}" --key "$${S3_ACCESS_KEY_ID}"
+      garage -c /etc/garage-config/garage.toml bucket allow --read --write "$${S3_BUCKET}" --key "$${S3_ACCESS_KEY_ID}"
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-scout-artifacts}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Generate S3_SECRET_ACCESS_KEY}
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
-    configs:
-      - source: garage-config
-        target: /etc/garage.toml
+    volumes:
+      - garage-config-data:/etc/garage-config:ro
     logging: *default-logging
 
   migrate:
-    image: ${ARGWS_SCOUT_MIGRATION_IMAGE:?Define GHCR migration image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: "no"
     command: [sh, -lc, "pnpm db:generate && pnpm db:migrate"]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
     depends_on:
@@ -128,12 +154,12 @@ services:
     networks: [scout]
 
   bootstrap:
-    image: ${ARGWS_SCOUT_MIGRATION_IMAGE:?Define GHCR migration image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-develop}
     pull_policy: always
     profiles: [maintenance]
     restart: "no"
     command: [pnpm, db:seed]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
     depends_on:
@@ -142,15 +168,15 @@ services:
     networks: [scout]
 
   api:
-    image: ${ARGWS_SCOUT_API_IMAGE:?Define GHCR API image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-api:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-api", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.3.0}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.4.0}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -185,7 +211,7 @@ services:
     networks: [scout]
 
   manager:
-    image: ${ARGWS_SCOUT_MANAGER_IMAGE:?Define GHCR Manager image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-manager:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     ports:
@@ -202,18 +228,18 @@ services:
     networks: [scout]
 
   docs:
-    image: ${ARGWS_SCOUT_DOCS_IMAGE:?Define GHCR Docs image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-docs:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     logging: *default-logging
     networks: [scout]
 
   dispatcher:
-    image: ${ARGWS_SCOUT_DISPATCHER_IMAGE:?Define GHCR dispatcher image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-dispatcher:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-dispatcher", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       <<: *app-environment
     depends_on:
@@ -223,11 +249,11 @@ services:
     networks: [scout]
 
   worker:
-    image: ${ARGWS_SCOUT_WORKER_IMAGE:?Define GHCR HTTP worker image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-worker:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-worker", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       <<: *app-environment
     depends_on:
@@ -239,7 +265,7 @@ services:
     networks: [scout]
 
   browser-worker:
-    image: ${ARGWS_SCOUT_BROWSER_WORKER_IMAGE:?Define GHCR browser worker image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-browser-worker:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -250,7 +276,7 @@ services:
     cap_drop: [ALL]
     tmpfs: [/tmp:rw, noexec, nosuid, size=512m]
     command: [pnpm, --filter, "@argws/scout-browser-worker", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       <<: *app-environment
       SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}
@@ -263,11 +289,11 @@ services:
     networks: [scout]
 
   scheduler:
-    image: ${ARGWS_SCOUT_SCHEDULER_IMAGE:?Define GHCR scheduler image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-scheduler:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-scheduler", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       <<: *app-environment
     depends_on:
@@ -276,11 +302,11 @@ services:
     networks: [scout]
 
   webhook-worker:
-    image: ${ARGWS_SCOUT_WEBHOOK_WORKER_IMAGE:?Define GHCR webhook worker image}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-webhook-worker:${SCOUT_TAG:-develop}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-webhook-worker", start]
-    env_file: [.env]
+    env_file: [stack.env]
     environment:
       <<: *app-environment
     depends_on:
@@ -291,23 +317,19 @@ services:
 
 networks:
   scout:
-    name: argws-scout-${SCOUT_ENV:-develop}-network
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-network
     driver: bridge
 
-configs:
-  garage-config:
-    content: |
-      metadata_dir = "/var/lib/garage/meta"
-      data_dir = "/var/lib/garage/data"
-      db_engine = "lmdb"
-      replication_factor = 1
-      rpc_bind_addr = "[::]:3901"
-      rpc_public_addr = "garage:3901"
-
-      [s3_api]
-      api_bind_addr = "[::]:3900"
-      s3_region = "us-east-1"
-      root_domain = ".s3.garage"
-
-      [admin]
-      api_bind_addr = "[::]:3903"
+volumes:
+  garage-config-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-config
+  postgres-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-postgres
+  redis-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-redis
+  rabbitmq-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-rabbitmq
+  garage-meta-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-meta
+  garage-object-data:
+    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-data
