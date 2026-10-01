@@ -63,12 +63,12 @@ Cada pacote contém apenas compose.yaml e .env.example. Não há scripts do host
 
 Para instalar um alvo:
 
-1. Abra a pasta do alvo/canal no servidor.
-2. Revise .env.example, URL pública, dono e tags GHCR.
-3. Execute ./prepare-env.py e revise .env, que recebe modo 0600.
-4. Execute ./preflight.sh, ./deploy.sh e ./bootstrap.sh.
+1. Copie `.env.example` para `.env` e preencha URL, segredos e tags.
+2. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet`.
+3. Baixe e inicie os serviços com `docker compose --env-file .env -f compose.yaml pull` e `docker compose --env-file .env -f compose.yaml up -d`.
+4. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`.
 
-Em produção, defina SCOUT_PUBLIC_URL para o domínio HTTPS, SCOUT_COOKIE_SECURE=true e SCOUT_ALLOW_HTTP=false. Os pacotes GHCR podem ser públicos para pulls sem credencial; se forem privados, deploy.sh aceita GHCR_USERNAME e GHCR_TOKEN como variáveis temporárias e remove o Docker config temporário no fim. O token nunca é gravado na pasta da aplicação.
+Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS, `SCOUT_COOKIE_SECURE=true` e `SCOUT_ALLOW_HTTP=false`. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
 
 ## Imagens e entrega
 
