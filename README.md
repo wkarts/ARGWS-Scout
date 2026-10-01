@@ -35,7 +35,7 @@ O histórico operacional do Manager usa as rotas da API. Para uma instalação m
 - packages: schemas, SDK de conectores, execução HTTP/browser, extração, core e utilitários compartilhados.
 - prisma: modelo PostgreSQL, migrações e seed inicial.
 - deploy/docker, deploy/dockge, deploy/cloudpanel e deploy/portainer: canais develop e production independentes.
-- deploy/templates: fonte versionada dos arquivos dos oito pacotes de instalação.
+- ops/deployment: fonte Compose e configuração operacional; pacotes de deploy sem scripts auxiliares.
 - .github/workflows: quality gates, implantação, segurança, espelhamento GHCR, publicação de aplicação e release.
 
 ## Fluxo local
@@ -59,7 +59,7 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pasta contém compose.yaml, .env.example, geração local de segredos, preflight, implantação, bootstrap do OWNER, status/logs, backup PostgreSQL + Garage e restauração com confirmação explícita. Os dados de PostgreSQL, Redis, RabbitMQ e Garage permanecem em diretórios relativos à stack. O único bind publicado é 127.0.0.1:8080 para o gateway Manager; CloudPanel termina TLS e faz o proxy reverso até essa porta.
+Cada pacote contém apenas compose.yaml e .env.example. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte docs/deployment.md. Os dados de PostgreSQL, Redis, RabbitMQ e Garage permanecem em diretórios relativos à stack. O único bind publicado é 127.0.0.1:8080 para o gateway Manager; CloudPanel termina TLS e faz o proxy reverso até essa porta.
 
 Para instalar um alvo:
 

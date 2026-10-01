@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "build_cache_hours": 2,
+  "managed_buildkit_scope_prefix": "argws-scout-buildkit-",
+  "maximum_deletions_per_run": 100,
+  "delete_git_tags": false,
+  "delete_github_releases": false,
+  "delete_release_images": false
+}

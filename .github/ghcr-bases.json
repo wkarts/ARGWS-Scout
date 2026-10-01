@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "images": [
+    {
+      "source": "docker.io/library/postgres:17.11-alpine3.23",
+      "package": "argws-scout-postgres",
+      "tag": "17.11-alpine3.23"
+    },
+    {
+      "source": "docker.io/library/redis:7.4.9-alpine",
+      "package": "argws-scout-redis",
+      "tag": "7.4.9-alpine"
+    },
+    {
+      "source": "docker.io/library/rabbitmq:4.3.6-management-alpine",
+      "package": "argws-scout-rabbitmq",
+      "tag": "4.3.6-management-alpine"
+    },
+    {
+      "source": "docker.io/dxflrs/garage:v2.4.1",
+      "package": "argws-scout-garage",
+      "tag": "v2.4.1"
+    },
+    {
+      "source": "docker.io/library/node:24.21.0-bookworm-slim",
+      "package": "argws-scout-node",
+      "tag": "24.21.0-bookworm-slim"
+    },
+    {
+      "source": "docker.io/library/nginx:1.30.5-alpine",
+      "package": "argws-scout-nginx",
+      "tag": "1.30.5-alpine"
+    },
+    {
+      "source": "docker.io/library/alpine:3.23",
+      "package": "argws-scout-alpine",
+      "tag": "3.23"
+    },
+    {
+      "source": "mcr.microsoft.com/playwright:v1.63.0-noble",
+      "package": "argws-scout-playwright",
+      "tag": "v1.63.0-noble"
+    },
+    {
+      "source": "docker.io/moby/buildkit:buildx-stable-1",
+      "package": "argws-scout-buildkit",
+      "tag": "buildx-stable-1"
+    }
+  ]
+}
