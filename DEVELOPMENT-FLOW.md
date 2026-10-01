@@ -6,7 +6,7 @@
 - develop: integração e teste no ambiente de staging.
 - feat/_, fix/_, docs/_, test/_ e chore/*: branches curtas, abertas para develop.
 - A promoção para main é feita somente por PR revisada develop → main. Um PR direto de branch curta para main é recusado pelo quality gate.
-- O arquivo VERSION e todos os manifests workspace são alterados na mesma mudança. develop usa SemVer pre-release; main usa SemVer estável.
+- O arquivo VERSION e todos os manifests workspace permanecem alinhados e são atualizados na mudança de release. develop publica no canal develop para staging; main usa SemVer estável.
 
 ## Quality gates
 

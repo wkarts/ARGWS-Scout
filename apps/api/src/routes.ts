@@ -1747,7 +1747,7 @@ export async function registerRoutes(
         dependencies,
         activity: { queuedJobs, activeJobs, failedJobsLast24Hours: failedJobs },
         runtime: {
-          version: process.env.SCOUT_VERSION ?? "0.2.0",
+          version: process.env.SCOUT_VERSION ?? "0.3.0",
           uptimeSeconds: Math.floor(process.uptime()),
           memoryBytes: process.memoryUsage().rss,
           node: process.version,

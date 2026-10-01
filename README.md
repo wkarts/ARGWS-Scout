@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-Versão 0.2.0 é a primeira versão estável da plataforma. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
+A próxima release estável 0.3.0 adiciona a integração WhatsApp à primeira versão estável 0.2.0. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
 
 ## O que a Scout já entrega
 
