@@ -48,12 +48,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - name: Format and print the GHCR workflows for exact repository style
-        run: |
-          pnpm exec prettier --write .github/workflows/ghcr-publish-application.yml .github/workflows/ghcr-sync-infrastructure.yml .github/workflows/deployment-integrity.yml
-          cat .github/workflows/ghcr-publish-application.yml
-          cat .github/workflows/ghcr-sync-infrastructure.yml
-          cat .github/workflows/deployment-integrity.yml
       - run: pnpm format:check
       - name: Enforce SemVer and workspace version contract
         shell: bash
