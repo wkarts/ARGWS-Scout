@@ -15,6 +15,7 @@ jobs:
         run: |
           python3 test/deployment-contract.py
           python3 test/actions-cache-retention.py
+          python3 scripts/ghcr-bases.py --mode validate --owner wkarts
       - name: Validate every deployment target and channel
         shell: bash
         run: |
@@ -28,3 +29,4 @@ jobs:
               python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done
+
