@@ -83,7 +83,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
-  version: process.env.SCOUT_VERSION ?? "0.2.0",
+  version: process.env.SCOUT_VERSION ?? "0.3.0",
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([
