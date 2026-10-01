@@ -71,36 +71,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 test/deployment-contract.py
           for target in docker dockge cloudpanel portainer; do
             for channel in develop production; do
               folder="deploy/$target/$channel"
               cp "$folder/.env.example" "$folder/.env"
+              if [[ "$target" == portainer ]]; then cp "$folder/.env" "$folder/stack.env"; fi
               docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
               docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
-              python3 - "$folder" /tmp/scout-compose.json <<'PY'
-          import json, pathlib, sys
-          folder, model_path = pathlib.Path(sys.argv[1]).resolve(), pathlib.Path(sys.argv[2])
-          model = json.loads(model_path.read_text())
-          published = [(name, port) for name, service in model["services"].items() for port in service.get("ports", [])]
-          assert len(published) == 1, f"{folder}: expected one published port, got {published}"
-          service, port = published[0]
-          assert service == "manager" and port.get("host_ip") == "127.0.0.1", (folder, service, port)
-          expected_mounts = (("postgres", "/var/lib/postgresql/data"), ("redis", "/data"), ("rabbitmq", "/var/lib/rabbitmq"), ("garage", "/var/lib/garage/meta"), ("garage", "/var/lib/garage/data"))
-          for name, target in expected_mounts:
-              mounts = model["services"][name].get("volumes", [])
-              assert any(mount.get("type") == "bind" and pathlib.Path(mount.get("source", "")).is_relative_to(folder) and mount.get("target") == target for mount in mounts), f"{folder}: {name} must use a relative bind mount"
-          assert model["services"]["garage-init"].get("network_mode") == "service:garage", f"{folder}: Garage bootstrap must stay inside the private stack network"
-          env = dict(line.split("=", 1) for line in (folder / ".env.example").read_text().splitlines() if line and not line.startswith("#") and "=" in line)
-          release_version = pathlib.Path("VERSION").read_text().strip()
-          channel = folder.name
-          expected_tag = ("stable" if "-alpha." not in release_version else release_version) if channel == "production" else "develop"
-          assert env.get("SCOUT_VERSION") == release_version, f"{folder}: SCOUT_VERSION must match VERSION"
-          assert env.get("SCOUT_TAG") == expected_tag, f"{folder}: SCOUT_TAG must be {expected_tag}"
-          application_images = {"ARGWS_SCOUT_API_IMAGE", "ARGWS_SCOUT_MIGRATION_IMAGE", "ARGWS_SCOUT_DISPATCHER_IMAGE", "ARGWS_SCOUT_WORKER_IMAGE", "ARGWS_SCOUT_SCHEDULER_IMAGE", "ARGWS_SCOUT_WEBHOOK_WORKER_IMAGE", "ARGWS_SCOUT_MANAGER_IMAGE", "ARGWS_SCOUT_DOCS_IMAGE", "ARGWS_SCOUT_BROWSER_WORKER_IMAGE", "ARGWS_SCOUT_GARAGE_INIT_IMAGE"}
-          image_values = [env[key] for key in application_images]
-          assert all(value.endswith(f":{expected_tag}") for value in image_values), f"{folder}: application image tags must match {expected_tag}"
-          print(f"{folder}: one loopback port, five relative persistent binds, and {expected_tag} image tags")
-          PY
+              python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done
       - name: Require a releasable version on main

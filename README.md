@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A próxima release estável 0.3.0 adiciona a integração WhatsApp à primeira versão estável 0.2.0. Valide capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.
+A release estável 0.4.0 corrige a instalação por plataforma, isola o nome e o armazenamento de cada stack e valida a chave usada para cifrar credenciais do Manager. A área WhatsApp se conecta diretamente à Connect API para administrar instâncias e publicar coletas.
 
 ## O que a Scout já entrega
 
@@ -20,7 +20,7 @@ A próxima release estável 0.3.0 adiciona a integração WhatsApp à primeira v
 - Trilha de auditoria das ações administrativas.
 - Manager com dashboard de volume e taxa de sucesso em 24 horas, busca e filtros de jobs, ações por fonte, tokens, entregas, usuários, auditoria e diagnóstico de dependências.
 - Containers separados para API, Manager, documentação, dispatcher, workers HTTP e browser, scheduler, webhook worker e bootstrap do Garage.
-- PostgreSQL, Redis, RabbitMQ e Garage com sondagens de saúde e armazenamento persistente por bind mount.
+- PostgreSQL, Redis, RabbitMQ e Garage com sondagens de saúde e armazenamento persistente isolado por projeto e plataforma.
 
 ## Gerenciador
 
@@ -61,16 +61,17 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pacote contém apenas compose.yaml e .env.example. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte docs/deployment.md. Os dados de PostgreSQL, Redis, RabbitMQ e Garage permanecem em diretórios relativos à stack. O único bind publicado é 127.0.0.1:8080 para o gateway Manager; CloudPanel termina TLS e faz o proxy reverso até essa porta.
+Cada pacote contém apenas `compose.yaml` e `.env.example`. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
 
 Para instalar um alvo:
 
-1. Copie `.env.example` para `.env` e preencha URL, segredos e tags.
-2. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet`.
-3. Baixe e inicie os serviços com `docker compose --env-file .env -f compose.yaml pull` e `docker compose --env-file .env -f compose.yaml up -d`.
-4. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`.
+1. Docker Compose, Dockge e CloudPanel: copie `.env.example` para `.env` e preencha URL e segredos. Portainer Standalone: carregue o `.env.example` na seção de variáveis do stack.
+2. Preserve `COMPOSE_PROJECT_NAME` em atualizações. Ele define nome da rede e volumes persistentes.
+3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou a versão estável publicada para produção. Essa única tag atualiza as dez imagens da Scout.
+4. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet` ou use a validação do stack no Portainer.
+5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. Crie o OWNER uma vez pelo perfil `maintenance` do Compose; no Portainer, use o console do container da API para executar `pnpm db:seed` uma vez.
 
-Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS, `SCOUT_COOKIE_SECURE=true` e `SCOUT_ALLOW_HTTP=false`. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
+Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a porta de loopback indicada no `.env.example`. A chave `SCOUT_ENCRYPTION_KEY_BASE64` precisa ser gerada como Base64 de 32 bytes; a API rejeita placeholders durante a inicialização. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
 
 ## Imagens e entrega
 

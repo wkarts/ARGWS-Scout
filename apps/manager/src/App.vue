@@ -2380,7 +2380,7 @@ onMounted(() => {
     </div>
     <div v-if="toast" class="toast"><Check :size="16" /> {{ toast }}</div>
     <footer class="app-footer">
-      <span>ARGWS Scout <i>·</i> {{ "0.3.0" }}</span
+      <span>ARGWS Scout <i>·</i> {{ "0.4.0" }}</span
       ><span
         >Web Intelligence & Automation <i>·</i>
         <a href="/docs/" target="_blank"

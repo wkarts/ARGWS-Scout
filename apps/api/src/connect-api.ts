@@ -54,21 +54,24 @@ function endpointUrl(baseUrl: string, path: string): URL {
   return url;
 }
 
-export async function connectApiRequest<T>(input: {
-  baseUrl: string;
-  apiKey: string;
-  path: string;
-  method?: "GET" | "POST" | "DELETE";
-  body?: Record<string, unknown>;
-  timeoutMs?: number;
-}): Promise<T> {
+export async function connectApiRequest<T>(
+  input: {
+    baseUrl: string;
+    apiKey: string;
+    path: string;
+    method?: "GET" | "POST" | "DELETE";
+    body?: Record<string, unknown>;
+    timeoutMs?: number;
+  },
+  request: typeof safeRequest = safeRequest,
+): Promise<T> {
   const baseUrl = normalizeConnectBaseUrl(input.baseUrl);
   if (!input.apiKey.trim())
     throw new ConnectApiError(
       "A chave administrativa da Connect API não está configurada.",
     );
   const url = endpointUrl(baseUrl, input.path);
-  const response = await safeRequest(url.toString(), {
+  const response = await request(url.toString(), {
     allowedHosts: [url.hostname],
     method: input.method ?? "GET",
     headers: {
@@ -92,6 +95,19 @@ export async function connectApiRequest<T>(input: {
   } catch {
     throw new ConnectApiError("A Connect API retornou uma resposta inválida.");
   }
+}
+
+export function createWhatsAppInstancePayload(name: string, token: string) {
+  return {
+    instanceName: name,
+    integration: "WHATSAPP-BAILEYS",
+    token,
+    qrcode: true,
+  };
+}
+
+export function sendWhatsAppTextPayload(number: string, text: string) {
+  return { number, text };
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -154,6 +170,10 @@ export function normalizeConnectInstances(
 
 export function connectInstancePath(name: string, action: string): string {
   return `/instance/${action}/${encodeURIComponent(name)}`;
+}
+
+export function connectSendTextPath(name: string): string {
+  return `/message/sendText/${encodeURIComponent(name)}`;
 }
 
 export function isWhatsAppIntegration(integration: string): boolean {

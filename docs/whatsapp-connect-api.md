@@ -13,6 +13,8 @@ A URL precisa apontar para um host público HTTPS. A política de rede da Scout 
 
 O segredo usa a chave já existente `SCOUT_ENCRYPTION_KEY_BASE64`. Preserve seu valor em todas as réplicas e faça backup seguro junto com o banco; trocar essa chave sem migrar os segredos torna a configuração e os tokens cifrados ilegíveis.
 
+O valor precisa ser Base64 de exatamente 32 bytes. A API valida isso ao iniciar; um placeholder de `.env.example` faz o container parar com erro claro, em vez de deixar o Manager abrir e falhar depois ao salvar a conexão.
+
 ## Instâncias
 
 - **Nova instância** cria uma instância WhatsApp Baileys na Connect API e gera um token próprio aleatório. A Scout cifra esse token antes de persistir.
