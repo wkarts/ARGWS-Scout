@@ -97,7 +97,6 @@ jobs:
               image="ghcr.io/$owner/argws-scout-$component"
               if [[ "$branch" == develop ]]; then
                 echo "$image:develop"
-                echo "$image:$version"
               else
                 echo "$image:$version"
                 if [[ "$version" != *-* ]]; then
