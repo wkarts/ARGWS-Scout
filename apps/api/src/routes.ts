@@ -29,6 +29,7 @@ import {
 import { renderInputTemplate } from "@argws/scout-core";
 import { audit } from "./audit.ts";
 import { prisma } from "./db.ts";
+import { registerWhatsAppRoutes } from "./whatsapp-routes.ts";
 import {
   authenticated,
   clearSessionCookies,
@@ -160,6 +161,7 @@ export async function registerRoutes(
   app: FastifyInstance,
   options: { prefix?: string; redis: Redis },
 ): Promise<void> {
+  await registerWhatsAppRoutes(app);
   app.post(
     "/auth/login",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
@@ -1745,7 +1747,7 @@ export async function registerRoutes(
         dependencies,
         activity: { queuedJobs, activeJobs, failedJobsLast24Hours: failedJobs },
         runtime: {
-          version: process.env.SCOUT_VERSION ?? "0.2.0-alpha.2",
+          version: process.env.SCOUT_VERSION ?? "0.2.0",
           uptimeSeconds: Math.floor(process.uptime()),
           memoryBytes: process.memoryUsage().rss,
           node: process.version,

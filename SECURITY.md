@@ -14,4 +14,4 @@ Reporte vulnerabilidades privadamente ao mantenedor do repositório. Não abra i
 
 Antes de colocar workers de navegador em produção, aplique política de egress na infraestrutura para bloquear redes privadas, link-local, metadata endpoints e ranges internos também no nível de rede. O isolamento do Compose não substitui firewall de saída.
 
-Use `pnpm audit` e atualize dependências antes de cada release. Esta baseline alpha precisa de revisão de segurança e teste de carga antes de produção.
+Use `pnpm audit` e atualize dependências antes de cada release. Valide segurança, capacidade, conectividade, backups e recuperação no ambiente de destino antes de liberar tráfego de produção.

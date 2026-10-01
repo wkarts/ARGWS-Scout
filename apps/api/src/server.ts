@@ -58,7 +58,7 @@ await app.register(cookie);
 await app.register(cors, {
   origin: origins,
   credentials: true,
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 await app.register(helmet, {
   contentSecurityPolicy: false,
@@ -83,7 +83,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
-  version: process.env.SCOUT_VERSION ?? "0.2.0-alpha.2",
+  version: process.env.SCOUT_VERSION ?? "0.2.0",
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([
