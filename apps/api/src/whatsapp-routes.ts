@@ -12,11 +12,14 @@ import { authenticated, hasRole, isManagerUser } from "./auth.ts";
 import {
   connectApiRequest,
   connectInstancePath,
+  connectSendTextPath,
   ConnectApiError,
+  createWhatsAppInstancePayload,
   isWhatsAppIntegration,
   normalizeConnectBaseUrl,
   normalizeConnectInstances,
   sanitizeConnectApiResponse,
+  sendWhatsAppTextPayload,
 } from "./connect-api.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
@@ -431,12 +434,7 @@ export async function registerWhatsAppRoutes(
           apiKey: auth.apiKey,
           path: "instance/create",
           method: "POST",
-          body: {
-            instanceName: body.data.name,
-            integration: "WHATSAPP-BAILEYS",
-            token,
-            qrcode: true,
-          },
+          body: createWhatsAppInstancePayload(body.data.name, token),
         });
       } catch (error) {
         const mayHaveCreated = !(
@@ -942,8 +940,8 @@ export async function registerWhatsAppRoutes(
           baseUrl: auth.config.baseUrl,
           apiKey: decryptSecret(instance.tokenEncrypted),
           method: "POST",
-          path: `/message/sendText/${encodeURIComponent(instance.name)}`,
-          body: { number, text: body.data.text },
+          path: connectSendTextPath(instance.name),
+          body: sendWhatsAppTextPayload(number, body.data.text),
           timeoutMs: 15000,
         });
         status = WhatsAppPublicationStatus.SENT;

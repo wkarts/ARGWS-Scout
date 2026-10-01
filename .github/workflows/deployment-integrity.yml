@@ -24,6 +24,7 @@ jobs:
             for channel in develop production; do
               folder="deploy/$target/$channel"
               cp "$folder/.env.example" "$folder/.env"
+              if [[ "$target" == portainer ]]; then cp "$folder/.env" "$folder/stack.env"; fi
               docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
               docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
               python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json

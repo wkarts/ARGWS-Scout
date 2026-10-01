@@ -10,7 +10,7 @@
 
 ## Quality gates
 
-O workflow Quality gates roda para PRs e pushes em develop/main. Ele instala dependências com lockfile congelado, aplica migrations em PostgreSQL limpo, executa seed, typecheck, testes, build e verificação Prettier. Também valida os oito arquivos Compose e prova que só Manager publica uma porta em 127.0.0.1, enquanto os dados usam cinco bind mounts relativos.
+O workflow Quality gates roda para PRs e pushes em develop/main. Ele instala dependências com lockfile congelado, aplica migrations em PostgreSQL limpo, executa seed, typecheck, testes, build e verificação Prettier. Também converte os oito manifests e valida nomes de projeto, portas, tags GHCR, variáveis e persistência por alvo: bind mounts relativos em Docker/Dockge/CloudPanel e volumes nomeados em Portainer.
 
 O workflow Security executa CodeQL e revisão de dependências em PR. O teste de segurança de rede/egress do browser worker precisa ser realizado no ambiente hospedado da implantação.
 
@@ -19,10 +19,10 @@ O workflow Security executa CodeQL e revisão de dependências em PR. O teste de
 1. O workflow GHCR infrastructure images espelha tags versionadas de PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, Nginx e Playwright. Execute-o manualmente na primeira configuração; a rotina semanal republica as mesmas versões fixadas e mudanças de versão entram por revisão.
 2. Um push em develop publica runtime, Manager, docs, browser-worker e garage-init com tag develop após os quality gates.
 3. O PR develop → main deve atualizar VERSION para SemVer estável.
-4. Após push aprovado em main, as cinco imagens recebem a versão e stable.
+4. Após push aprovado em main, as cinco builds publicam a versão SemVer; as imagens de aplicação também recebem stable.
 5. Somente após a publicação das imagens o workflow SemVer cria v<version> e GitHub Release.
 
-Não existe tag móvel latest. O deploy de produção pode usar stable ou uma versão fixa SemVer. Para rollback, fixe cada imagem funcional na versão anterior, implante e valide API, jobs, webhooks e acesso aos artefatos.
+Não existe tag móvel latest. Os manifests de produção fixam as imagens de aplicação na versão SemVer. Para rollback, fixe cada imagem funcional na versão anterior, implante e valide API, jobs, webhooks e acesso aos artefatos.
 
 ## Configuração do repositório GitHub
 

@@ -9,6 +9,7 @@ import Redis from "ioredis";
 import { prisma } from "./db.ts";
 import { registerAuthTypes } from "./auth.ts";
 import { registerRoutes } from "./routes.ts";
+import { validateEncryptionKey } from "@argws/scout-shared/crypto";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -21,6 +22,7 @@ if (jwtSecret.length < 32 || jwtSecret.startsWith("replace-with"))
   throw new Error(
     "SCOUT_JWT_SECRET deve ter ao menos 32 caracteres aleatórios.",
   );
+validateEncryptionKey();
 const origins = (process.env.SCOUT_CORS_ORIGINS ?? "http://localhost:8080")
   .split(",")
   .map((value) => value.trim())
@@ -83,7 +85,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
-  version: process.env.SCOUT_VERSION ?? "0.3.0",
+  version: process.env.SCOUT_VERSION ?? "0.4.0",
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([
