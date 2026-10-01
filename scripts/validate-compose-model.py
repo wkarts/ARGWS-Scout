@@ -33,7 +33,9 @@ for name, mount_target in (
     data_mount = next((mount for mount in mounts if mount.get("target") == mount_target), None)
     assert data_mount, f"{folder}: {name} missing persistent storage for {mount_target}"
     if target == "portainer":
-        assert data_mount.get("type") == "volume" and data_mount.get("source", "").startswith(project + "-"), (folder, name, data_mount)
+        volume_name = data_mount.get("source", "")
+        volume = model.get("volumes", {}).get(volume_name, {})
+        assert data_mount.get("type") == "volume" and volume.get("name", "").startswith(project + "-"), (folder, name, data_mount, volume)
     else:
         assert data_mount.get("type") == "bind" and pathlib.Path(data_mount.get("source", "")).is_relative_to(folder), (folder, name, data_mount)
 app_images = {
