@@ -104,15 +104,15 @@ jobs:
             echo 'TAGS'
           } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: image=ghcr.io/${{ github.repository_owner }}/argws-scout-buildkit:buildx-stable-1
       - name: Authenticate to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=ghcr.io/${{ github.repository_owner }}/argws-scout-buildkit:buildx-stable-1
       - name: Wait for pinned GHCR base images
         shell: bash
         run: |
@@ -164,7 +164,7 @@ jobs:
     if: needs.publish.result == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'main')
     continue-on-error: true
     runs-on: ubuntu-latest
-    permissions: {actions: write, contents: read}
+    permissions: { actions: write, contents: read }
     steps:
       - uses: actions/checkout@v4
         with:
