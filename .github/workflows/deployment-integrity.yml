@@ -1,15 +1,21 @@
 name: Deployment integrity
 on:
-  pull_request: {branches: [develop, main]}
-  push: {branches: [develop, main]}
-permissions: {contents: read}
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+permissions:
+  contents: read
 jobs:
   compose-contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 test/deployment-contract.py && python3 test/actions-cache-retention.py
-      - name: Validate all deployment channels
+      - name: Check bundle and retention contracts
+        run: |
+          python3 test/deployment-contract.py
+          python3 test/actions-cache-retention.py
+      - name: Validate every deployment target and channel
         shell: bash
         run: |
           set -euo pipefail
@@ -19,16 +25,6 @@ jobs:
               cp "$folder/.env.example" "$folder/.env"
               docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
               docker compose --profile '*' --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
-              python3 - "$folder" /tmp/scout-compose.json <<'PY'
-import json,pathlib,sys
-folder=pathlib.Path(sys.argv[1]);m=json.loads(pathlib.Path(sys.argv[2]).read_text())
-pub=[(n,p) for n,s in m["services"].items() for p in s.get("ports",[])]
-assert len(pub)==1 and pub[0][0]=="manager" and pub[0][1].get("host_ip")=="127.0.0.1"
-for n in m["services"]: assert m["services"][n].get("pull_policy")=="always"
-for n in ("postgres","redis","rabbitmq","garage"):
- assert m["services"][n]["image"].startswith("ghcr.io/wkarts/argws-scout-")
-assert "content" in m["configs"]["garage-config"]
-print(folder,"compose contract passed")
-PY
+              python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done
