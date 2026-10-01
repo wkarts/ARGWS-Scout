@@ -4,7 +4,7 @@ Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}
 
 ## Instalação
 
-Copie `.env.example` para `.env`, preencha URL e segredos, valide com `docker compose --env-file .env -f compose.yaml config --quiet`, baixe as imagens e suba a stack com `pull` e `up -d`. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`. MFA é obrigatório no primeiro acesso.
+Copie `.env.example` para `.env`, preencha URL e segredos, valide com `docker compose --env-file .env -f compose.yaml config --quiet`, baixe as imagens e suba a stack com `pull` e `up -d`. Crie o OWNER uma vez com `docker compose --env-file .env -f compose.yaml --profile maintenance run --rm bootstrap`. MFA é obrigatório no primeiro acesso. Os pulls sem credencial exigem pacotes GHCR com leitura pública; caso sejam privados, configure a autenticação GHCR no host antes do pull.
 
 O Manager publica somente `127.0.0.1:8080`; CloudPanel termina TLS e encaminha o domínio para essa porta. PostgreSQL, Redis, RabbitMQ e Garage ficam na rede Compose e persistem em volumes relativos. Garage usa configuração inline no Compose; nenhum `garage.toml` é necessário. Requisito: Docker Compose v2.23.1+.
 
