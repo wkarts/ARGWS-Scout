@@ -1,4 +1,4 @@
-ARG PLAYWRIGHT_BASE=mcr.microsoft.com/playwright:v1.63.0-noble
+ARG PLAYWRIGHT_BASE=ghcr.io/wkarts/argws-scout-playwright:v1.63.0-noble
 FROM ${PLAYWRIGHT_BASE}
 
 ENV PNPM_HOME="/home/pwuser/.local/share/pnpm" PATH="/home/pwuser/.local/share/pnpm:$PATH" NODE_ENV=production

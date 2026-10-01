@@ -1,6 +1,6 @@
 # Build arguments consumed by FROM must be declared before the first stage.
-ARG GARAGE_BASE=dxflrs/garage:v2.4.1
-ARG TOOLS_BASE=alpine:3.23
+ARG GARAGE_BASE=ghcr.io/wkarts/argws-scout-garage:v2.4.1
+ARG TOOLS_BASE=ghcr.io/wkarts/argws-scout-alpine:3.23
 FROM ${GARAGE_BASE} AS garage
 
 FROM ${TOOLS_BASE}
