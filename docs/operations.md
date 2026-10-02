@@ -6,6 +6,10 @@ O Compose raiz é o ambiente de desenvolvimento local e mapeia Postgres, Redis, 
 
 Em produção, use domínio HTTPS, SCOUT_COOKIE_SECURE=true, SCOUT_ALLOW_HTTP=false, CORS restrito e SCOUT_TRUST_PROXY_HOPS compatível com o proxy. Só Manager publica porta e o bind é 127.0.0.1. CloudPanel termina TLS e encaminha para o gateway.
 
+## E-mail
+
+Configure `SCOUT_RECOVERY_SMTP_HOST`, `PORT`, `SECURE`, `USERNAME`, `PASSWORD`, `FROM_EMAIL` e `FROM_NAME` no `.env` para redefinição de senha. Esse relay é global e usado apenas para recuperação; mantenha seu segredo no mesmo cofre do `.env`. Cada organização configura seu SMTP de envio em **Configurações** do Manager, separado do relay de recuperação. `SECURE=true` representa TLS implícito; com `false`, a API exige STARTTLS. A integração por organização é testável pelo painel e a senha fica cifrada com `SCOUT_ENCRYPTION_KEY_BASE64`.
+
 ## Serviços e verificação
 
 O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migração, dispatcher, worker HTTP, browser worker, scheduler e webhook worker. As sondagens da API verificam Postgres e Redis para readiness; a área Saúde da plataforma verifica também RabbitMQ e Garage. Containers têm política de restart, healthchecks onde a imagem suporta e limites de log. Docker, Dockge e CloudPanel usam bind mounts relativos; Portainer usa volumes nomeados com prefixo do projeto.

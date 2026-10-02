@@ -58,6 +58,7 @@ model Tenant {
   connectApi  ConnectApiConfig?
   connectInstances ConnectApiInstance[]
   whatsAppPublications WhatsAppPublication[]
+  smtpConfig TenantSmtpConfig?
 }
 
 model User {
@@ -77,6 +78,8 @@ model User {
   jobs                  Job[]
   auditLogs             AuditLog[]
   whatsAppPublications  WhatsAppPublication[]
+  passwordResetTokens   PasswordResetToken[]
+  mfaRecoveryCodes      MfaRecoveryCode[]
 }
 
 model Membership {
@@ -104,6 +107,47 @@ model AuthSession {
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, usedAt])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  codeHash  String    @db.Char(64)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId, usedAt])
+}
+
+model TenantSmtpConfig {
+  tenantId          String   @id @db.Uuid
+  host              String   @db.VarChar(255)
+  port              Int
+  secure            Boolean  @default(false)
+  username          String?  @db.VarChar(254)
+  passwordEncrypted String?  @db.Text
+  fromEmail         String   @db.VarChar(254)
+  fromName          String   @db.VarChar(120)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
 }
 
 model Instance {

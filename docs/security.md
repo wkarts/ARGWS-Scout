@@ -4,9 +4,11 @@
 
 - Usuários usam e-mail e senha Argon2id; o seed exige senha inicial de pelo menos 16 caracteres.
 - Sessão usa cookie HTTP-only, access de 15 minutos e refresh rotativo de até 30 dias.
-- TOTP é exigido para a conta OWNER no primeiro login por padrão; os demais perfis podem ativar MFA no Manager. Uma conta com MFA habilitada sempre precisa informar o código no login. Recuperação por backup codes ainda não está disponível.
+- TOTP é exigido para a conta OWNER no primeiro login por padrão; os demais perfis podem ativar MFA no Manager. Uma conta com MFA habilitada exige o autenticador ou um código reserva de uso único. Os códigos reserva são guardados como hashes, mostrados apenas ao ativar ou regenerar e auditados quando usados.
+- Redefinições de senha usam token aleatório com hash SHA-256 no banco, expiração de 30 minutos, uso único e revogação das sessões existentes. O endpoint de solicitação responde de forma genérica para não revelar se o e-mail existe.
+- O SMTP global configurado por `SCOUT_RECOVERY_SMTP_*` envia somente mensagens de recuperação. A integração SMTP de envio é separada por organização; a senha é cifrada com AES-256-GCM e nunca volta nas respostas da API.
 - Membership define OWNER, ADMIN, OPERATOR e VIEWER por tenant. Tokens de API são por instância, guardados como hash SHA-256 e limitados por escopo; o segredo é mostrado uma única vez.
-- Segredos TOTP pendentes e webhooks usam AES-256-GCM, com chave de 32 bytes mantida fora do banco.
+- Segredos TOTP pendentes, SMTP de envio e webhooks usam AES-256-GCM, com chave de 32 bytes mantida fora do banco.
 
 ## SSRF e browser
 
