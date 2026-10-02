@@ -57,4 +57,19 @@ for target in targets:
   else:
    assert "./volumes/postgres:/var/lib/postgresql/data" in y
   assert f"SCOUT_MANAGER_PORT={ports[target][channel]}" in e
+  current_service=None
+  service_blocks={}
+  for line in lines:
+   service_match=re.match(r"^  ([A-Za-z0-9_-]+):$",line)
+   if service_match:
+    current_service=service_match.group(1)
+    service_blocks[current_service]=[]
+   if current_service:
+    service_blocks[current_service].append(line)
+  recovery_keys=("HOST","PORT","SECURE","USERNAME","PASSWORD","FROM_EMAIL","FROM_NAME")
+  for service,block in service_blocks.items():
+   block_text="\n".join(block)
+   if service!="api" and "env_file:" in block_text:
+    for key in recovery_keys:
+     assert f'SCOUT_RECOVERY_SMTP_{key}: ""' in block_text, f"{d}/{service}: recovery SMTP must stay inside the API container"
 print("Eight distinct Compose+env bundles have isolated project names, ports and persistent data.")

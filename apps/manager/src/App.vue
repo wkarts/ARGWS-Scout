@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  Mail,
   Menu,
   MessageCircle,
   MoreHorizontal,
@@ -47,6 +48,7 @@ type Me = {
     mfaEnabled: boolean;
   };
   role: string;
+  mfaRequiredForOwner: boolean;
   tenant: { id: string; name: string; slug: string };
 };
 type Instance = {
@@ -160,10 +162,17 @@ const showScheduleForm = ref(false);
 const showWebhookForm = ref(false);
 const showProfile = ref(false);
 const showMfaDialog = ref(false);
+const showRecoveryCodesDialog = ref(false);
+const showMfaDisableDialog = ref(false);
 const showPublicationForm = ref(false);
+const showEmailPublicationForm = ref(false);
 const publishing = ref(false);
 const publicationForm = ref({ instanceName: "", number: "", text: "" });
+const emailPublicationForm = ref({ to: "", subject: "", text: "" });
 const mfaSetup = ref({ qrCodeDataUrl: "", manualKey: "", code: "" });
+const mfaRecoveryCodes = ref<string[]>([]);
+const recoveryCodeForm = ref({ code: "" });
+const mfaDisableForm = ref({ password: "", code: "" });
 const showTokenDialog = ref(false);
 const issuedToken = ref("");
 const issuedWebhookSecret = ref("");
@@ -171,7 +180,29 @@ const loginForm = ref({ email: "", password: "", code: "" });
 const mfaToken = ref("");
 const mfaQr = ref("");
 const mfaManualKey = ref("");
-const loginStage = ref<"credentials" | "totp" | "setup">("credentials");
+const recoveryTokenFromUrl =
+  new URLSearchParams(window.location.hash.slice(1)).get("reset") ??
+  new URLSearchParams(window.location.search).get("reset") ??
+  "";
+if (recoveryTokenFromUrl) {
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("reset");
+  cleanUrl.hash = "";
+  window.history.replaceState({}, "", cleanUrl.toString());
+}
+const resetToken = ref(recoveryTokenFromUrl);
+const forgotEmail = ref("");
+const resetPasswordForm = ref({ password: "", confirm: "" });
+const loginStage = ref<
+  | "credentials"
+  | "totp"
+  | "setup"
+  | "recovery-codes"
+  | "forgot"
+  | "forgot-sent"
+  | "reset"
+  | "reset-done"
+>(recoveryTokenFromUrl ? "reset" : "credentials");
 const instanceForm = ref({ name: "", description: "" });
 const sourceForm = ref({
   name: "",
@@ -195,6 +226,20 @@ const tokenForm = ref({
   scopes: ["jobs:create", "jobs:read", "results:read"],
 });
 const profileForm = ref({ name: "", phone: "", locale: "pt-BR" });
+const recoveryEmailConfigured = ref(false);
+const smtpConfigured = ref(false);
+const smtpSettingsLoaded = ref(false);
+const smtpForm = ref({
+  host: "",
+  port: 587,
+  secure: false,
+  authentication: true,
+  username: "",
+  password: "",
+  fromEmail: "",
+  fromName: "ARGWS Scout",
+});
+const smtpTestRecipient = ref("");
 
 const title = computed(
   () =>
@@ -322,6 +367,99 @@ async function loadData() {
   }
 }
 
+async function loadSmtpSettings() {
+  if (!me.value || !["OWNER", "ADMIN", "OPERATOR"].includes(me.value.role))
+    return;
+  try {
+    const response = await api<{
+      recoveryConfigured: boolean;
+      configured: boolean;
+      config: {
+        host: string;
+        port: number;
+        secure: boolean;
+        authentication: boolean;
+        username: string | null;
+        fromEmail: string;
+        fromName: string;
+      } | null;
+    }>("/integrations/smtp");
+    recoveryEmailConfigured.value = response.recoveryConfigured;
+    smtpConfigured.value = response.configured;
+    if (response.config && ["OWNER", "ADMIN"].includes(me.value.role))
+      smtpForm.value = {
+        ...response.config,
+        username: response.config.username ?? "",
+        password: "",
+      };
+    smtpSettingsLoaded.value = true;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao carregar SMTP.";
+  }
+}
+
+async function saveSmtpSettings() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/integrations/smtp", {
+      method: "PUT",
+      body: JSON.stringify({
+        ...smtpForm.value,
+        ...(smtpForm.value.password ? {} : { password: undefined }),
+      }),
+    });
+    smtpForm.value.password = "";
+    await loadSmtpSettings();
+    notify("SMTP de envio salvo para esta organização.");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao salvar SMTP.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function testSmtpSettings() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/integrations/smtp/test", {
+      method: "POST",
+      body: JSON.stringify({ recipient: smtpTestRecipient.value }),
+    });
+    notify("Conexão validada e e-mail de teste enviado.");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha no teste SMTP.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function removeSmtpSettings() {
+  if (!window.confirm("Remover o SMTP de envio desta organização?")) return;
+  busy.value = true;
+  try {
+    await api("/integrations/smtp", { method: "DELETE" });
+    smtpConfigured.value = false;
+    smtpSettingsLoaded.value = true;
+    smtpForm.value = {
+      host: "",
+      port: 587,
+      secure: false,
+      authentication: true,
+      username: "",
+      password: "",
+      fromEmail: "",
+      fromName: "ARGWS Scout",
+    };
+    notify("SMTP de envio removido.");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao remover SMTP.";
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function loadInstanceData() {
   if (!selectedInstance.value) {
     sources.value = [];
@@ -418,6 +556,8 @@ async function checkSession() {
     profileForm.value.name = response.user.name;
     profileForm.value.phone = String(response.user.profile.phone ?? "");
     await loadData();
+    if (["OWNER", "ADMIN", "OPERATOR"].includes(response.role))
+      await loadSmtpSettings();
   } catch {
     me.value = null;
   }
@@ -470,16 +610,72 @@ async function verifyMfa() {
   try {
     const endpoint =
       loginStage.value === "setup" ? "/auth/mfa/confirm" : "/auth/mfa/verify";
-    await api(endpoint, {
+    const response = await api<{ recoveryCodes?: string[] }>(endpoint, {
       method: "POST",
       body: JSON.stringify({ code: loginForm.value.code }),
       authToken: mfaToken.value,
       noRefresh: true,
     });
     loginForm.value.code = "";
+    if (response.recoveryCodes?.length) {
+      mfaRecoveryCodes.value = response.recoveryCodes;
+      loginStage.value = "recovery-codes";
+      return;
+    }
     await checkSession();
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : "Código inválido.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function continueAfterSavingRecoveryCodes() {
+  mfaRecoveryCodes.value = [];
+  await checkSession();
+  loginStage.value = "credentials";
+}
+
+async function requestPasswordReset() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email: forgotEmail.value }),
+      noRefresh: true,
+    });
+    loginStage.value = "forgot-sent";
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Falha ao solicitar recuperação.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function completePasswordReset() {
+  if (resetPasswordForm.value.password !== resetPasswordForm.value.confirm) {
+    error.value = "As senhas informadas não coincidem.";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({
+        token: resetToken.value,
+        password: resetPasswordForm.value.password,
+      }),
+      noRefresh: true,
+    });
+    resetToken.value = "";
+    resetPasswordForm.value = { password: "", confirm: "" };
+    loginStage.value = "reset-done";
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Falha ao redefinir a senha.";
   } finally {
     busy.value = false;
   }
@@ -643,6 +839,7 @@ async function createToken() {
 async function startMfaSetup() {
   busy.value = true;
   error.value = "";
+  mfaRecoveryCodes.value = [];
   try {
     mfaSetup.value = await api<{
       qrCodeDataUrl: string;
@@ -661,18 +858,80 @@ async function confirmMfaSetup() {
   busy.value = true;
   error.value = "";
   try {
-    await api("/profile/mfa/confirm", {
-      method: "POST",
-      body: JSON.stringify({ code: mfaSetup.value.code }),
-    });
-    showMfaDialog.value = false;
+    const response = await api<{ recoveryCodes: string[] }>(
+      "/profile/mfa/confirm",
+      {
+        method: "POST",
+        body: JSON.stringify({ code: mfaSetup.value.code }),
+      },
+    );
+    mfaRecoveryCodes.value = response.recoveryCodes;
+    mfaSetup.value.code = "";
     await checkSession();
-    notify("Autenticação em duas etapas ativada.");
+    notify("2FA ativada. Salve os códigos reserva antes de fechar.");
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Código inválido.";
   } finally {
     busy.value = false;
   }
+}
+
+async function regenerateRecoveryCodes() {
+  busy.value = true;
+  error.value = "";
+  try {
+    const response = await api<{ recoveryCodes: string[] }>(
+      "/profile/mfa/recovery-codes/regenerate",
+      {
+        method: "POST",
+        body: JSON.stringify({ code: recoveryCodeForm.value.code }),
+      },
+    );
+    mfaRecoveryCodes.value = response.recoveryCodes;
+    recoveryCodeForm.value.code = "";
+    showRecoveryCodesDialog.value = true;
+    notify("Novos códigos reserva gerados; os anteriores foram invalidados.");
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Falha ao gerar códigos reserva.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+function openRecoveryCodeDialog() {
+  recoveryCodeForm.value.code = "";
+  mfaRecoveryCodes.value = [];
+  showRecoveryCodesDialog.value = true;
+}
+
+async function disableMfa() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/profile/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify(mfaDisableForm.value),
+    });
+    showMfaDisableDialog.value = false;
+    mfaDisableForm.value = { password: "", code: "" };
+    await checkSession();
+    notify("2FA desativada nesta conta.");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao desativar 2FA.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+function closeRecoveryCodes() {
+  showMfaDialog.value = false;
+  showRecoveryCodesDialog.value = false;
+  mfaRecoveryCodes.value = [];
+}
+
+async function copyRecoveryCodes() {
+  await copyValue(mfaRecoveryCodes.value.join("\n"));
 }
 
 async function saveProfile() {
@@ -708,8 +967,11 @@ function openInstance(item: Instance) {
 function selectSection(section: string) {
   activeSection.value = section;
   mobileMenu.value = false;
+  if (section === "settings" && !smtpSettingsLoaded.value)
+    void loadSmtpSettings();
 }
 function closeDialogs() {
+  if (mfaRecoveryCodes.value.length) return;
   showInstanceForm.value = false;
   showSourceForm.value = false;
   showJobForm.value = false;
@@ -717,6 +979,8 @@ function closeDialogs() {
   showWebhookForm.value = false;
   showProfile.value = false;
   showMfaDialog.value = false;
+  showRecoveryCodesDialog.value = false;
+  showMfaDisableDialog.value = false;
   error.value = "";
 }
 async function copyValue(value: string) {
@@ -726,6 +990,7 @@ async function copyValue(value: string) {
 function openJob(job: Job) {
   selectedJob.value = job;
   showPublicationForm.value = false;
+  showEmailPublicationForm.value = false;
 }
 function openWhatsAppPublication(job: Job) {
   const result = job.result?.data ?? job.result ?? {};
@@ -741,6 +1006,44 @@ function openWhatsAppPublication(job: Job) {
     text: `${header}${collected}`.slice(0, 4096),
   };
   showPublicationForm.value = true;
+  showEmailPublicationForm.value = false;
+}
+function openEmailPublication(job: Job) {
+  const result = job.result?.data ?? job.result ?? {};
+  const collected =
+    typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  const header = `ARGWS Scout · ${job.source?.name ?? "Coleta"}\n${prettyDate(job.finishedAt ?? job.createdAt)}\n\n`;
+  emailPublicationForm.value = {
+    to: "",
+    subject: `ARGWS Scout: ${job.source?.name ?? "resultado de coleta"}`.slice(
+      0,
+      200,
+    ),
+    text: `${header}${collected}`.slice(0, 30000),
+  };
+  showEmailPublicationForm.value = true;
+  showPublicationForm.value = false;
+}
+
+async function publishJobByEmail() {
+  if (!selectedJob.value) return;
+  publishing.value = true;
+  error.value = "";
+  try {
+    await api(`/jobs/${selectedJob.value.id}/email`, {
+      method: "POST",
+      body: JSON.stringify(emailPublicationForm.value),
+    });
+    showEmailPublicationForm.value = false;
+    notify(
+      `Resultado enviado por e-mail para ${emailPublicationForm.value.to}.`,
+    );
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "Falha ao enviar resultado por e-mail.";
+  } finally {
+    publishing.value = false;
+  }
 }
 async function publishJobToWhatsApp() {
   if (!selectedJob.value) return;
@@ -835,7 +1138,15 @@ onMounted(() => {
             ? "Acesse sua plataforma"
             : loginStage === "setup"
               ? "Proteja sua conta"
-              : "Confirme sua identidade"
+              : loginStage === "totp"
+                ? "Confirme sua identidade"
+                : loginStage === "recovery-codes"
+                  ? "Guarde seus códigos reserva"
+                  : loginStage === "forgot" || loginStage === "forgot-sent"
+                    ? "Recuperar senha"
+                    : loginStage === "reset"
+                      ? "Defina uma nova senha"
+                      : "Senha redefinida"
         }}
       </h1>
       <p class="muted auth-copy" v-if="loginStage === 'credentials'">
@@ -860,6 +1171,9 @@ onMounted(() => {
         <button class="button primary full" :disabled="busy" @click="login">
           <LoaderCircle v-if="busy" class="spin" :size="17" /> Entrar
           <ArrowRight :size="16" />
+        </button>
+        <button class="text-button" @click="loginStage = 'forgot'">
+          Esqueci minha senha
         </button>
       </template>
       <template v-else-if="loginStage === 'setup'">
@@ -891,25 +1205,116 @@ onMounted(() => {
           Ativar MFA e entrar <ArrowRight :size="16" />
         </button>
       </template>
-      <template v-else>
+      <template v-else-if="loginStage === 'totp'">
         <p class="muted">
-          Informe o código de 6 dígitos do seu aplicativo autenticador.
+          Informe o código do aplicativo autenticador ou um código reserva de
+          uso único.
         </p>
         <label
-          >Código autenticador<input
+          >Código de verificação<input
             v-model="loginForm.code"
-            inputmode="numeric"
             autocomplete="one-time-code"
-            maxlength="6"
-            placeholder="000000"
+            maxlength="32"
+            placeholder="6 dígitos ou código reserva"
             @keyup.enter="verifyMfa"
         /></label>
         <button
           class="button primary full"
-          :disabled="busy || loginForm.code.length !== 6"
+          :disabled="busy || loginForm.code.length < 6"
           @click="verifyMfa"
         >
           Verificar <ArrowRight :size="16" />
+        </button>
+      </template>
+      <template v-else-if="loginStage === 'recovery-codes'">
+        <p class="muted">
+          A configuração do autenticador foi concluída. Cada código só pode ser
+          usado uma vez. Guarde-os agora em um local seguro.
+        </p>
+        <div class="recovery-code-list">
+          <code v-for="code in mfaRecoveryCodes" :key="code">{{ code }}</code>
+        </div>
+        <button
+          class="button primary full"
+          @click="continueAfterSavingRecoveryCodes"
+        >
+          Já salvei os códigos <ArrowRight :size="16" />
+        </button>
+      </template>
+      <template v-else-if="loginStage === 'forgot'">
+        <p class="muted">
+          Informe o e-mail da sua conta. Se ele estiver cadastrado, enviaremos
+          um link válido por 30 minutos.
+        </p>
+        <label
+          >E-mail<input
+            v-model="forgotEmail"
+            type="email"
+            autocomplete="email"
+            placeholder="voce@empresa.com"
+            @keyup.enter="requestPasswordReset"
+        /></label>
+        <button
+          class="button primary full"
+          :disabled="busy || !forgotEmail"
+          @click="requestPasswordReset"
+        >
+          Enviar instruções
+        </button>
+        <button class="text-button" @click="loginStage = 'credentials'">
+          Voltar ao login
+        </button>
+      </template>
+      <template v-else-if="loginStage === 'forgot-sent'">
+        <p class="muted">
+          Se o e-mail informado estiver cadastrado, você receberá instruções
+          para redefinir a senha.
+        </p>
+        <button class="button primary full" @click="loginStage = 'credentials'">
+          Voltar ao login
+        </button>
+      </template>
+      <template v-else-if="loginStage === 'reset'">
+        <p class="muted">
+          A nova senha deve ter pelo menos 16 caracteres. Após a troca, as
+          sessões existentes serão encerradas.
+        </p>
+        <label
+          >Nova senha<input
+            v-model="resetPasswordForm.password"
+            type="password"
+            autocomplete="new-password"
+            minlength="16"
+            maxlength="256"
+        /></label>
+        <label
+          >Confirmar senha<input
+            v-model="resetPasswordForm.confirm"
+            type="password"
+            autocomplete="new-password"
+            minlength="16"
+            maxlength="256"
+            @keyup.enter="completePasswordReset"
+        /></label>
+        <button
+          class="button primary full"
+          :disabled="
+            busy ||
+            resetPasswordForm.password.length < 16 ||
+            !resetPasswordForm.confirm
+          "
+          @click="completePasswordReset"
+        >
+          Redefinir senha
+        </button>
+      </template>
+      <template v-else>
+        <p class="muted">
+          Sua senha foi redefinida. Entre usando a nova senha e conclua o MFA
+          normalmente.
+        </p>
+        <button class="button primary full" @click="loginStage = 'credentials'">
+          Ir para o login
         </button>
       </template>
       <p v-if="error" class="inline-error">{{ error }}</p>
@@ -977,6 +1382,12 @@ onMounted(() => {
           @click="selectSection('webhooks')"
         >
           <Webhook :size="18" /> Webhooks
+        </button>
+        <button
+          :class="{ active: activeSection === 'settings' }"
+          @click="selectSection('settings')"
+        >
+          <Settings2 :size="18" /> Configurações
         </button>
         <button
           v-if="['OWNER', 'ADMIN'].includes(me.role)"
@@ -1888,6 +2299,21 @@ onMounted(() => {
               >
                 Configurar 2FA
               </button>
+              <template v-else>
+                <button
+                  class="button outline small-button"
+                  @click="openRecoveryCodeDialog"
+                >
+                  Códigos reserva
+                </button>
+                <button
+                  v-if="me.role !== 'OWNER' || !me.mfaRequiredForOwner"
+                  class="button outline small-button"
+                  @click="showMfaDisableDialog = true"
+                >
+                  Desativar 2FA
+                </button>
+              </template>
             </div>
             <div class="settings-row">
               <span class="settings-icon"><Globe2 :size="18" /></span>
@@ -1922,8 +2348,133 @@ onMounted(() => {
                 Sair
               </button>
             </div>
-          </section></template
-        >
+          </section>
+          <section
+            v-if="['OWNER', 'ADMIN'].includes(me.role)"
+            class="panel settings-panel smtp-panel"
+          >
+            <div class="panel-header">
+              <div>
+                <h2>SMTP de envio</h2>
+                <p>
+                  Integração independente, exclusiva para e-mails enviados pela
+                  organização.
+                </p>
+              </div>
+              <span
+                class="status-pill"
+                :class="smtpConfigured ? 'succeeded' : 'running'"
+              >
+                <i></i>{{ smtpConfigured ? "Configurado" : "Não configurado" }}
+              </span>
+            </div>
+            <div class="settings-row recovery-smtp-status">
+              <span class="settings-icon"><ShieldCheck :size="18" /></span>
+              <div>
+                <strong>SMTP interno de recuperação</strong>
+                <small
+                  >Usado apenas para redefinição de senha; configurado pelo
+                  ambiente do deploy.</small
+                >
+              </div>
+              <span
+                class="status-pill"
+                :class="recoveryEmailConfigured ? 'succeeded' : 'running'"
+              >
+                <i></i
+                >{{ recoveryEmailConfigured ? "Configurado" : "Pendente" }}
+              </span>
+            </div>
+            <form class="smtp-settings-form" @submit.prevent="saveSmtpSettings">
+              <label
+                >Servidor SMTP<input
+                  v-model="smtpForm.host"
+                  required
+                  maxlength="255"
+                  placeholder="smtp.empresa.com"
+              /></label>
+              <label
+                >Porta<input
+                  v-model.number="smtpForm.port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  required
+              /></label>
+              <label
+                >Remetente<input
+                  v-model="smtpForm.fromEmail"
+                  type="email"
+                  required
+                  placeholder="no-reply@empresa.com"
+              /></label>
+              <label
+                >Nome do remetente<input
+                  v-model="smtpForm.fromName"
+                  required
+                  maxlength="120"
+              /></label>
+              <label class="smtp-check"
+                ><input v-model="smtpForm.secure" type="checkbox" /> TLS
+                implícito (ex.: porta 465)</label
+              >
+              <label class="smtp-check"
+                ><input v-model="smtpForm.authentication" type="checkbox" />
+                Autenticar no SMTP</label
+              >
+              <template v-if="smtpForm.authentication">
+                <label
+                  >Usuário<input
+                    v-model="smtpForm.username"
+                    autocomplete="username"
+                    required
+                /></label>
+                <label
+                  >Senha SMTP<input
+                    v-model="smtpForm.password"
+                    type="password"
+                    autocomplete="new-password"
+                    :required="!smtpConfigured"
+                    :placeholder="
+                      smtpConfigured
+                        ? 'Em branco para manter a senha atual'
+                        : 'Senha do servidor SMTP'
+                    "
+                /></label>
+              </template>
+              <div class="smtp-actions">
+                <button
+                  class="button primary"
+                  :disabled="busy || !smtpSettingsLoaded"
+                >
+                  Salvar SMTP
+                </button>
+                <button
+                  class="button outline"
+                  type="button"
+                  :disabled="busy || !smtpConfigured || !smtpTestRecipient"
+                  @click="testSmtpSettings"
+                >
+                  Enviar teste
+                </button>
+                <button
+                  v-if="smtpConfigured"
+                  class="button outline"
+                  type="button"
+                  :disabled="busy"
+                  @click="removeSmtpSettings"
+                >
+                  Remover
+                </button>
+              </div>
+              <label class="smtp-test-recipient"
+                >Destinatário do teste<input
+                  v-model="smtpTestRecipient"
+                  type="email"
+                  placeholder="seu-email@empresa.com"
+              /></label>
+            </form></section
+        ></template>
       </main>
     </section>
 
@@ -1936,7 +2487,9 @@ onMounted(() => {
         showProfile ||
         showJobForm ||
         showTokenDialog ||
-        showMfaDialog
+        showMfaDialog ||
+        showRecoveryCodesDialog ||
+        showMfaDisableDialog
       "
       class="modal-backdrop"
       @click.self="closeDialogs"
@@ -2132,38 +2685,154 @@ onMounted(() => {
             </button>
           </div></template
         >
-        <template v-else-if="showMfaDialog"
-          ><p class="eyebrow">SEGURANÇA DA CONTA</p>
-          <h2>Ativar autenticação em duas etapas</h2>
+        <template v-else-if="showMfaDialog">
+          <template v-if="mfaRecoveryCodes.length">
+            <p class="eyebrow">CÓDIGOS DE RECUPERAÇÃO</p>
+            <h2>Salve seus códigos reserva</h2>
+            <p class="muted">
+              Cada código vale uma vez e substitui o código do autenticador no
+              login. Eles não serão exibidos novamente.
+            </p>
+            <div class="recovery-code-list">
+              <code v-for="code in mfaRecoveryCodes" :key="code">{{
+                code
+              }}</code>
+            </div>
+            <div class="modal-actions">
+              <button class="button outline" @click="copyRecoveryCodes">
+                Copiar códigos
+              </button>
+              <button class="button primary" @click="closeRecoveryCodes">
+                Já salvei
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="eyebrow">SEGURANÇA DA CONTA</p>
+            <h2>Ativar autenticação em duas etapas</h2>
+            <p class="muted">
+              Escaneie o QR Code no seu autenticador e confirme um código.
+            </p>
+            <img
+              v-if="mfaSetup.qrCodeDataUrl"
+              :src="mfaSetup.qrCodeDataUrl"
+              alt="QR Code de autenticação"
+              class="mfa-qr"
+            />
+            <code class="manual-key">{{ mfaSetup.manualKey }}</code>
+            <label
+              >Código de 6 dígitos<input
+                v-model="mfaSetup.code"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                placeholder="000000"
+                @keyup.enter="confirmMfaSetup"
+            /></label>
+            <div class="modal-actions">
+              <button class="button subtle" @click="closeDialogs">
+                Cancelar
+              </button>
+              <button
+                class="button primary"
+                :disabled="busy || mfaSetup.code.length !== 6"
+                @click="confirmMfaSetup"
+              >
+                Ativar 2FA
+              </button>
+            </div>
+          </template>
+        </template>
+        <template v-else-if="showRecoveryCodesDialog">
+          <template v-if="mfaRecoveryCodes.length">
+            <p class="eyebrow">CÓDIGOS DE RECUPERAÇÃO</p>
+            <h2>Salve os novos códigos</h2>
+            <p class="muted">
+              Os códigos anteriores foram invalidados. Cada novo código só pode
+              ser usado uma vez.
+            </p>
+            <div class="recovery-code-list">
+              <code v-for="code in mfaRecoveryCodes" :key="code">{{
+                code
+              }}</code>
+            </div>
+            <div class="modal-actions">
+              <button class="button outline" @click="copyRecoveryCodes">
+                Copiar códigos
+              </button>
+              <button class="button primary" @click="closeRecoveryCodes">
+                Já salvei
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="eyebrow">CÓDIGOS DE RECUPERAÇÃO</p>
+            <h2>Gerar novos códigos</h2>
+            <p class="muted">
+              Confirme um código do autenticador. Os códigos existentes serão
+              invalidados.
+            </p>
+            <label
+              >Código autenticador<input
+                v-model="recoveryCodeForm.code"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                placeholder="000000"
+            /></label>
+            <div class="modal-actions">
+              <button class="button subtle" @click="closeDialogs">
+                Cancelar
+              </button>
+              <button
+                class="button primary"
+                :disabled="busy || recoveryCodeForm.code.length !== 6"
+                @click="regenerateRecoveryCodes"
+              >
+                Gerar códigos
+              </button>
+            </div>
+          </template>
+        </template>
+        <template v-else-if="showMfaDisableDialog">
+          <p class="eyebrow">SEGURANÇA DA CONTA</p>
+          <h2>Desativar 2FA</h2>
           <p class="muted">
-            Escaneie o QR Code no seu autenticador e confirme um código.
+            Confirme sua senha e o código atual do autenticador. As sessões em
+            outros dispositivos serão encerradas.
           </p>
-          <img
-            v-if="mfaSetup.qrCodeDataUrl"
-            :src="mfaSetup.qrCodeDataUrl"
-            alt="QR Code de autenticação"
-            class="mfa-qr"
-          /><code class="manual-key">{{ mfaSetup.manualKey }}</code
-          ><label
-            >Código de 6 dígitos<input
-              v-model="mfaSetup.code"
+          <label
+            >Senha atual<input
+              v-model="mfaDisableForm.password"
+              type="password"
+              autocomplete="current-password"
+          /></label>
+          <label
+            >Código autenticador<input
+              v-model="mfaDisableForm.code"
               inputmode="numeric"
               autocomplete="one-time-code"
               maxlength="6"
               placeholder="000000"
-              @keyup.enter="confirmMfaSetup"
           /></label>
           <div class="modal-actions">
-            <button class="button subtle" @click="closeDialogs">Cancelar</button
-            ><button
-              class="button primary"
-              :disabled="busy || mfaSetup.code.length !== 6"
-              @click="confirmMfaSetup"
-            >
-              Ativar 2FA
+            <button class="button subtle" @click="closeDialogs">
+              Cancelar
             </button>
-          </div></template
-        ><template v-else-if="showProfile"
+            <button
+              class="button primary"
+              :disabled="
+                busy ||
+                !mfaDisableForm.password ||
+                mfaDisableForm.code.length !== 6
+              "
+              @click="disableMfa"
+            >
+              Desativar 2FA
+            </button>
+          </div>
+        </template>
+        <template v-else-if="showProfile"
           ><p class="eyebrow">CONTA</p>
           <h2>Seu perfil</h2>
           <p class="muted">Atualize suas informações pessoais.</p>
@@ -2332,6 +3001,80 @@ onMounted(() => {
                   @click="publishJobToWhatsApp"
                 >
                   {{ publishing ? "Enviando…" : "Confirmar envio" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          v-if="
+            selectedJob.status === 'SUCCEEDED' &&
+            ['OWNER', 'ADMIN', 'OPERATOR'].includes(me.role)
+          "
+          class="email-publication"
+        >
+          <button
+            v-if="!showEmailPublicationForm"
+            class="button outline"
+            :disabled="!smtpConfigured"
+            @click="openEmailPublication(selectedJob)"
+          >
+            <Mail :size="16" /> Enviar resultado por e-mail
+          </button>
+          <p v-if="!smtpConfigured" class="muted">
+            Configure o SMTP de envio em Configurações antes de enviar
+            resultados.
+          </p>
+          <div
+            v-if="showEmailPublicationForm"
+            class="whatsapp-publication-form"
+          >
+            <label
+              >Destinatário<input
+                v-model="emailPublicationForm.to"
+                type="email"
+                autocomplete="email"
+                required
+                placeholder="destinatario@empresa.com"
+            /></label>
+            <label
+              >Assunto<input
+                v-model="emailPublicationForm.subject"
+                maxlength="200"
+                required
+            /></label>
+            <label
+              >Mensagem<textarea
+                v-model="emailPublicationForm.text"
+                rows="8"
+                maxlength="30000"
+                required
+              />
+            </label>
+            <div class="publication-footer">
+              <small
+                >{{ emailPublicationForm.text.length }}/30000 caracteres · O
+                envio será registrado na auditoria.</small
+              >
+              <div class="modal-actions">
+                <button
+                  class="button subtle"
+                  :disabled="publishing"
+                  @click="showEmailPublicationForm = false"
+                >
+                  Cancelar
+                </button>
+                <button
+                  class="button primary"
+                  :disabled="
+                    publishing ||
+                    !emailPublicationForm.to ||
+                    !emailPublicationForm.subject.trim() ||
+                    !emailPublicationForm.text.trim()
+                  "
+                  @click="publishJobByEmail"
+                >
+                  {{ publishing ? "Enviando…" : "Enviar e-mail" }}
                 </button>
               </div>
             </div>

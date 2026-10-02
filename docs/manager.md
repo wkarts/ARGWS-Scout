@@ -14,9 +14,12 @@ O Manager é o console web para equipes que operam várias instâncias e fontes.
 - Webhooks: revisar destino e eventos, inspecionar últimas 100 entregas e seus retries.
 - Tokens: rever prefixo, escopos, expiração e último uso; revogar sem revelar segredo.
 - Acesso e auditoria: criar usuário com senha inicial longa e papel; OWNER pode redefinir MFA de outro membro; OWNER/ADMIN consultam eventos.
+- Configurações: ativar TOTP, guardar/regenerar códigos reserva de uso único, recuperar a senha por e-mail e gerenciar o SMTP de envio separado por organização. OWNER/ADMIN podem enviar um e-mail de teste.
 - Saúde da plataforma: probes de PostgreSQL, Redis, RabbitMQ e Garage, mais fila, falhas 24h, uptime, versão e memória da API.
 
 O segredo completo de token de API e de webhook só é exibido no momento de criação. Armazene esses valores em cofre externo. O Manager aplica os papéis fornecidos pela API; ocultar controles na interface não substitui autorização no servidor.
+
+O SMTP de recuperação não aparece como uma integração editável por tenant: configure o relay global `SCOUT_RECOVERY_SMTP_*` no ambiente do deploy. O SMTP de envio de cada organização pode ser configurado em **Configurações**; a senha salva é cifrada e não pode ser consultada de volta. Porta 465 usa TLS implícito; outras portas usam STARTTLS obrigatório.
 
 O painel é responsivo e construído em Vue 3 + TypeScript. As áreas de acesso e operações são componentes isolados em src/views; o app shell mantém navegação, sessão e fluxos principais. Logs detalhados por serviço permanecem no runtime Docker e podem ser consultados por Dockge, Portainer ou linha de comando.
 

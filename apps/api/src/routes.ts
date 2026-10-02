@@ -13,6 +13,9 @@ import {
   jobCreateSchema,
   loginSchema,
   mfaCodeSchema,
+  mfaChallengeSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema,
   profileUpdateSchema,
   scheduleCreateSchema,
   slugSchema,
@@ -20,7 +23,12 @@ import {
   tokenCreateSchema,
   webhookCreateSchema,
 } from "@argws/scout-schemas";
-import { encryptSecret, randomToken, sha256 } from "@argws/scout-shared/crypto";
+import {
+  decryptSecret,
+  encryptSecret,
+  randomToken,
+  sha256,
+} from "@argws/scout-shared/crypto";
 import { assertSafePublicUrl } from "@argws/scout-shared/url-policy";
 import {
   checkObjectStorage,
@@ -29,6 +37,14 @@ import {
 import { renderInputTemplate } from "@argws/scout-core";
 import { audit } from "./audit.ts";
 import { prisma } from "./db.ts";
+import {
+  recoverySmtpSettings,
+  sendRecoveryEmail,
+  sendTenantEmail,
+  TenantSmtpNotConfiguredError,
+  testTenantSmtp,
+} from "./email.ts";
+import { consumeRecoveryCode, replaceRecoveryCodes } from "./mfa.ts";
 import { registerWhatsAppRoutes } from "./whatsapp-routes.ts";
 import {
   authenticated,
@@ -163,6 +179,449 @@ export async function registerRoutes(
 ): Promise<void> {
   await registerWhatsAppRoutes(app);
   app.post(
+    "/integrations/smtp/test",
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (!(await mayAdmin(request, reply))) return;
+      const body = parsed(
+        z.object({ recipient: z.string().trim().email().max(254) }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+      const config = await prisma.tenantSmtpConfig.findUnique({
+        where: { tenantId: tenantId(request) },
+      });
+      if (!config)
+        return fail(
+          reply,
+          409,
+          "SMTP_NOT_CONFIGURED",
+          "Configure primeiro o SMTP de envio desta organização.",
+        );
+      try {
+        await testTenantSmtp(config, body.recipient);
+        return { sent: true };
+      } catch (error) {
+        request.log.warn(
+          { errorType: error instanceof Error ? error.name : "UnknownError" },
+          "Tenant SMTP test failed",
+        );
+        return fail(
+          reply,
+          502,
+          "SMTP_TEST_FAILED",
+          "Não foi possível validar o SMTP ou enviar o e-mail de teste. Revise os dados e tente novamente.",
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/integrations/smtp",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!(await mayManage(request, reply))) return;
+      const canViewConfiguration = hasRole(request, ...adminRoles);
+      const [config, recoveryConfigured] = await Promise.all([
+        prisma.tenantSmtpConfig.findUnique({
+          where: { tenantId: tenantId(request) },
+        }),
+        Promise.resolve().then(() => {
+          try {
+            return Boolean(recoverySmtpSettings());
+          } catch {
+            return false;
+          }
+        }),
+      ]);
+      return {
+        recoveryConfigured: canViewConfiguration && recoveryConfigured,
+        configured: Boolean(config),
+        config:
+          config && canViewConfiguration
+            ? {
+                host: config.host,
+                port: config.port,
+                secure: config.secure,
+                authentication: Boolean(config.username),
+                username: config.username,
+                passwordConfigured: Boolean(config.passwordEncrypted),
+                fromEmail: config.fromEmail,
+                fromName: config.fromName,
+                updatedAt: config.updatedAt,
+              }
+            : null,
+      };
+    },
+  );
+
+  app.put(
+    "/integrations/smtp",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!(await mayAdmin(request, reply))) return;
+      const body = parsed(
+        z
+          .object({
+            host: z.string().trim().min(1).max(255),
+            port: z.number().int().min(1).max(65535),
+            secure: z.boolean(),
+            authentication: z.boolean(),
+            username: z.string().trim().max(254).optional(),
+            password: z.string().min(1).max(512).optional(),
+            fromEmail: z.string().trim().email().max(254),
+            fromName: z.string().trim().min(1).max(120),
+          })
+          .superRefine((value, ctx) => {
+            if (value.authentication && !value.username)
+              ctx.addIssue({
+                code: "custom",
+                path: ["username"],
+                message:
+                  "Informe o usuário SMTP quando a autenticação estiver ativa.",
+              });
+          }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+      const tenant = tenantId(request);
+      const current = await prisma.tenantSmtpConfig.findUnique({
+        where: { tenantId: tenant },
+      });
+      let passwordEncrypted: string | null = null;
+      let username: string | null = null;
+      if (body.authentication) {
+        username = body.username!.trim();
+        if (body.password) passwordEncrypted = encryptSecret(body.password);
+        else if (
+          current?.passwordEncrypted &&
+          current.host === body.host &&
+          current.username === username
+        )
+          passwordEncrypted = current.passwordEncrypted;
+        else
+          return fail(
+            reply,
+            400,
+            "SMTP_PASSWORD_REQUIRED",
+            "Informe a senha SMTP ao ativar autenticação ou alterar host/usuário.",
+          );
+      }
+      const config = await prisma.tenantSmtpConfig.upsert({
+        where: { tenantId: tenant },
+        create: {
+          tenantId: tenant,
+          host: body.host,
+          port: body.port,
+          secure: body.secure,
+          username,
+          passwordEncrypted,
+          fromEmail: body.fromEmail,
+          fromName: body.fromName,
+        },
+        update: {
+          host: body.host,
+          port: body.port,
+          secure: body.secure,
+          username,
+          passwordEncrypted,
+          fromEmail: body.fromEmail,
+          fromName: body.fromName,
+        },
+      });
+      await audit({
+        tenantId: tenant,
+        actorUserId: auditActor(request),
+        action: "integration.smtp.updated",
+        resourceType: "smtp_config",
+        resourceId: tenant,
+        metadata: {
+          host: config.host,
+          port: config.port,
+          secure: config.secure,
+          authentication: Boolean(config.username),
+        },
+      });
+      return {
+        configured: true,
+        config: {
+          host: config.host,
+          port: config.port,
+          secure: config.secure,
+          authentication: Boolean(config.username),
+          username: config.username,
+          passwordConfigured: Boolean(config.passwordEncrypted),
+          fromEmail: config.fromEmail,
+          fromName: config.fromName,
+          updatedAt: config.updatedAt,
+        },
+      };
+    },
+  );
+
+  app.delete(
+    "/integrations/smtp",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!(await mayAdmin(request, reply))) return;
+      await prisma.tenantSmtpConfig.deleteMany({
+        where: { tenantId: tenantId(request) },
+      });
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: auditActor(request),
+        action: "integration.smtp.deleted",
+        resourceType: "smtp_config",
+        resourceId: tenantId(request),
+      });
+      return reply.code(204).send();
+    },
+  );
+
+  app.post(
+    "/profile/mfa/recovery-codes/regenerate",
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (request.principal?.kind !== "user")
+        return fail(
+          reply,
+          403,
+          "USER_SESSION_REQUIRED",
+          "Ação disponível somente para usuários do Manager.",
+        );
+      const body = parsed(mfaCodeSchema, request.body, reply);
+      if (!body) return;
+      const secret = await mfaSecret(request.principal.userId!);
+      if (!secret || !authenticator.check(body.code, secret))
+        return fail(
+          reply,
+          401,
+          "MFA_CODE_INVALID",
+          "Código autenticador inválido.",
+        );
+      const recoveryCodes = await replaceRecoveryCodes(
+        request.principal.userId!,
+      );
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: request.principal.userId,
+        action: "auth.mfa.recovery_codes_regenerated",
+        resourceType: "user",
+        resourceId: request.principal.userId,
+      });
+      return { recoveryCodes };
+    },
+  );
+
+  app.post(
+    "/profile/mfa/disable",
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (request.principal?.kind !== "user")
+        return fail(
+          reply,
+          403,
+          "USER_SESSION_REQUIRED",
+          "Ação disponível somente para usuários do Manager.",
+        );
+      const body = parsed(
+        z.object({
+          password: z.string().min(1).max(256),
+          code: z.string().regex(/^\d{6}$/),
+        }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+      const [user, ownerMembership] = await Promise.all([
+        prisma.user.findUnique({ where: { id: request.principal.userId } }),
+        prisma.membership.findFirst({
+          where: { userId: request.principal.userId, role: TenantRole.OWNER },
+          select: { tenantId: true },
+        }),
+      ]);
+      if (!user?.mfaEnabled)
+        return fail(
+          reply,
+          409,
+          "MFA_NOT_ENABLED",
+          "MFA não está ativa nesta conta.",
+        );
+      if (
+        ownerMembership &&
+        process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false"
+      )
+        return fail(
+          reply,
+          409,
+          "MFA_REQUIRED_BY_POLICY",
+          "A política da plataforma exige MFA para OWNER.",
+        );
+      const secret = await mfaSecret(user.id);
+      if (
+        !(await verifyPassword(user.passwordHash, body.password)) ||
+        !secret ||
+        !authenticator.check(body.code, secret)
+      )
+        return fail(
+          reply,
+          401,
+          "REAUTHENTICATION_FAILED",
+          "Senha ou código autenticador inválido.",
+        );
+      const currentSessionId = request.principal.sessionId;
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            mfaEnabled: false,
+            totpSecretEncrypted: null,
+            totpPendingEncrypted: null,
+          },
+        });
+        await tx.mfaRecoveryCode.deleteMany({ where: { userId: user.id } });
+        await tx.authSession.updateMany({
+          where: {
+            userId: user.id,
+            id: { not: currentSessionId ?? "" },
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        });
+      });
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: user.id,
+        action: "auth.mfa.disabled",
+        resourceType: "user",
+        resourceId: user.id,
+      });
+      return { disabled: true };
+    },
+  );
+
+  app.post(
+    "/auth/password/forgot",
+    { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      const body = parsed(passwordResetRequestSchema, request.body, reply);
+      if (!body) return;
+      const user = await prisma.user.findUnique({
+        where: { email: body.email.toLowerCase() },
+        select: { id: true, email: true, name: true, disabledAt: true },
+      });
+      if (user && !user.disabledAt) {
+        const token = randomToken(32);
+        const now = new Date();
+        await prisma.$transaction(async (tx) => {
+          await tx.passwordResetToken.deleteMany({
+            where: {
+              OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }],
+            },
+          });
+          await tx.passwordResetToken.updateMany({
+            where: { userId: user.id, usedAt: null },
+            data: { usedAt: now },
+          });
+          await tx.passwordResetToken.create({
+            data: {
+              userId: user.id,
+              tokenHash: sha256(token),
+              expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
+            },
+          });
+        });
+        try {
+          const resetUrl = new URL(
+            process.env.SCOUT_PUBLIC_URL ?? "http://localhost:8080",
+          );
+          resetUrl.hash = `reset=${encodeURIComponent(token)}`;
+          await sendRecoveryEmail({
+            to: user.email,
+            name: user.name,
+            resetUrl: resetUrl.toString(),
+          });
+        } catch (error) {
+          await prisma.passwordResetToken.updateMany({
+            where: { tokenHash: sha256(token), usedAt: null },
+            data: { usedAt: new Date() },
+          });
+          request.log.warn(
+            { errorType: error instanceof Error ? error.name : "UnknownError" },
+            "Password recovery email delivery failed",
+          );
+        }
+      }
+      return reply.code(202).send({
+        accepted: true,
+        message:
+          "Se o e-mail estiver cadastrado, você receberá instruções para redefinir a senha.",
+      });
+    },
+  );
+
+  app.post(
+    "/auth/password/reset",
+    { config: { rateLimit: { max: 8, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      const body = parsed(passwordResetSchema, request.body, reply);
+      if (!body) return;
+      const now = new Date();
+      const passwordHash = await argon2.hash(body.password, {
+        type: argon2.argon2id,
+      });
+      const reset = await prisma.$transaction(async (tx) => {
+        const token = await tx.passwordResetToken.findUnique({
+          where: { tokenHash: sha256(body.token) },
+          select: { id: true, userId: true, expiresAt: true, usedAt: true },
+        });
+        if (!token || token.usedAt || token.expiresAt <= now) return false;
+        const claimed = await tx.passwordResetToken.updateMany({
+          where: {
+            id: token.id,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { usedAt: now },
+        });
+        if (claimed.count !== 1) return false;
+        await tx.user.update({
+          where: { id: token.userId },
+          data: { passwordHash },
+        });
+        await tx.authSession.updateMany({
+          where: { userId: token.userId, revokedAt: null },
+          data: { revokedAt: now },
+        });
+        await tx.passwordResetToken.updateMany({
+          where: { userId: token.userId, usedAt: null },
+          data: { usedAt: now },
+        });
+        return true;
+      });
+      if (!reset)
+        return fail(
+          reply,
+          400,
+          "PASSWORD_RESET_INVALID",
+          "Este link expirou ou já foi utilizado. Solicite uma nova redefinição.",
+        );
+      return reply.send({ reset: true });
+    },
+  );
+
+  app.post(
     "/auth/login",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
@@ -193,7 +652,7 @@ export async function registerRoutes(
           "Usuário não pertence à organização solicitada.",
         );
       const ownerMustEnroll =
-        membership.role === TenantRole.OWNER &&
+        memberships.some((item) => item.role === TenantRole.OWNER) &&
         process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false";
       if (user.mfaEnabled || ownerMustEnroll) {
         const preAuthToken = app.jwt.sign(
@@ -239,19 +698,14 @@ export async function registerRoutes(
           "A etapa de autenticação expirou. Entre novamente.",
         );
       }
-      const membership = await prisma.membership.findUnique({
+      const adminMembership = await prisma.membership.findFirst({
         where: {
-          tenantId_userId: {
-            tenantId: preAuth.tenantId,
-            userId: preAuth.userId,
-          },
+          userId: preAuth.userId,
+          role: { in: [TenantRole.OWNER, TenantRole.ADMIN] },
         },
+        select: { userId: true },
       });
-      if (
-        !membership ||
-        (membership.role !== TenantRole.OWNER &&
-          membership.role !== TenantRole.ADMIN)
-      )
+      if (!adminMembership)
         return fail(
           reply,
           403,
@@ -310,7 +764,6 @@ export async function registerRoutes(
           "MFA_SETUP_REQUIRED",
           "Gere um novo segredo de configuração.",
         );
-      const { decryptSecret } = await import("@argws/scout-shared/crypto");
       if (
         !authenticator.check(
           body.code,
@@ -331,6 +784,7 @@ export async function registerRoutes(
           mfaEnabled: true,
         },
       });
+      const recoveryCodes = await replaceRecoveryCodes(user.id);
       await createSession(app, reply, user.id, preAuth.tenantId);
       await audit({
         tenantId: preAuth.tenantId,
@@ -339,7 +793,7 @@ export async function registerRoutes(
         resourceType: "user",
         resourceId: user.id,
       });
-      return reply.send({ authenticated: true });
+      return reply.send({ authenticated: true, recoveryCodes });
     },
   );
 
@@ -358,10 +812,16 @@ export async function registerRoutes(
           "A etapa de autenticação expirou. Entre novamente.",
         );
       }
-      const body = parsed(mfaCodeSchema, request.body, reply);
+      const body = parsed(mfaChallengeSchema, request.body, reply);
       if (!body) return;
       const secret = await mfaSecret(preAuth.userId);
-      if (!secret || !authenticator.check(body.code, secret))
+      const validTotp =
+        /^\d{6}$/.test(body.code) &&
+        Boolean(secret && authenticator.check(body.code, secret));
+      const validRecoveryCode = validTotp
+        ? false
+        : await consumeRecoveryCode(preAuth.userId, body.code);
+      if (!validTotp && !validRecoveryCode)
         return fail(
           reply,
           401,
@@ -384,6 +844,14 @@ export async function registerRoutes(
           "Organização indisponível.",
         );
       await createSession(app, reply, preAuth.userId, preAuth.tenantId);
+      if (validRecoveryCode)
+        await audit({
+          tenantId: preAuth.tenantId,
+          actorUserId: preAuth.userId,
+          action: "auth.mfa.recovery_code_used",
+          resourceType: "user",
+          resourceId: preAuth.userId,
+        });
       return reply.send({ authenticated: true });
     },
   );
@@ -500,6 +968,8 @@ export async function registerRoutes(
           mfaEnabled: membership.user.mfaEnabled,
         },
         role: membership.role,
+        mfaRequiredForOwner:
+          process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false",
         tenant: {
           id: membership.tenant.id,
           name: membership.tenant.name,
@@ -606,7 +1076,6 @@ export async function registerRoutes(
           "MFA_SETUP_REQUIRED",
           "Gere um novo segredo de configuração.",
         );
-      const { decryptSecret } = await import("@argws/scout-shared/crypto");
       if (
         !authenticator.check(
           body.code,
@@ -627,6 +1096,7 @@ export async function registerRoutes(
           mfaEnabled: true,
         },
       });
+      const recoveryCodes = await replaceRecoveryCodes(user.id);
       await audit({
         tenantId: tenantId(request),
         actorUserId: user.id,
@@ -634,7 +1104,7 @@ export async function registerRoutes(
         resourceType: "user",
         resourceId: user.id,
       });
-      return { enabled: true };
+      return { enabled: true, recoveryCodes };
     },
   );
 
@@ -758,6 +1228,7 @@ export async function registerRoutes(
           where: { userId, tenantId: tenantId(request), revokedAt: null },
           data: { revokedAt: new Date() },
         }),
+        prisma.mfaRecoveryCode.deleteMany({ where: { userId } }),
         prisma.auditLog.create({
           data: {
             tenantId: tenantId(request),
@@ -1254,6 +1725,74 @@ export async function registerRoutes(
       )
         return { job: { ...job, result: undefined } };
       return { job };
+    },
+  );
+
+  app.post(
+    "/jobs/:jobId/email",
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (!(await mayManage(request, reply))) return;
+      const body = parsed(
+        z.object({
+          to: z.string().trim().email().max(254),
+          subject: z.string().trim().min(1).max(200),
+          text: z.string().trim().min(1).max(30000),
+        }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+      const { jobId } = request.params as { jobId: string };
+      const job = await prisma.job.findFirst({
+        where: { id: jobId, tenantId: tenantId(request) },
+        include: { source: { select: { name: true } } },
+      });
+      if (!job) return fail(reply, 404, "JOB_NOT_FOUND", "Job não encontrado.");
+      if (job.status !== JobStatus.SUCCEEDED || !job.result)
+        return fail(
+          reply,
+          409,
+          "JOB_RESULT_UNAVAILABLE",
+          "Somente resultados concluídos podem ser enviados por e-mail.",
+        );
+      try {
+        await sendTenantEmail(tenantId(request), {
+          to: body.to,
+          subject: body.subject,
+          text: body.text,
+        });
+      } catch (error) {
+        if (error instanceof TenantSmtpNotConfiguredError)
+          return fail(
+            reply,
+            409,
+            "SMTP_NOT_CONFIGURED",
+            "Configure o SMTP de envio desta organização antes de enviar e-mails.",
+          );
+        request.log.warn(
+          { errorType: error instanceof Error ? error.name : "UnknownError" },
+          "Tenant email delivery failed",
+        );
+        return fail(
+          reply,
+          502,
+          "EMAIL_DELIVERY_FAILED",
+          "O envio falhou. Verifique o SMTP da organização e tente novamente.",
+        );
+      }
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: auditActor(request),
+        action: "job.result_emailed",
+        resourceType: "job",
+        resourceId: job.id,
+        metadata: { sourceName: job.source.name },
+      });
+      return { sent: true };
     },
   );
 
