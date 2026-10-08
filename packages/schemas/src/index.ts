@@ -24,6 +24,16 @@ export const loginSchema = z.object({
 });
 
 export const mfaCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/) });
+export const mfaChallengeSchema = z.object({
+  code: z.string().trim().min(6).max(32),
+});
+export const passwordResetRequestSchema = z.object({
+  email: z.string().trim().email().max(254),
+});
+export const passwordResetSchema = z.object({
+  token: z.string().min(32).max(128),
+  password: z.string().min(16).max(256),
+});
 
 export const instanceCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
