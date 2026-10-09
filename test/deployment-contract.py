@@ -94,5 +94,12 @@ for manifest in scout_manifests:
     for expected_field in probe_fields:
         assert expected_field in rabbitmq_section, f"{manifest}: missing {expected_field}"
     assert rabbitmq_section.count("      test: ") == 1, f"{manifest}: ambiguous probe"
+    browser = re.search(r"(?ms)^  browser-worker:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", document)
+    assert browser, f"{manifest}: browser-worker service missing"
+    browser_section = browser.group(1)
+    safe_tmpfs = '    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]'
+    assert safe_tmpfs in browser_section, f"{manifest}: invalid browser tmpfs syntax (noexec must be a mount option, not a mount path)"
+    assert browser_section.count("    tmpfs:") == 1, f"{manifest}: duplicate browser tmpfs declaration"
+
 
 print("Eight distinct Compose+env bundles have isolated project names, ports and persistent data.")
