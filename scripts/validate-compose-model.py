@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory(prefix="scout-garage-test-") as temp:
     assert config["s3_api"]["s3_region"] == "us-east-1", (folder, config)
     before = output.read_text(encoding="utf-8") + "# retained-user-configuration\n"
     output.write_text(before, encoding="utf-8")
-    subprocess.run(["/bin/sh", "-ec", test_script], check=True)
+    subprocess.run(["/bin/sh", "-ec", test_script], check=True, env=valid_rpc_env)
     assert output.read_text(encoding="utf-8") == before, (
         f"{folder}: existing Garage config must survive redeploy"
     )
