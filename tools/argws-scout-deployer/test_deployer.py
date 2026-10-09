@@ -103,6 +103,16 @@ class ScoutDeployerTests(unittest.TestCase):
             (output / "extra").mkdir()
             self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 1)
 
+    def test_generation_refuses_to_write_into_unrelated_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            output.mkdir()
+            marker = output / "keep.txt"
+            marker.write_text("user data", encoding="utf-8")
+            self.assertEqual(scout_deployer.main(self.command("docker", "production", output)), 1)
+            self.assertEqual(marker.read_text(encoding="utf-8"), "user data")
+            self.assertFalse((output / "compose.yaml").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
