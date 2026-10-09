@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A versão estável 0.5.1 inclui a correção preventiva dos healthchecks RabbitMQ e elimina o erro de montagem `invalid mount path: 'noexec'` do browser-worker em todos os deploys. Mantém os recursos da 0.5.0, incluindo o isolamento por plataforma, a proteção das credenciais e a integração com a Connect API.
+A versão estável **0.5.3** corrige a geração da chave RPC do Garage nos deploys e no Deployer Windows 1.0.1, evitando a falha `Invalid RPC secret key` em novas instalações. Inclui validação preventiva, testes de inicialização real e atualização dos pacotes Docker, Dockge, CloudPanel e Portainer, mantendo recursos, volumes e isolamento existentes. Para instalações afetadas, consulte [a recuperação do Garage](docs/deployment.md#garage-chave-rpc-válida-e-recuperação-sem-perda-de-dados); atualizar apenas as imagens não substitui uma chave inválida no `.env`.
 
 ## O que a Scout já entrega
 
@@ -71,7 +71,7 @@ Para instalar um alvo:
 4. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet` ou use a validação do stack no Portainer.
 5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. Crie o OWNER uma vez pelo perfil `maintenance` do Compose; no Portainer, use o console do container da API para executar `pnpm db:seed` uma vez.
 
-Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a porta de loopback indicada no `.env.example`. A chave `SCOUT_ENCRYPTION_KEY_BASE64` precisa ser gerada como Base64 de 32 bytes; a API rejeita placeholders durante a inicialização. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
+Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a porta de loopback indicada no `.env.example`. A variável `GARAGE_RPC_SECRET` exige exatamente 64 caracteres hexadecimais (32 bytes); gere-a com `openssl rand -hex 32` e preserve-a nas atualizações. O Deployer Windows 1.0.1 corrige a geração, que anteriormente usava Base64 URL-safe e impedia o Garage de iniciar. A recuperação de instalações afetadas está descrita em [docs/deployment.md](docs/deployment.md). A chave `SCOUT_ENCRYPTION_KEY_BASE64` precisa ser gerada como Base64 de 32 bytes; a API rejeita placeholders durante a inicialização. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
 
 ## Imagens e entrega
 

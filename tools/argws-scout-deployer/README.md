@@ -31,7 +31,9 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 - As portas padrão do Manager ficam isoladas por alvo e canal; CLI e GUI aceitam uma porta explícita para substituí-las.
 - Cada instalação recebe chaves e senhas aleatórias. A senha do primeiro OWNER fica em `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` no `.env`.
 - Uma execução posterior preserva o `.env`. `--force` atualiza somente `compose.yaml`.
-- A validação confirma as variáveis essenciais, a chave de cifragem de 32 bytes e a presença apenas do Compose e do arquivo de ambiente esperado.
+- O Deployer 1.0.1 gera `GARAGE_RPC_SECRET` com 32 bytes aleatórios em hexadecimal (`secrets.token_hex(32)`). Versões anteriores geravam Base64 URL-safe, inválido para o Garage.
+- A validação confirma as variáveis essenciais, a chave RPC de 64 caracteres hexadecimais, a chave de cifragem de 32 bytes e a presença apenas do Compose e do arquivo de ambiente esperado.
+- Para uma pasta criada por versão anterior, corrija explicitamente `GARAGE_RPC_SECRET` no `.env`/`stack.env`; `--force` mantém as credenciais e não modifica automaticamente a chave. Preserve chaves válidas existentes.
 - No Windows, mantenha a pasta gerada sob uma conta e um diretório com ACL restrita. O `.env` contém credenciais da instalação.
 
 | Alvo       | Develop | Produção |

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.0.1"
 TARGETS = ("docker", "dockge", "cloudpanel", "portainer")
 CHANNELS = ("develop", "production")
 DEFAULT_PORTS = {
@@ -29,7 +29,7 @@ SECRET_VALUES = {
     "REDIS_PASSWORD": lambda: secrets.token_urlsafe(36),
     "RABBITMQ_PASSWORD": lambda: secrets.token_urlsafe(36),
     "S3_SECRET_ACCESS_KEY": lambda: secrets.token_urlsafe(36),
-    "GARAGE_RPC_SECRET": lambda: secrets.token_urlsafe(36),
+    "GARAGE_RPC_SECRET": lambda: secrets.token_hex(32),
     "GARAGE_ADMIN_TOKEN": lambda: secrets.token_urlsafe(36),
     "SCOUT_JWT_SECRET": lambda: secrets.token_urlsafe(48),
     "SCOUT_ENCRYPTION_KEY_BASE64": lambda: base64.b64encode(
@@ -48,7 +48,7 @@ def project_root() -> Path:
 
 def product_version() -> str:
     version_file = project_root() / "VERSION"
-    return version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.5.0"
+    return version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.5.3"
 
 
 def env_filename(target: str) -> str:
@@ -227,6 +227,8 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
                 raise ValueError(f"A variável {key} ainda contém um valor de exemplo.")
         if "services:" not in compose or "image:" not in compose:
             raise ValueError("compose.yaml não parece ser uma stack Scout válida.")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", env["GARAGE_RPC_SECRET"]):
+            raise ValueError("GARAGE_RPC_SECRET precisa conter 64 caracteres hexadecimais (32 bytes).")
         key = base64.b64decode(env["SCOUT_ENCRYPTION_KEY_BASE64"], validate=True)
         if len(key) != 32:
             raise ValueError("SCOUT_ENCRYPTION_KEY_BASE64 precisa decodificar para 32 bytes.")
