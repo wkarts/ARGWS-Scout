@@ -42,6 +42,7 @@ Não execute `docker compose down --volumes` para atualizar ou reverter: isso re
 Nas oito distribuições, `garage-config-init` grava `garage.toml` no volume `garage-config-data`, montado em `/etc/garage-config` no Garage. Ambos os scripts `garage-config-init` e `garage-init` precisam receber o script inteiro como **um único argumento** de `/bin/sh -ec`. Use `command:` como lista com um elemento de texto multilinha (`- |`); `command: |` e `command: >-` escalares não preservam corretamente o script ao gerar o comando de execução do container.
 
 A inicialização verifica `test -s /config/garage.toml`. Se o arquivo já existir e contiver dados, é preservado. Dados e metadados S3 permanecem nos seus volumes originais.
+O inicializador `garage-init` monta o mesmo diretório persistente `garage/meta` do servidor **em somente leitura** (`:ro`). O cliente CLI precisa ler nesse diretório a chave do nó para operar, mesmo quando compartilha a rede do container `garage`.
 
 **Recuperação de Dockge em produção:** substitua a definição do Compose pelo conteúdo corrigido de `deploy/dockge/production/compose.yaml`, mantendo intactos `COMPOSE_PROJECT_NAME`, `.env`, credenciais, bind mounts e volumes. Alterar apenas `SCOUT_TAG` não atualiza o YAML da stack já cadastrada no Dockge. Dentro do diretório da stack:
 

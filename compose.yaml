@@ -112,6 +112,7 @@ services:
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
+      - ./volumes/garage/meta:/var/lib/garage/meta:ro
 
   migrate:
     build: { context: ., dockerfile: Dockerfile }

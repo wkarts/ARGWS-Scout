@@ -64,6 +64,25 @@ for name, mount_target in (
         assert data_mount.get("type") == "volume" and volume.get("name", "").startswith(project + "-"), (folder, name, data_mount, volume)
     else:
         assert data_mount.get("type") == "bind" and pathlib.Path(data_mount.get("source", "")).is_relative_to(folder), (folder, name, data_mount)
+# Garage CLI runs in its own container: sharing Garage's network namespace
+# does not share its filesystem. It needs the node key stored in metadata_dir.
+garage_meta = next(
+    mount for mount in model["services"]["garage"]["volumes"]
+    if mount.get("target") == "/var/lib/garage/meta"
+)
+init_meta = next(
+    (mount for mount in model["services"]["garage-init"].get("volumes", [])
+     if mount.get("target") == "/var/lib/garage/meta"),
+    None,
+)
+assert init_meta is not None, f"{folder}/garage-init: missing Garage node metadata mount"
+assert init_meta.get("source") == garage_meta.get("source"), (
+    f"{folder}/garage-init: node metadata must use the exact Garage source volume"
+)
+assert init_meta.get("read_only") is True, (
+    f"{folder}/garage-init: node metadata must be mounted read-only"
+)
+
 app_images = {
     "garage-config-init": "garage-init",
     "garage-init": "garage-init",
