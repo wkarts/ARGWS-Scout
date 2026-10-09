@@ -1,0 +1,129 @@
+name: Windows deployer
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deployer-release.yml'
+      - 'deploy/**'
+      - 'VERSION'
+      - 'tools/argws-scout-deployer/**'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing stable GitHub Release to attach the Windows deployer to
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Run deployer tests
+        run: python -m unittest discover -s tools/argws-scout-deployer -p "test_*.py" -v
+      - name: Install pinned Windows packager
+        run: python -m pip install -r tools/argws-scout-deployer/requirements-build.txt
+      - name: Build portable Windows CLI and GUI
+        shell: pwsh
+        run: |
+          python -m PyInstaller --clean --noconfirm --onefile --console `
+            --name argws-scout-deployer-win-x64 `
+            --distpath dist/cli --workpath build/cli `
+            --add-data "deploy;deploy" --add-data "VERSION;." `
+            tools/argws-scout-deployer/scout_deployer.py
+          if ($LASTEXITCODE -ne 0) { throw "CLI build failed" }
+          python -m PyInstaller --clean --noconfirm --onefile --windowed `
+            --name argws-scout-deployer-gui-win-x64 `
+            --distpath dist/gui --workpath build/gui `
+            tools/argws-scout-deployer/deployer_gui.py
+          if ($LASTEXITCODE -ne 0) { throw "GUI build failed" }
+      - name: Smoke test the packaged binaries
+        shell: pwsh
+        run: |
+          $cli = Join-Path $PWD "dist/cli/argws-scout-deployer-win-x64.exe"
+          $gui = Join-Path $PWD "dist/gui/argws-scout-deployer-gui-win-x64.exe"
+          & $cli version
+          if ($LASTEXITCODE -ne 0) { throw "CLI version smoke test failed" }
+          & $cli list
+          if ($LASTEXITCODE -ne 0) { throw "CLI list smoke test failed" }
+          $output = Join-Path $env:RUNNER_TEMP "scout-deployer-smoke"
+          if (Test-Path $output) { Remove-Item -Recurse -Force $output }
+          & $cli generate --target docker --environment production --output $output `
+            --public-url https://scout.example.org --admin-email admin@scout.example.org
+          if ($LASTEXITCODE -ne 0) { throw "CLI generate smoke test failed" }
+          & $cli validate --directory $output
+          if ($LASTEXITCODE -ne 0) { throw "CLI validation smoke test failed" }
+          & $gui --smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "GUI initialization smoke test failed" }
+      - name: Assemble release files
+        shell: pwsh
+        run: |
+          $stage = Join-Path $PWD "dist/package"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "dist/cli/argws-scout-deployer-win-x64.exe" $stage
+          Copy-Item "dist/gui/argws-scout-deployer-gui-win-x64.exe" $stage
+          Copy-Item "tools/argws-scout-deployer/README.md" $stage
+          $env:STAGE_DIR = $stage
+          $env:SCOUT_VERSION = (Get-Content VERSION -Raw).Trim()
+          @'
+          import hashlib, json, os
+          from pathlib import Path
+          stage = Path(os.environ["STAGE_DIR"])
+          files = {}
+          for name in sorted(("argws-scout-deployer-win-x64.exe", "argws-scout-deployer-gui-win-x64.exe", "README.md")):
+              files[name] = hashlib.sha256((stage / name).read_bytes()).hexdigest()
+          manifest = {
+              "product": "ARGWS Scout Deployer",
+              "deployer_version": "1.0.0",
+              "scout_version": os.environ["SCOUT_VERSION"],
+              "platform": "windows",
+              "architecture": "x64",
+              "files": files,
+          }
+          (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          '@ | python -
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/argws-scout-deployer-win-x64.zip" -Force
+          $archive = Get-FileHash "dist/argws-scout-deployer-win-x64.zip" -Algorithm SHA256
+          $cli = Get-FileHash "dist/cli/argws-scout-deployer-win-x64.exe" -Algorithm SHA256
+          @(
+            "$($archive.Hash.ToLower())  argws-scout-deployer-win-x64.zip",
+            "$($cli.Hash.ToLower())  argws-scout-deployer-win-x64.exe"
+          ) | Set-Content -Encoding utf8NoBOM "dist/SHA256SUMS.txt"
+      - name: Upload build artifact for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: argws-scout-deployer-win-x64
+          path: |
+            dist/argws-scout-deployer-win-x64.zip
+            dist/cli/argws-scout-deployer-win-x64.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach binaries to stable release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw "Only stable SemVer tags are supported: $env:RELEASE_TAG" }
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($env:RELEASE_TAG -ne "v$version") { throw "Release tag $env:RELEASE_TAG does not match VERSION $version" }
+          gh release view $env:RELEASE_TAG --repo $env:GH_REPO
+          if ($LASTEXITCODE -ne 0) { throw "The target GitHub Release does not exist" }
+          gh release upload $env:RELEASE_TAG `
+            "dist/argws-scout-deployer-win-x64.zip" `
+            "dist/cli/argws-scout-deployer-win-x64.exe" `
+            "dist/SHA256SUMS.txt" `
+            "dist/package/manifest.json" `
+            --repo $env:GH_REPO --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload deployer assets" }
