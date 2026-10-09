@@ -30,3 +30,58 @@ jobs:
               python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
           done
+
+  garage-bootstrap-smoke:
+    name: Real Garage startup and S3 bucket provisioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate isolated smoke-test environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp deploy/dockge/production/.env.example deploy/dockge/production/.env
+          python3 - <<'PY'
+          import secrets
+          from pathlib import Path
+          path = Path("deploy/dockge/production/.env")
+          keys = {
+              "GARAGE_RPC_SECRET": secrets.token_hex(32),
+              "GARAGE_ADMIN_TOKEN": secrets.token_urlsafe(40),
+              "S3_SECRET_ACCESS_KEY": secrets.token_hex(32),
+          }
+          updated = []
+          for line in path.read_text(encoding="utf-8").splitlines():
+              name = line.partition("=")[0]
+              updated.append(f"{name}={keys[name]}" if name in keys else line)
+          path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+          PY
+      - name: Boot Garage, verify readiness, import key and create bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd deploy/dockge/production
+          docker compose config --quiet
+          docker compose up --abort-on-container-exit --exit-code-from garage-init garage-init
+          docker compose run --rm --no-deps --entrypoint /bin/sh garage-config-init -ec 'test -s /config/garage.toml && grep -Fq "replication_factor = 1" /config/garage.toml'
+      - name: Show Garage logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          cd deploy/dockge/production
+          docker compose ps -a || true
+          docker compose logs --tail=150 garage-config-init garage garage-init || true
+      - name: Cleanup ephemeral smoke containers
+        if: always()
+        shell: bash
+        run: |
+          cd deploy/dockge/production
+          docker compose down || true
