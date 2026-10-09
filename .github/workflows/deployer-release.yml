@@ -2,10 +2,10 @@ name: Windows deployer
 on:
   pull_request:
     paths:
-      - '.github/workflows/deployer-release.yml'
-      - 'deploy/**'
-      - 'VERSION'
-      - 'tools/argws-scout-deployer/**'
+      - .github/workflows/deployer-release.yml
+      - deploy/**
+      - VERSION
+      - tools/argws-scout-deployer/**
   workflow_dispatch:
     inputs:
       release_tag:
@@ -21,11 +21,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: tools/argws-scout-deployer/requirements-build.txt
       - name: Run deployer tests
