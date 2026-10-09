@@ -99,11 +99,11 @@ services:
     command:
       - |
         set -eu
-        if [ "$(printf '%s' "$GARAGE_RPC_SECRET" | wc -c)" -ne 64 ]; then
+        if [ "$$(printf '%s' "$$GARAGE_RPC_SECRET" | wc -c)" -ne 64 ]; then
           echo "ERRO: GARAGE_RPC_SECRET deve conter exatamente 64 caracteres hexadecimais (32 bytes). Gere com openssl rand -hex 32 e preserve a chave." >&2
           exit 1
         fi
-        case "$GARAGE_RPC_SECRET" in
+        case "$$GARAGE_RPC_SECRET" in
           *[!0-9a-fA-F]*)
             echo "ERRO: GARAGE_RPC_SECRET contem caracteres nao hexadecimais. Gere com openssl rand -hex 32." >&2
             exit 1
