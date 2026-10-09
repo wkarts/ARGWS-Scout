@@ -146,6 +146,7 @@ services:
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
     volumes:
       - garage-config-data:/etc/garage-config:ro
+      - garage-meta-data:/var/lib/garage/meta:ro
     logging: *default-logging
 
   migrate:
