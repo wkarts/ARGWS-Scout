@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A versão estável 0.5.1 inclui a correção preventiva dos healthchecks RabbitMQ e elimina o erro de montagem `invalid mount path: 'noexec'` do browser-worker em todos os deploys. Mantém os recursos da 0.5.0, incluindo o isolamento por plataforma, a proteção das credenciais e a integração com a Connect API.
+A versão estável **0.5.3** corrige a geração da chave RPC do Garage nos deploys e no Deployer Windows 1.0.1, evitando a falha `Invalid RPC secret key` em novas instalações. Inclui validação preventiva, testes de inicialização real e atualização dos pacotes Docker, Dockge, CloudPanel e Portainer, mantendo recursos, volumes e isolamento existentes. Para instalações afetadas, consulte [a recuperação do Garage](docs/deployment.md#garage-chave-rpc-válida-e-recuperação-sem-perda-de-dados); atualizar apenas as imagens não substitui uma chave inválida no `.env`.
 
 ## O que a Scout já entrega
 
