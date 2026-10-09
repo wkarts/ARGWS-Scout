@@ -64,6 +64,10 @@ class ScoutDeployerTests(unittest.TestCase):
                     with contextlib.redirect_stdout(io.StringIO()):
                         self.assertEqual(scout_deployer.main(self.command(target, environment, output)), 0)
                     self.assertEqual({path.name for path in output.iterdir()}, {"compose.yaml", ".env"})
+                    compose = (output / "compose.yaml").read_text(encoding="utf-8")
+                    expected_tag = "develop" if environment == "develop" else "stable"
+                    self.assertIn(f"SCOUT_TAG:-{expected_tag}", compose)
+                    self.assertIn("SCOUT_VERSION:-0.5.0", compose)
 
     def test_rejects_http_in_production_and_bad_slug(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
