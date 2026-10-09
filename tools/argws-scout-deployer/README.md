@@ -4,7 +4,7 @@ O deployer portátil prepara uma instalação para Docker Compose, Dockge, Cloud
 
 ## Pacote da release
 
-Baixe `argws-scout-deployer-gui-win-x64.zip` e extraia os dois executáveis juntos. A GUI chama o CLI que acompanha o pacote. Também é possível usar `argws-scout-deployer-win-x64.exe` diretamente em automações.
+Baixe `argws-scout-deployer-win-x64.zip` e extraia os dois executáveis juntos. A GUI chama o CLI que acompanha o pacote. Também é possível usar `argws-scout-deployer-win-x64.exe` diretamente em automações.
 
 ## Uso pelo terminal
 
