@@ -101,6 +101,7 @@ jobs:
                 echo "$image:$version"
                 if [[ "$version" != *-* ]]; then
                   echo "$image:stable"
+                  echo "$image:latest"
                 fi
               fi
             done
