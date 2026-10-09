@@ -34,8 +34,8 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 - A validação confirma as variáveis essenciais, a chave de cifragem de 32 bytes e a presença apenas do Compose e do arquivo de ambiente esperado.
 - No Windows, mantenha a pasta gerada sob uma conta e um diretório com ACL restrita. O `.env` contém credenciais da instalação.
 
-| Alvo      | Develop | Produção |
-| --------- | ------: | -------: |
+| Alvo       | Develop | Produção |
+| ---------- | ------: | -------: |
 | Docker    |    8080 |     8180 |
 | Dockge    |    8081 |     8181 |
 | CloudPanel |    8082 |     8182 |
