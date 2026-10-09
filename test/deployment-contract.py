@@ -87,7 +87,7 @@ probe_fields = (
 )
 for manifest in scout_manifests:
     document = manifest.read_text(encoding="utf-8")
-    block = re.search(r"(?ms)^  rabbitmq:\\n(.*?)(?=^  [A-Za-z0-9_-]+:\\n|\\Z)", document)
+    block = re.search(r"(?ms)^  rabbitmq:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", document)
     assert block, f"{manifest}: RabbitMQ service is missing"
     rabbitmq_section = block.group(1)
     assert "rabbitmq-diagnostics" not in rabbitmq_section, f"{manifest}: expensive CLI check"
