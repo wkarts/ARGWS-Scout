@@ -61,7 +61,7 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pacote contém apenas `compose.yaml` e `.env.example`. Baixe o [deployer Windows](https://github.com/wkarts/ARGWS-Scout/releases/latest) para gerar automaticamente os dois arquivos, já com segredos aleatórios; o pacote inclui interface gráfica e CLI. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
+Cada pacote contém apenas `compose.yaml` e `.env.example`. Baixe o [deployer Windows](https://github.com/wkarts/ARGWS-Scout/releases/latest) para gerar automaticamente os dois arquivos, já com segredos aleatórios; o pacote inclui interface gráfica e CLI. Para Portainer, o arquivo sai como `stack.env`, conforme o Compose desse alvo. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
 
 Para instalar um alvo:
 
