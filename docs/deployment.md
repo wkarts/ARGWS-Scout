@@ -37,6 +37,49 @@ O BuildKit mantém cache por componente. Após uma publicação validada, a pol�
 
 Não execute `docker compose down --volumes` para atualizar ou reverter: isso remove os dados persistentes. Use `pull` e `up -d`; o nome `COMPOSE_PROJECT_NAME` identifica as redes e volumes que devem sobreviver à atualização.
 
+## Garage: chave RPC válida e recuperação sem perda de dados
+
+O Garage exige `GARAGE_RPC_SECRET` com **64 caracteres hexadecimais**, equivalentes a 32 bytes aleatórios. Gere uma vez com `openssl rand -hex 32`, grave no `.env` (ou `stack.env`/variáveis do Portainer) e **não altere uma chave válida nas atualizações**. Não use `replace-me`, Base64, `secrets.token_urlsafe()` ou um valor com menos de 64 caracteres.
+
+O Deployer Windows até a versão 1.0.0 gerava a chave RPC em Base64 URL-safe, formato rejeitado pelo Garage 2.4.1. A partir do Deployer 1.0.1, a chave é criada usando `secrets.token_hex(32)`, e a validação da pasta de deploy recusa formatos incorretos. O gerador preserva o arquivo de ambiente já existente ao atualizar o Compose: uma instalação afetada precisa corrigir explicitamente seu segredo persistente.
+
+Para recuperar uma instalação em Docker Compose, Dockge ou CloudPanel **cujo Garage nunca iniciou com a chave atual**, execute na pasta que contém o Compose e o `.env`:
+
+```bash
+set -e
+umask 077
+cp -p .env ".env.backup.$(date +%Y%m%d-%H%M%S)"
+python3 - <<'PY'
+from pathlib import Path
+import re, secrets
+env_file = Path('.env')
+content = env_file.read_text(encoding='utf-8')
+lines = content.splitlines(keepends=True)
+matches = [i for i, line in enumerate(lines) if re.match(r'^GARAGE_RPC_SECRET=', line)]
+if len(matches) != 1:
+    raise SystemExit('Esperado exatamente um GARAGE_RPC_SECRET no .env; corrija manualmente.')
+index = matches[0]
+raw_value = lines[index].split('=', 1)[1].strip().strip('"').strip("'")
+if re.fullmatch(r'[0-9a-fA-F]{64}', raw_value):
+    print('Chave RPC já válida; nenhuma alteração realizada.')
+else:
+    newline = '\r\n' if lines[index].endswith('\r\n') else '\n'
+    lines[index] = 'GARAGE_RPC_SECRET=' + secrets.token_hex(32) + newline
+    env_file.write_text(''.join(lines), encoding='utf-8')
+    env_file.chmod(0o600)
+    print('Chave RPC corrigida e gravada no .env, sem exibi-la.')
+PY
+docker compose config --quiet
+docker compose up -d garage-config-init garage garage-init
+docker compose up -d
+docker compose ps
+docker compose logs --tail=80 garage-config-init garage garage-init
+```
+
+Se essa instância já funcionou anteriormente com outra chave RPC válida, **não gere uma chave nova**: recupere a chave original do backup do ambiente para manter a identidade criptográfica do nó. Em Portainer, atualize a variável `GARAGE_RPC_SECRET` na interface e faça redeploy preservando os volumes; o roteiro acima é destinado a `.env` local. No Dockge, confira também se a variável definida na interface sobrescreve o `.env` da pasta.
+
+O `garage-config-init` agora verifica tamanho e caracteres da chave **antes** de tocar em `garage.toml`. Um valor inválido encerra o inicializador com mensagem clara, sem criar/substituir configurações e sem iniciar o loop de reinicialização do Garage. `COMPOSE_PROJECT_NAME`, volumes, chaves S3 e credenciais do PostgreSQL/Redis/RabbitMQ permanecem inalterados.
+
 ## Garage: correção do bootstrap S3
 
 Nas oito distribuições, `garage-config-init` grava `garage.toml` no volume `garage-config-data`, montado em `/etc/garage-config` no Garage. Ambos os scripts `garage-config-init` e `garage-init` precisam receber o script inteiro como **um único argumento** de `/bin/sh -ec`. Use `command:` como lista com um elemento de texto multilinha (`- |`); `command: |` e `command: >-` escalares não preservam corretamente o script ao gerar o comando de execução do container.
