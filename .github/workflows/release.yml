@@ -4,7 +4,7 @@ on:
     workflows: ["GHCR application images"]
     types: [completed]
 permissions:
-  actions: read
+  actions: write
   contents: write
 jobs:
   release:
@@ -45,18 +45,19 @@ jobs:
         run: |
           set -euo pipefail
           version="$(tr -d '\r\n' < VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || { echo "Unsupported release SemVer: $version" >&2; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Only a stable SemVer release is supported: $version" >&2; exit 1; }
           for manifest in package.json apps/*/package.json packages/*/package.json; do
             actual="$(node -p "JSON.parse(require('fs').readFileSync('$manifest', 'utf8')).version")"
             [[ "$actual" == "$version" ]] || { echo "$manifest has $actual; expected $version" >&2; exit 1; }
           done
           echo "value=$version" >> "$GITHUB_OUTPUT"
-      - name: Create release after image publication
+      - name: Create or verify stable release
         if: steps.source.outputs.source_branch == 'main' && steps.source.outputs.source_event == 'push' && steps.source.outputs.source_conclusion == 'success'
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           RELEASE_VERSION: "${{ steps.version.outputs.value }}"
           RELEASE_COMMIT: ${{ steps.source.outputs.source_sha }}
+          GH_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
@@ -71,12 +72,22 @@ jobs:
             git tag -a "$release_tag" "$RELEASE_COMMIT" -m "ARGWS Scout $release_tag"
             git push origin "refs/tags/$release_tag"
           fi
-          if gh release view "$release_tag" >/dev/null 2>&1; then
-            echo "Release $release_tag already exists."
-            exit 0
+          if ! gh release view "$release_tag" --repo "$GH_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$release_tag" --repo "$GH_REPOSITORY" --title "ARGWS Scout $release_tag" --generate-notes
           fi
-          release_args=()
-          if [[ "$RELEASE_VERSION" == *-* ]]; then
-            release_args+=(--prerelease)
-          fi
-          gh release create "$release_tag" --title "ARGWS Scout $release_tag" --generate-notes "${release_args[@]}"
+          dispatched_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          workflow_path=".github/workflows/deployer-release.yml"
+          gh workflow run "$workflow_path" --repo "$GH_REPOSITORY" --ref main -f "release_tag=$release_tag"
+          run_id=""
+          for attempt in {1..40}; do
+            runs="$(gh run list --repo "$GH_REPOSITORY" --workflow "$workflow_path" --branch main --event workflow_dispatch --limit 20 --json databaseId,headSha,createdAt)"
+            run_id="$(jq -r --arg sha "$RELEASE_COMMIT" --arg since "$dispatched_at" '[.[] | select(.headSha == $sha and .createdAt >= $since)] | sort_by(.createdAt) | last | .databaseId // empty' <<< "$runs")"
+            [[ -n "$run_id" ]] && break
+            sleep 5
+          done
+          [[ -n "$run_id" ]] || { echo "Could not find Windows deployer workflow run for $RELEASE_COMMIT." >&2; exit 1; }
+          gh run watch "$run_id" --repo "$GH_REPOSITORY" --exit-status --interval 15
+          assets="$(gh release view "$release_tag" --repo "$GH_REPOSITORY" --json assets --jq '.assets[].name')"
+          for required in argws-scout-deployer-win-x64.zip argws-scout-deployer-win-x64.exe SHA256SUMS.txt manifest.json; do
+            grep -Fxq "$required" <<< "$assets" || { echo "Release asset missing: $required" >&2; exit 1; }
+          done

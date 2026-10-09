@@ -39,9 +39,11 @@ for target in targets:
   refs=[line.split("=",1)[1] for line in e.splitlines() if line.startswith("ARGWS_SCOUT_") and "_IMAGE=" in line]
   assert refs and all(x.startswith("ghcr.io/wkarts/argws-scout-") for x in refs), f"{d}: infrastructure images must come from GHCR"
   assert env.get("SCOUT_IMAGE_OWNER")=="wkarts", f"{d}: application image owner must be configurable"
-  app_images=re.findall(r"image: ghcr\.io/\$\{SCOUT_IMAGE_OWNER:-wkarts\}/argws-scout-[^:]+:\$\{SCOUT_TAG:-develop\}", y)
-  assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and update tag"
-  expected_tag="develop" if channel=="develop" else version
+  image_tag="develop" if channel=="develop" else "stable"
+  pattern=r"image: ghcr\.io/\$\{SCOUT_IMAGE_OWNER:-wkarts\}/argws-scout-[^:]+:\$\{SCOUT_TAG:-"+image_tag+r"\}"
+  app_images=re.findall(pattern, y)
+  assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and channel tag"
+  expected_tag=image_tag
   assert env.get("SCOUT_TAG")==expected_tag, f"{d}: SCOUT_TAG must be {expected_tag}"
   assert int(env["SCOUT_MANAGER_PORT"])==ports[target][channel], f"{d}: manager port must be isolated by target and channel"
   assert env["SCOUT_ENCRYPTION_KEY_BASE64"]=="REPLACE_WITH_BASE64_32_BYTE_KEY", f"{d}: example must never contain a deployable encryption key"

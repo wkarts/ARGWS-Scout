@@ -101,6 +101,7 @@ jobs:
                 echo "$image:$version"
                 if [[ "$version" != *-* ]]; then
                   echo "$image:stable"
+                  echo "$image:latest"
                 fi
               fi
             done
@@ -190,3 +191,55 @@ jobs:
           path: build-cache-retention.json
           if-no-files-found: ignore
           retention-days: 30
+
+  verify-published:
+    needs: [publish]
+    if: needs.publish.result == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Verify every published application manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          branch="${{ github.event.workflow_run.head_branch }}"
+          version="$(tr -d '\r\n' < VERSION)"
+          components=(runtime api migrate dispatcher worker scheduler webhook-worker manager docs browser-worker garage-init)
+          if [[ "$branch" == develop ]]; then
+            tags=(develop)
+          else
+            tags=("$version")
+            if [[ "$version" != *-* ]]; then
+              tags+=(stable latest)
+            fi
+          fi
+          for component in "${components[@]}"; do
+            image="ghcr.io/$owner/argws-scout-$component"
+            for tag in "${tags[@]}"; do
+              ready=false
+              for attempt in {1..40}; do
+                if docker buildx imagetools inspect "$image:$tag" >/dev/null 2>&1; then
+                  ready=true
+                  break
+                fi
+                sleep 15
+              done
+              if [[ "$ready" != true ]]; then
+                echo "Published image manifest is unavailable: $image:$tag" >&2
+                exit 1
+              fi
+            done
+          done
+          echo "All application image manifests are available."
