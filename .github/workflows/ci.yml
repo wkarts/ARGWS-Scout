@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17.11-alpine3.23
+        image: ghcr.io/wkarts/argws-scout-postgres:17.11-alpine3.23
         env:
           POSTGRES_DB: scout
           POSTGRES_USER: scout
