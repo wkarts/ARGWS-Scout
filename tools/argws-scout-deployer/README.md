@@ -28,10 +28,18 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 ## Comportamento e proteção
 
 - Produção exige URL HTTPS e usa a tag publicada `stable`; o canal develop usa a tag `develop`.
+- As portas padrão do Manager ficam isoladas por alvo e canal; CLI e GUI aceitam uma porta explícita para substituí-las.
 - Cada instalação recebe chaves e senhas aleatórias. A senha do primeiro OWNER fica em `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` no `.env`.
 - Uma execução posterior preserva o `.env`. `--force` atualiza somente `compose.yaml`.
 - A validação confirma as variáveis essenciais, a chave de cifragem de 32 bytes e a presença apenas do Compose e do arquivo de ambiente esperado.
 - No Windows, mantenha a pasta gerada sob uma conta e um diretório com ACL restrita. O `.env` contém credenciais da instalação.
+
+| Alvo | Develop | Produção |
+| --- | ---: | ---: |
+| Docker | 8080 | 8180 |
+| Dockge | 8081 | 8181 |
+| CloudPanel | 8082 | 8182 |
+| Portainer | 8083 | 8183 |
 
 ## Desenvolvimento
 
