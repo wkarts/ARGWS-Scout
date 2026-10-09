@@ -9,6 +9,32 @@ target = folder.parent.name
 channel = folder.name
 project = f"argws-scout-{target}-{channel}"
 model = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+# RabbitMQ readiness must not start the Erlang diagnostic CLI for every probe.
+expected_rabbitmq_check = ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+rabbitmq_check = model["services"]["rabbitmq"].get("healthcheck", {}).get("test")
+assert rabbitmq_check == expected_rabbitmq_check, (
+    f"{folder}: RabbitMQ must use the lightweight Bash TCP readiness probe, got {rabbitmq_check!r}"
+)
+# Container mounts must resolve to absolute targets; a bare "noexec" is not a path.
+for container_name, container_config in model["services"].items():
+    for volume in container_config.get("volumes", []):
+        target_path = volume.get("target", "")
+        assert pathlib.PurePosixPath(target_path).is_absolute(), (
+            f"{folder}/{container_name}: invalid volume mount target {target_path!r}"
+        )
+browser_tmpfs = model["services"]["browser-worker"].get("tmpfs", [])
+assert isinstance(browser_tmpfs, list) and len(browser_tmpfs) == 1, (
+    f"{folder}: browser-worker tmpfs must contain exactly one mount, got {browser_tmpfs!r}"
+)
+tmpfs_mount = browser_tmpfs[0]
+assert isinstance(tmpfs_mount, str) and tmpfs_mount.startswith("/tmp:"), (
+    f"{folder}: invalid tmpfs target {tmpfs_mount!r}"
+)
+tmpfs_options = tmpfs_mount.split(":", 1)[1].split(",")
+assert {"rw", "noexec", "nosuid", "size=512m"}.issubset(set(tmpfs_options)), (
+    f"{folder}: browser-worker tmpfs security or size options missing: {tmpfs_mount!r}"
+)
+
 env = dict(
     line.split("=", 1)
     for line in (folder / ".env.example").read_text(encoding="utf-8").splitlines()

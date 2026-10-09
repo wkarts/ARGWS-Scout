@@ -74,4 +74,32 @@ for target in targets:
    if service!="api" and "env_file:" in block_text:
     for key in recovery_keys:
      assert f'SCOUT_RECOVERY_SMTP_{key}: ""' in block_text, f"{d}/{service}: recovery SMTP must stay inside the API container"
+# Enforce the lightweight RabbitMQ readiness check for all supported deployments.
+scout_manifests = [root / "compose.yaml", root / "ops/deployment/compose.yaml"]
+scout_manifests += [root / "deploy" / target / channel / "compose.yaml"
+                    for target in targets for channel in channels]
+probe_fields = (
+    '      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]',
+    "      interval: 60s",
+    "      timeout: 5s",
+    "      retries: 5",
+    "      start_period: 90s",
+)
+for manifest in scout_manifests:
+    document = manifest.read_text(encoding="utf-8")
+    block = re.search(r"(?ms)^  rabbitmq:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", document)
+    assert block, f"{manifest}: RabbitMQ service is missing"
+    rabbitmq_section = block.group(1)
+    assert "rabbitmq-diagnostics" not in rabbitmq_section, f"{manifest}: expensive CLI check"
+    for expected_field in probe_fields:
+        assert expected_field in rabbitmq_section, f"{manifest}: missing {expected_field}"
+    assert rabbitmq_section.count("      test: ") == 1, f"{manifest}: ambiguous probe"
+    browser = re.search(r"(?ms)^  browser-worker:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", document)
+    assert browser, f"{manifest}: browser-worker service missing"
+    browser_section = browser.group(1)
+    safe_tmpfs = '    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]'
+    assert safe_tmpfs in browser_section, f"{manifest}: invalid browser tmpfs syntax (noexec must be a mount option, not a mount path)"
+    assert browser_section.count("    tmpfs:") == 1, f"{manifest}: duplicate browser tmpfs declaration"
+
+
 print("Eight distinct Compose+env bundles have isolated project names, ports and persistent data.")

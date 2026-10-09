@@ -11,6 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scout_deployer
 
+SCOUT_RELEASE_VERSION = (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip()
+
 
 class ScoutDeployerTests(unittest.TestCase):
     @staticmethod
@@ -40,7 +42,7 @@ class ScoutDeployerTests(unittest.TestCase):
             self.assertEqual({path.name for path in output.iterdir()}, {"compose.yaml", ".env"})
             env = scout_deployer.parse_env((output / ".env").read_text(encoding="utf-8"))
             self.assertEqual(env["SCOUT_TAG"], "stable")
-            self.assertEqual(env["SCOUT_VERSION"], "0.5.0")
+            self.assertEqual(env["SCOUT_VERSION"], SCOUT_RELEASE_VERSION)
             self.assertEqual(len(base64.b64decode(env["SCOUT_ENCRYPTION_KEY_BASE64"])), 32)
             self.assertGreaterEqual(len(env["SCOUT_JWT_SECRET"]), 32)
             self.assertNotIn("replace-me", (output / ".env").read_text(encoding="utf-8"))
@@ -74,7 +76,7 @@ class ScoutDeployerTests(unittest.TestCase):
                         self.assertIn("env_file: [stack.env]", compose)
                     expected_tag = "develop" if environment == "develop" else "stable"
                     self.assertIn(f"SCOUT_TAG:-{expected_tag}", compose)
-                    self.assertIn("SCOUT_VERSION:-0.5.0", compose)
+                    self.assertIn(f"SCOUT_VERSION:-{SCOUT_RELEASE_VERSION}", compose)
 
     def test_rejects_http_in_production_and_bad_slug(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

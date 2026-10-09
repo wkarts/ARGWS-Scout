@@ -56,10 +56,11 @@ services:
     volumes:
       - ./volumes/rabbitmq:/var/lib/rabbitmq
     healthcheck:
-      test: [CMD, rabbitmq-diagnostics, -q, ping]
-      interval: 15s
-      timeout: 10s
-      retries: 12
+      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     logging: *default-logging
     networks: [scout]
 
@@ -190,7 +191,7 @@ services:
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.0}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.1}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -302,7 +303,7 @@ services:
     cpus: 2
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    tmpfs: [/tmp:rw, noexec, nosuid, size=512m]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
     command: [pnpm, --filter, "@argws/scout-browser-worker", start]
     env_file: [.env]
     environment:

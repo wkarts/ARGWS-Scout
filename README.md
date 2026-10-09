@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A release estável 0.5.0 corrige a instalação por plataforma, isola o nome e o armazenamento de cada stack e valida a chave usada para cifrar credenciais do Manager. A área WhatsApp se conecta diretamente à Connect API para administrar instâncias e publicar coletas.
+A versão estável 0.5.1 inclui a correção preventiva dos healthchecks RabbitMQ e elimina o erro de montagem `invalid mount path: 'noexec'` do browser-worker em todos os deploys. Mantém os recursos da 0.5.0, incluindo o isolamento por plataforma, a proteção das credenciais e a integração com a Connect API.
 
 ## O que a Scout já entrega
 
