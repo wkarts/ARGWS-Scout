@@ -13,6 +13,10 @@ import scout_deployer
 
 
 class ScoutDeployerTests(unittest.TestCase):
+    @staticmethod
+    def environment_file(target: str) -> str:
+        return "stack.env" if target == "portainer" else ".env"
+
     def command(self, target: str, environment: str, output: Path, *extra: str) -> list[str]:
         return [
             "generate",
@@ -20,7 +24,7 @@ class ScoutDeployerTests(unittest.TestCase):
             "--environment", environment,
             "--output", str(output),
             "--public-url", "https://scout.argws.com.br" if environment == "production" else "http://localhost:8080",
-            "--manager-port", "8081" if target == "dockge" else "8180",
+            "--manager-port", str(scout_deployer.DEFAULT_PORTS[(target, environment)]),
             "--tenant-name", "Minha organização",
             "--tenant-slug", "minha-organizacao",
             "--admin-name", "Administrador",
@@ -63,8 +67,11 @@ class ScoutDeployerTests(unittest.TestCase):
                     output = Path(temporary) / "deploy"
                     with contextlib.redirect_stdout(io.StringIO()):
                         self.assertEqual(scout_deployer.main(self.command(target, environment, output)), 0)
-                    self.assertEqual({path.name for path in output.iterdir()}, {"compose.yaml", ".env"})
+                    env_file = self.environment_file(target)
+                    self.assertEqual({path.name for path in output.iterdir()}, {"compose.yaml", env_file})
                     compose = (output / "compose.yaml").read_text(encoding="utf-8")
+                    if target == "portainer":
+                        self.assertIn("env_file: [stack.env]", compose)
                     expected_tag = "develop" if environment == "develop" else "stable"
                     self.assertIn(f"SCOUT_TAG:-{expected_tag}", compose)
                     self.assertIn("SCOUT_VERSION:-0.5.0", compose)
@@ -96,7 +103,7 @@ class ScoutDeployerTests(unittest.TestCase):
             del args[args.index("--manager-port") : args.index("--manager-port") + 2]
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(scout_deployer.main(args), 0)
-            env = scout_deployer.parse_env((output / ".env").read_text(encoding="utf-8"))
+            env = scout_deployer.parse_env((output / "stack.env").read_text(encoding="utf-8"))
             self.assertEqual(env["SCOUT_MANAGER_PORT"], "8083")
 
     def test_validation_rejects_extra_directories(self) -> None:
