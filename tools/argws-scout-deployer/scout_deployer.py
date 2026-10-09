@@ -149,6 +149,11 @@ def generate(args: argparse.Namespace) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
         compose_path = output_dir / "compose.yaml"
         env_path = output_dir / ".env"
+        unexpected = sorted(
+            path.name for path in output_dir.iterdir() if path.name not in {"compose.yaml", ".env"}
+        )
+        if unexpected:
+            raise ValueError("A pasta de saída deve estar vazia ou conter somente compose.yaml e .env.")
         if compose_path.exists() and not args.force:
             raise ValueError("compose.yaml já existe; use --force para atualizá-lo.")
         generated_env = None
