@@ -34,6 +34,7 @@ for target in targets:
    if re.match(r"\s+image:",line): assert lines[i+1].strip()=="pull_policy: always", f"{d}: images must be pulled on deploy"
   assert "configs:" not in y and "content: |" not in y, f"{d}: avoid Compose configs.content for Portainer compatibility"
   assert "garage-config-init:" in y and "cat > /config/garage.toml" in y, f"{d}: Garage config must be generated from this Compose file"
+  assert y.count("    entrypoint: [/bin/sh, -ec]\n    command:\n      - |") == 2, f"{d}: Garage init scripts must each be passed as a single shell argument"
   assert "garage-config-data:/etc/garage-config:ro" in y and "garage-config-data:/config" in y
   assert "./garage.toml" not in y
   refs=[line.split("=",1)[1] for line in e.splitlines() if line.startswith("ARGWS_SCOUT_") and "_IMAGE=" in line]

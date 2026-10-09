@@ -37,6 +37,25 @@ O BuildKit mantém cache por componente. Após uma publicação validada, a pol�
 
 Não execute `docker compose down --volumes` para atualizar ou reverter: isso remove os dados persistentes. Use `pull` e `up -d`; o nome `COMPOSE_PROJECT_NAME` identifica as redes e volumes que devem sobreviver à atualização.
 
+## Garage: correção do bootstrap S3
+
+Nas oito distribuições, `garage-config-init` grava `garage.toml` no volume `garage-config-data`, montado em `/etc/garage-config` no Garage. Ambos os scripts `garage-config-init` e `garage-init` precisam receber o script inteiro como **um único argumento** de `/bin/sh -ec`. Use `command:` como lista com um elemento de texto multilinha (`- |`); `command: |` e `command: >-` escalares não preservam corretamente o script ao gerar o comando de execução do container.
+
+A inicialização verifica `test -s /config/garage.toml`. Se o arquivo já existir e contiver dados, é preservado. Dados e metadados S3 permanecem nos seus volumes originais.
+
+**Recuperação de Dockge em produção:** substitua a definição do Compose pelo conteúdo corrigido de `deploy/dockge/production/compose.yaml`, mantendo intactos `COMPOSE_PROJECT_NAME`, `.env`, credenciais, bind mounts e volumes. Alterar apenas `SCOUT_TAG` não atualiza o YAML da stack já cadastrada no Dockge. Dentro do diretório da stack:
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d --force-recreate garage-config-init garage garage-init
+docker compose up -d
+docker compose ps -a
+docker compose logs --tail=80 garage-config-init garage garage-init
+```
+
+**Não execute** `docker compose down -v`, `docker volume prune` ou exclusão de `./volumes`: isso pode destruir os dados. Se ainda houver erro, os logs de `garage` e `garage-init` devem indicar possíveis problemas independentes de credenciais, permissões ou estado do armazenamento.
+
 ## RabbitMQ: readiness leve em todos os deploys
 
 O Scout utiliza o RabbitMQ exclusivamente pela rede interna `rabbitmq:5672` para API, dispatcher e workers. Todos os manifests (`compose.yaml`, `ops/deployment/compose.yaml` e os oito bundles em `deploy/`) devem usar a mesma checagem TCP local e **não** executar `rabbitmq-diagnostics ping` a cada poucos segundos. A CLI inicia sessões Erlang adicionais e, quando muitas stacks compartilham a VPS, pode causar consumo desnecessário de CPU.
