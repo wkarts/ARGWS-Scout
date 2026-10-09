@@ -39,9 +39,11 @@ for target in targets:
   refs=[line.split("=",1)[1] for line in e.splitlines() if line.startswith("ARGWS_SCOUT_") and "_IMAGE=" in line]
   assert refs and all(x.startswith("ghcr.io/wkarts/argws-scout-") for x in refs), f"{d}: infrastructure images must come from GHCR"
   assert env.get("SCOUT_IMAGE_OWNER")=="wkarts", f"{d}: application image owner must be configurable"
-  app_images=re.findall(r"image: ghcr\.io/\$\{SCOUT_IMAGE_OWNER:-wkarts\}/argws-scout-[^:]+:\$\{SCOUT_TAG:-develop\}", y)
-  assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and update tag"
-  expected_tag="develop" if channel=="develop" else version
+  image_tag="develop" if channel=="develop" else "stable"
+  pattern=r"image: ghcr\.io/\$\{SCOUT_IMAGE_OWNER:-wkarts\}/argws-scout-[^:]+:\$\{SCOUT_TAG:-"+image_tag+r"\}"
+  app_images=re.findall(pattern, y)
+  assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and channel tag"
+  expected_tag=image_tag
   assert env.get("SCOUT_TAG")==expected_tag, f"{d}: SCOUT_TAG must be {expected_tag}"
   assert int(env["SCOUT_MANAGER_PORT"])==ports[target][channel], f"{d}: manager port must be isolated by target and channel"
   assert env["SCOUT_ENCRYPTION_KEY_BASE64"]=="REPLACE_WITH_BASE64_32_BYTE_KEY", f"{d}: example must never contain a deployable encryption key"
@@ -57,4 +59,19 @@ for target in targets:
   else:
    assert "./volumes/postgres:/var/lib/postgresql/data" in y
   assert f"SCOUT_MANAGER_PORT={ports[target][channel]}" in e
+  current_service=None
+  service_blocks={}
+  for line in lines:
+   service_match=re.match(r"^  ([A-Za-z0-9_-]+):$",line)
+   if service_match:
+    current_service=service_match.group(1)
+    service_blocks[current_service]=[]
+   if current_service:
+    service_blocks[current_service].append(line)
+  recovery_keys=("HOST","PORT","SECURE","USERNAME","PASSWORD","FROM_EMAIL","FROM_NAME")
+  for service,block in service_blocks.items():
+   block_text="\n".join(block)
+   if service!="api" and "env_file:" in block_text:
+    for key in recovery_keys:
+     assert f'SCOUT_RECOVERY_SMTP_{key}: ""' in block_text, f"{d}/{service}: recovery SMTP must stay inside the API container"
 print("Eight distinct Compose+env bundles have isolated project names, ports and persistent data.")

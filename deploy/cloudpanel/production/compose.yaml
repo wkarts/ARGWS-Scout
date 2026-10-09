@@ -88,7 +88,7 @@ services:
     networks: [scout]
 
   garage-config-init:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: "no"
     network_mode: none
@@ -115,7 +115,7 @@ services:
     logging: *default-logging
 
   garage-init:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-garage-init:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: "no"
     network_mode: "service:garage"
@@ -141,12 +141,19 @@ services:
     logging: *default-logging
 
   migrate:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: "no"
     command: [sh, -lc, "pnpm db:generate && pnpm db:migrate"]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
     depends_on:
       postgres: { condition: service_healthy }
@@ -154,13 +161,20 @@ services:
     networks: [scout]
 
   bootstrap:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-stable}
     pull_policy: always
     profiles: [maintenance]
     restart: "no"
     command: [pnpm, db:seed]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -168,7 +182,7 @@ services:
     networks: [scout]
 
   api:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-api:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-api:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-api", start]
@@ -176,7 +190,7 @@ services:
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.4.0}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.0}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -211,7 +225,7 @@ services:
     networks: [scout]
 
   manager:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-manager:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-manager:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     ports:
@@ -228,19 +242,26 @@ services:
     networks: [scout]
 
   docs:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-docs:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-docs:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     logging: *default-logging
     networks: [scout]
 
   dispatcher:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-dispatcher:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-dispatcher:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-dispatcher", start]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
     depends_on:
       api: { condition: service_healthy }
@@ -249,12 +270,19 @@ services:
     networks: [scout]
 
   worker:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-worker:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-worker:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
     depends_on:
       api: { condition: service_healthy }
@@ -265,7 +293,7 @@ services:
     networks: [scout]
 
   browser-worker:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-browser-worker:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-browser-worker:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -278,6 +306,13 @@ services:
     command: [pnpm, --filter, "@argws/scout-browser-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
       SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}
     depends_on:
@@ -289,12 +324,19 @@ services:
     networks: [scout]
 
   scheduler:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-scheduler:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-scheduler:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-scheduler", start]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
     depends_on:
       api: { condition: service_healthy }
@@ -302,12 +344,19 @@ services:
     networks: [scout]
 
   webhook-worker:
-    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-webhook-worker:${SCOUT_TAG:-develop}
+    image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-webhook-worker:${SCOUT_TAG:-stable}
     pull_policy: always
     restart: unless-stopped
     command: [pnpm, --filter, "@argws/scout-webhook-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_RECOVERY_SMTP_HOST: ""
+      SCOUT_RECOVERY_SMTP_PORT: ""
+      SCOUT_RECOVERY_SMTP_SECURE: ""
+      SCOUT_RECOVERY_SMTP_USERNAME: ""
+      SCOUT_RECOVERY_SMTP_PASSWORD: ""
+      SCOUT_RECOVERY_SMTP_FROM_EMAIL: ""
+      SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
     depends_on:
       api: { condition: service_healthy }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ARGWS Scout API
-  version: 0.4.0
+  version: 0.5.0
   description: REST API para tenants, coleta web e publicação WhatsApp via Connect API.
 servers:
   - url: /v1
@@ -29,6 +29,41 @@ paths:
           description: Sessão ou indicação MFA_REQUIRED/MFA_SETUP_REQUIRED.
         "401":
           description: Credenciais inválidas.
+  /auth/password/forgot:
+    post:
+      security: []
+      summary: Solicita redefinição de senha sem revelar se o e-mail existe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202":
+          {
+            description: Solicitação aceita; o SMTP global envia o link quando a conta existe.,
+          }
+  /auth/password/reset:
+    post:
+      security: []
+      summary: Redefine senha com token de uso único válido por 30 minutos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, writeOnly: true }
+                password: { type: string, minLength: 16, writeOnly: true }
+      responses:
+        "200": { description: Senha alterada e sessões revogadas. }
+        "400": { description: Token expirado ou já utilizado. }
   /auth/mfa/setup:
     post:
       security: [{ PreAuth: [] }]
@@ -46,9 +81,9 @@ paths:
   /auth/mfa/verify:
     post:
       security: [{ PreAuth: [] }]
-      summary: Confirma código TOTP durante login.
+      summary: Confirma TOTP ou código reserva de uso único durante login.
       requestBody:
-        $ref: "#/components/requestBodies/MfaCode"
+        $ref: "#/components/requestBodies/MfaChallenge"
       responses:
         "200": { description: Sessão criada. }
   /auth/refresh:
@@ -76,6 +111,97 @@ paths:
         $ref: "#/components/requestBodies/ProfileUpdate"
       responses:
         "200": { description: Perfil atualizado. }
+  /profile/mfa/recovery-codes/regenerate:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Substitui códigos reserva e confirma TOTP atual.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200": { description: Códigos novos exibidos uma única vez. }
+  /profile/mfa/disable:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Desativa MFA após confirmar senha e TOTP; OWNER mantém MFA pela política padrão.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password: { type: string, writeOnly: true }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200": { description: MFA desativada e outras sessões encerradas. }
+        "409": { description: MFA obrigatória pela política. }
+  /integrations/smtp:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Consulta estado do SMTP de envio; configuração completa só para OWNER/ADMIN.
+      responses:
+        "200":
+          {
+            description: Configuração sem o segredo e estado do relay global de recuperação.,
+          }
+    put:
+      security: [{ ScoutSession: [] }]
+      summary: Salva SMTP de envio independente para esta organização.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [host, port, secure, authentication, fromEmail, fromName]
+              properties:
+                host: { type: string, maxLength: 255 }
+                port: { type: integer, minimum: 1, maximum: 65535 }
+                secure: { type: boolean }
+                authentication: { type: boolean }
+                username: { type: string, maxLength: 254 }
+                password:
+                  {
+                    type: string,
+                    writeOnly: true,
+                    description: "Opcional para manter a senha já cifrada.",
+                  }
+                fromEmail: { type: string, format: email }
+                fromName: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          {
+            description: Configuração cifrada salva; a senha nunca é retornada.,
+          }
+    delete:
+      security: [{ ScoutSession: [] }]
+      summary: Remove SMTP de envio desta organização.
+      responses:
+        "204": { description: Integração removida. }
+  /integrations/smtp/test:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Verifica o relay configurado e envia e-mail de teste; OWNER/ADMIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient]
+              properties:
+                recipient: { type: string, format: email }
+      responses:
+        "200": { description: E-mail de teste enviado. }
   /overview:
     get:
       summary: Retorna contadores e jobs recentes do tenant.
@@ -183,6 +309,25 @@ paths:
       summary: Retorna estado, resultado, source e tentativas.
       responses:
         "200": { description: Job encontrado. }
+  /jobs/{jobId}/email:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Envia resultado concluído usando o SMTP da organização.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, subject, text]
+              properties:
+                to: { type: string, format: email }
+                subject: { type: string, maxLength: 200 }
+                text: { type: string, maxLength: 30000 }
+      responses:
+        "200": { description: Resultado enviado e ação auditada. }
+        "409": { description: Job não concluído ou sem SMTP de envio. }
+        "502": { description: SMTP recusou ou não entregou a mensagem. }
   /jobs/{jobId}/artifacts/{artifactId}:
     get:
       parameters:
@@ -510,6 +655,21 @@ components:
             required: [code]
             properties:
               code: { type: string, pattern: "^[0-9]{6}$" }
+    MfaChallenge:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            properties:
+              code:
+                {
+                  type: string,
+                  minLength: 6,
+                  maxLength: 32,
+                  description: "Código TOTP de seis dígitos ou código reserva de uso único.",
+                }
     ProfileUpdate:
       required: true
       content:

@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A release estável 0.4.0 corrige a instalação por plataforma, isola o nome e o armazenamento de cada stack e valida a chave usada para cifrar credenciais do Manager. A área WhatsApp se conecta diretamente à Connect API para administrar instâncias e publicar coletas.
+A release estável 0.5.0 corrige a instalação por plataforma, isola o nome e o armazenamento de cada stack e valida a chave usada para cifrar credenciais do Manager. A área WhatsApp se conecta diretamente à Connect API para administrar instâncias e publicar coletas.
 
 ## O que a Scout já entrega
 
@@ -61,13 +61,13 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pacote contém apenas `compose.yaml` e `.env.example`. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
+Cada pacote contém apenas `compose.yaml` e `.env.example`. Baixe o [deployer Windows](https://github.com/wkarts/ARGWS-Scout/releases/latest) para gerar automaticamente os dois arquivos, já com segredos aleatórios; o pacote inclui interface gráfica e CLI. Para Portainer, o arquivo sai como `stack.env`, conforme o Compose desse alvo. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
 
 Para instalar um alvo:
 
 1. Docker Compose, Dockge e CloudPanel: copie `.env.example` para `.env` e preencha URL e segredos. Portainer Standalone: carregue o `.env.example` na seção de variáveis do stack.
 2. Preserve `COMPOSE_PROJECT_NAME` em atualizações. Ele define nome da rede e volumes persistentes.
-3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou a versão estável publicada para produção. Essa única tag atualiza as dez imagens da Scout.
+3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou `stable` (recomendado) ou `latest` para produção. Essa única tag atualiza as dez imagens da Scout.
 4. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet` ou use a validação do stack no Portainer.
 5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. Crie o OWNER uma vez pelo perfil `maintenance` do Compose; no Portainer, use o console do container da API para executar `pnpm db:seed` uma vez.
 
@@ -78,7 +78,7 @@ Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a port
 - Aplicações: argws-scout-api, argws-scout-migrate, argws-scout-dispatcher, argws-scout-worker, argws-scout-scheduler, argws-scout-webhook-worker, argws-scout-manager, argws-scout-docs, argws-scout-browser-worker e argws-scout-garage-init. Os processos Node usam o mesmo conteúdo de runtime sob tags funcionais distintas.
 - Bases sincronizadas para GHCR: PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, Nginx e Playwright.
 - O fluxo de sincronização de infraestrutura roda manualmente e semanalmente; tags upstream ficam explícitas e só mudam por revisão.
-- A publicação de aplicações espera todos os quality gates. develop publica somente o canal develop. main exige SemVer estável e publica a versão mais o canal stable.
+- A publicação de aplicações espera todos os quality gates. develop publica somente o canal develop. main exige SemVer estável e publica a versão mais os aliases `stable` e `latest`.
 - A tag Git e o GitHub Release só são criados depois que o workflow de imagens termina com sucesso.
 - Runtime, Manager e docs usam linux/amd64 e linux/arm64. Browser worker usa linux/amd64 porque a imagem Playwright incluída é específica dessa arquitetura.
 

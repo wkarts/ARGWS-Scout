@@ -6,6 +6,7 @@ settings:
 
 overrides:
   deepmerge-ts: ^8.0.0
+  source-map-js: ^1.2.2
 
 importers:
   .:
@@ -83,6 +84,9 @@ importers:
       ioredis:
         specifier: ^5.6.1
         version: 5.11.1
+      nodemailer:
+        specifier: ^10.0.13
+        version: 10.0.13
       otplib:
         specifier: ^12.0.1
         version: 12.0.1
@@ -96,6 +100,9 @@ importers:
       "@types/amqplib":
         specifier: ^0.10.7
         version: 0.10.8
+      "@types/nodemailer":
+        specifier: ^8.0.2
+        version: 8.0.2
       "@types/qrcode":
         specifier: ^1.5.5
         version: 1.5.6
@@ -1456,6 +1463,12 @@ packages:
         integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==,
       }
 
+  "@types/nodemailer@8.0.2":
+    resolution:
+      {
+        integrity: sha512-c7M5ox8p0nEOfbJ2E9Qcmt8/QCu/VzsiAhzBiZbvky2PhKZDHpKB3sQHBM5MEZNkCfBOaS6S9//AGPRTNB7IaA==,
+      }
+
   "@types/qrcode@1.5.6":
     resolution:
       {
@@ -2463,6 +2476,13 @@ packages:
       }
     hasBin: true
 
+  nodemailer@10.0.13:
+    resolution:
+      {
+        integrity: sha512-SzG86OlvcW/NNhUFC6uROMwRTL4n7MswfQqC/T8mhkmnY1YVa23zUEMYi4ijSeXSl9GLz9ZeTJDUatEDuY5FeQ==,
+      }
+    engines: { node: ">=20.0.0" }
+
   nth-check@2.1.1:
     resolution:
       {
@@ -2934,10 +2954,10 @@ packages:
         integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==,
       }
 
-  source-map-js@1.2.1:
+  source-map-js@1.2.2:
     resolution:
       {
-        integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==,
+        integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==,
       }
     engines: { node: ">=0.10.0" }
 
@@ -3960,6 +3980,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  "@types/nodemailer@8.0.2":
+    dependencies:
+      "@types/node": 22.20.4
+
   "@types/qrcode@1.5.6":
     dependencies:
       "@types/node": 22.20.4
@@ -4032,7 +4056,7 @@ snapshots:
       "@vue/shared": 3.5.43
       entities: 7.0.1
       estree-walker: 2.0.2
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   "@vue/compiler-dom@3.5.43":
     dependencies:
@@ -4049,7 +4073,7 @@ snapshots:
       estree-walker: 2.0.2
       magic-string: 0.30.21
       postcss: 8.5.28
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   "@vue/compiler-ssr@3.5.43":
     dependencies:
@@ -4615,6 +4639,8 @@ snapshots:
 
   node-gyp-build@4.8.4: {}
 
+  nodemailer@10.0.13: {}
+
   nth-check@2.1.1:
     dependencies:
       boolbase: 1.0.0
@@ -4732,7 +4758,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.19
       picocolors: 1.1.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   prettier@3.9.9: {}
 
@@ -4858,7 +4884,7 @@ snapshots:
     dependencies:
       atomic-sleep: 1.0.0
 
-  source-map-js@1.2.1: {}
+  source-map-js@1.2.2: {}
 
   source-map@0.7.6: {}
 
