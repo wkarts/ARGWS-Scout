@@ -127,7 +127,9 @@ config_init = model["services"]["garage-config-init"]
 assert config_init.get("environment", {}).get("GARAGE_RPC_SECRET") == env["GARAGE_RPC_SECRET"], (
     f"{folder}: Garage config init must receive the same RPC secret as the server"
 )
-config_script = config_init["command"][0]
+# Docker Compose may keep escaped $$ in its rendered model; the Engine passes a
+# single $ to the shell after interpolation, so emulate that when testing locally.
+config_script = config_init["command"][0].replace("$$", "$")
 valid_rpc_env = {**os.environ, "GARAGE_RPC_SECRET": "a" * 64}
 for invalid_rpc_secret in ("replace-me", "g" * 64, "A" * 63 + "="):
     with tempfile.TemporaryDirectory(prefix="scout-garage-invalid-") as temp:
