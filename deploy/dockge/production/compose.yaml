@@ -303,7 +303,7 @@ services:
     cpus: 2
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    tmpfs: [/tmp:rw, noexec, nosuid, size=512m]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
     command: [pnpm, --filter, "@argws/scout-browser-worker", start]
     env_file: [.env]
     environment:
