@@ -39,7 +39,7 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 | Docker    |    8080 |     8180 |
 | Dockge    |    8081 |     8181 |
 | CloudPanel |    8082 |     8182 |
-| Portainer |    8083 |     8183 |
+| Portainer  |    8083 |     8183 |
 
 ## Desenvolvimento
 
