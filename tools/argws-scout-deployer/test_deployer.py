@@ -45,7 +45,27 @@ class ScoutDeployerTests(unittest.TestCase):
             self.assertEqual(env["SCOUT_VERSION"], SCOUT_RELEASE_VERSION)
             self.assertEqual(len(base64.b64decode(env["SCOUT_ENCRYPTION_KEY_BASE64"])), 32)
             self.assertGreaterEqual(len(env["SCOUT_JWT_SECRET"]), 32)
+            self.assertRegex(env["GARAGE_RPC_SECRET"], r"^[0-9a-f]{64}$")
             self.assertNotIn("replace-me", (output / ".env").read_text(encoding="utf-8"))
+
+    def test_rejects_invalid_rpc_secret_without_changing_existing_env(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(scout_deployer.main(self.command("docker", "production", output)), 0)
+            env_path = output / ".env"
+            original = env_path.read_text(encoding="utf-8")
+            secret = scout_deployer.parse_env(original)["GARAGE_RPC_SECRET"]
+            for invalid in ("replace-me", "g" * 64, "A" * 63 + "="):
+                with self.subTest(secret=invalid):
+                    corrupted = original.replace("GARAGE_RPC_SECRET=" + secret, "GARAGE_RPC_SECRET=" + invalid)
+                    env_path.write_text(corrupted, encoding="utf-8")
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 1)
+                    self.assertEqual(env_path.read_text(encoding="utf-8"), corrupted)
+            env_path.write_text(original, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 0)
 
     def test_preserves_existing_env_and_force_replaces_only_compose(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
