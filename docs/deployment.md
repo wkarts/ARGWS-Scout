@@ -36,3 +36,31 @@ O workflow sincroniza bases PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, N
 O BuildKit mantém cache por componente. Após uma publicação validada, a política remove somente caches próprios sem acesso há duas horas; não remove tags ou imagens de release.
 
 Não execute `docker compose down --volumes` para atualizar ou reverter: isso remove os dados persistentes. Use `pull` e `up -d`; o nome `COMPOSE_PROJECT_NAME` identifica as redes e volumes que devem sobreviver à atualização.
+
+## RabbitMQ: readiness leve em todos os deploys
+
+O Scout utiliza o RabbitMQ exclusivamente pela rede interna `rabbitmq:5672` para API, dispatcher e workers. Todos os manifests (`compose.yaml`, `ops/deployment/compose.yaml` e os oito bundles em `deploy/`) devem usar a mesma checagem TCP local e **não** executar `rabbitmq-diagnostics ping` a cada poucos segundos. A CLI inicia sessões Erlang adicionais e, quando muitas stacks compartilham a VPS, pode causar consumo desnecessário de CPU.
+
+```yaml
+healthcheck:
+  test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+  interval: 60s
+  timeout: 5s
+  retries: 5
+  start_period: 90s
+```
+
+A imagem padrão `rabbitmq:4.3.6-management-alpine` (espelhada como `ghcr.io/wkarts/argws-scout-rabbitmq`) possui Bash em seu entrypoint. A checagem usa apenas o próprio Bash, sem `nc`, `curl` ou comandos Erlang. **Se a imagem for substituída**, a disponibilidade do Bash e o acesso a `/dev/tcp` devem ser confirmados antes de implantar. O teste apenas confirma a abertura da porta AMQP local: não valida autenticação, filas, alarmes, recuperação de consumidores ou conectividade externa.
+
+Antes de iniciar a primeira stack ou recriar um broker existente, valide:
+
+```bash
+docker compose --env-file .env -f compose.yaml config --quiet
+docker compose --env-file .env -f compose.yaml config --format json > /tmp/scout-compose.json
+# Opcional, após o RabbitMQ existir: confira se o healthcheck está healthy.
+docker compose ps rabbitmq
+```
+
+A atualização de um serviço RabbitMQ **já iniciado** pode exigir recriação e interromper conexões momentaneamente. Não use `docker compose down -v`, não remova dados, não troque nomes de projeto/volumes e não altere credenciais. Preserve consumidores e acompanhe o backlog da fila antes e depois. O healthcheck Docker não é um mecanismo automático de correção de indisponibilidade do broker. Se for necessário monitoramento aprofundado, use métricas do plugin Prometheus/RabbitMQ em frequência separada e adequada.
+
+Os contratos automatizados em `test/deployment-contract.py` e `scripts/validate-compose-model.py` impedem regressão para o check CLI pesado e conferem a verificação TCP nos arquivos de origem e no modelo renderizado.

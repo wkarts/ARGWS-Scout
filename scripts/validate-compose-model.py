@@ -9,6 +9,12 @@ target = folder.parent.name
 channel = folder.name
 project = f"argws-scout-{target}-{channel}"
 model = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+# RabbitMQ readiness must not start the Erlang diagnostic CLI for every probe.
+expected_rabbitmq_check = ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+rabbitmq_check = model["services"]["rabbitmq"].get("healthcheck", {}).get("test")
+assert rabbitmq_check == expected_rabbitmq_check, (
+    f"{folder}: RabbitMQ must use the lightweight Bash TCP readiness probe, got {rabbitmq_check!r}"
+)
 env = dict(
     line.split("=", 1)
     for line in (folder / ".env.example").read_text(encoding="utf-8").splitlines()

@@ -58,10 +58,11 @@ services:
     ports:
       - "127.0.0.1:5672:5672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
+      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+      interval: 60s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 90s
     networks: [scout]
 
   garage:
