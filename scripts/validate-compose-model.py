@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate the rendered Compose model for one standalone deployment package."""
 import json
+import os
 import pathlib
 import sys
 
@@ -122,20 +123,42 @@ for name in ("garage-config-init", "garage-init"):
     )
     subprocess.run(["/bin/sh", "-n", "-c", command[0]], check=True)
 
-config_script = model["services"]["garage-config-init"]["command"][0]
+config_init = model["services"]["garage-config-init"]
+assert config_init.get("environment", {}).get("GARAGE_RPC_SECRET") == env["GARAGE_RPC_SECRET"], (
+    f"{folder}: Garage config init must receive the same RPC secret as the server"
+)
+# Docker Compose may keep escaped $$ in its rendered model; the Engine passes a
+# single $ to the shell after interpolation, so emulate that when testing locally.
+config_script = config_init["command"][0].replace("$$", "$")
+valid_rpc_env = {**os.environ, "GARAGE_RPC_SECRET": "a" * 64}
+for invalid_rpc_secret in ("replace-me", "g" * 64, "A" * 63 + "="):
+    with tempfile.TemporaryDirectory(prefix="scout-garage-invalid-") as temp:
+        invalid_output = pathlib.Path(temp) / "garage.toml"
+        invalid_script = config_script.replace("/config/garage.toml", str(invalid_output))
+        execution = subprocess.run(
+            ["/bin/sh", "-ec", invalid_script],
+            env={**os.environ, "GARAGE_RPC_SECRET": invalid_rpc_secret},
+            capture_output=True, text=True, check=False,
+        )
+        assert execution.returncode != 0 and not invalid_output.exists(), (
+            f"{folder}: invalid Garage RPC secret must fail before writing config"
+        )
+        assert "GARAGE_RPC_SECRET" in execution.stderr, (
+            f"{folder}: startup failure must explain the invalid key"
+        )
 assert "cat > /config/garage.toml <<'EOF'" in config_script, f"{folder}: missing Garage configuration heredoc"
 assert "test -s /config/garage.toml" in config_script, f"{folder}: missing Garage config verification"
 with tempfile.TemporaryDirectory(prefix="scout-garage-test-") as temp:
     output = pathlib.Path(temp) / "garage.toml"
     test_script = config_script.replace("/config/garage.toml", str(output))
-    subprocess.run(["/bin/sh", "-ec", test_script], check=True)
+    subprocess.run(["/bin/sh", "-ec", test_script], check=True, env=valid_rpc_env)
     config = tomllib.loads(output.read_text(encoding="utf-8"))
     assert config["replication_factor"] == 1 and config["db_engine"] == "lmdb", (folder, config)
     assert config["s3_api"]["api_bind_addr"] == "[::]:3900", (folder, config)
     assert config["s3_api"]["s3_region"] == "us-east-1", (folder, config)
     before = output.read_text(encoding="utf-8") + "# retained-user-configuration\n"
     output.write_text(before, encoding="utf-8")
-    subprocess.run(["/bin/sh", "-ec", test_script], check=True)
+    subprocess.run(["/bin/sh", "-ec", test_script], check=True, env=valid_rpc_env)
     assert output.read_text(encoding="utf-8") == before, (
         f"{folder}: existing Garage config must survive redeploy"
     )

@@ -44,26 +44,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate isolated smoke-test environment
+      - name: Generate isolated smoke environment with the Windows Deployer backend
         shell: bash
         run: |
           set -euo pipefail
-          cp deploy/dockge/production/.env.example deploy/dockge/production/.env
-          python3 - <<'PY'
-          import secrets
-          from pathlib import Path
-          path = Path("deploy/dockge/production/.env")
-          keys = {
-              "GARAGE_RPC_SECRET": secrets.token_hex(32),
-              "GARAGE_ADMIN_TOKEN": secrets.token_urlsafe(40),
-              "S3_SECRET_ACCESS_KEY": secrets.token_hex(32),
-          }
-          updated = []
-          for line in path.read_text(encoding="utf-8").splitlines():
-              name = line.partition("=")[0]
-              updated.append(f"{name}={keys[name]}" if name in keys else line)
-          path.write_text("\n".join(updated) + "\n", encoding="utf-8")
-          PY
+          python3 tools/argws-scout-deployer/scout_deployer.py generate \
+            --target dockge --environment production \
+            --output "$RUNNER_TEMP/scout-garage-smoke" \
+            --public-url https://scout.example.org \
+            --admin-email admin@scout.example.org
+          cp "$RUNNER_TEMP/scout-garage-smoke/.env" deploy/dockge/production/.env
       - name: Boot Garage, verify readiness, import key and create bucket
         shell: bash
         run: |
