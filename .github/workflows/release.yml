@@ -4,7 +4,7 @@ on:
     workflows: ["GHCR application images"]
     types: [completed]
 permissions:
-  actions: read
+  actions: write
   contents: write
 jobs:
   release:
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           version="$(tr -d '\r\n' < VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || { echo "Unsupported release SemVer: $version" >&2; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || { echo "Only stable SemVer releases are supported: $version" >&2; exit 1; }
           for manifest in package.json apps/*/package.json packages/*/package.json; do
             actual="$(node -p "JSON.parse(require('fs').readFileSync('$manifest', 'utf8')).version")"
             [[ "$actual" == "$version" ]] || { echo "$manifest has $actual; expected $version" >&2; exit 1; }
