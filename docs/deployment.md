@@ -64,3 +64,21 @@ docker compose ps rabbitmq
 A atualização de um serviço RabbitMQ **já iniciado** pode exigir recriação e interromper conexões momentaneamente. Não use `docker compose down -v`, não remova dados, não troque nomes de projeto/volumes e não altere credenciais. Preserve consumidores e acompanhe o backlog da fila antes e depois. O healthcheck Docker não é um mecanismo automático de correção de indisponibilidade do broker. Se for necessário monitoramento aprofundado, use métricas do plugin Prometheus/RabbitMQ em frequência separada e adequada.
 
 Os contratos automatizados em `test/deployment-contract.py` e `scripts/validate-compose-model.py` impedem regressão para o check CLI pesado e conferem a verificação TCP nos arquivos de origem e no modelo renderizado.
+
+## Correção de montagem tmpfs do navegador — v0.5.1
+
+O `browser-worker` utiliza `tmpfs` em `/tmp` com `rw,noexec,nosuid,size=512m` para isolamento do navegador. **As opções devem estar em um único item**, não em quatro itens do YAML:
+
+```yaml
+# Correto: um mount com destino absoluto e opções
+tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
+
+# Incorreto: o Docker interpreta "noexec" como novo destino de montagem
+# tmpfs: [/tmp:rw, noexec, nosuid, size=512m]
+```
+
+O formato incorreto impede a criação do serviço e pode interromper o deploy com `Error response from daemon: invalid mount path: 'noexec' mount path must be absolute`. A versão 0.5.1 corrige os oito bundles de plataforma e o manifesto `ops/deployment/compose.yaml`; o Compose de desenvolvimento principal já continha a forma correta.
+
+Execute `docker compose --env-file .env -f compose.yaml config --format json` e confirme que `services.browser-worker.tmpfs` tem um único item antes de iniciar o stack. O contrato em `scripts/validate-compose-model.py` valida também destinos absolutos para todos os volumes.
+
+Para recuperar o Dockge Production, **atualize a definição Compose do stack** com o arquivo da versão corrigida. Não basta trocar o tag da imagem: essa falha está na configuração de montagem, não no código da imagem. Após conferir `config --quiet`, recrie apenas o serviço afetado quando possível; serviços que dependem de migrations/bootstraps devem respeitar a ordem de inicialização. Não execute `docker compose down -v`, não altere `COMPOSE_PROJECT_NAME` e mantenha os volumes existentes.
