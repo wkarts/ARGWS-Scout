@@ -51,6 +51,10 @@ def product_version() -> str:
     return version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.5.0"
 
 
+def env_filename(target: str) -> str:
+    return "stack.env" if target == "portainer" else ".env"
+
+
 def fail(message: str) -> int:
     print(f"Erro: {message}", file=sys.stderr)
     return 1
@@ -148,9 +152,9 @@ def generate(args: argparse.Namespace) -> int:
         output_dir = Path(args.output).expanduser().resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
         compose_path = output_dir / "compose.yaml"
-        env_path = output_dir / ".env"
+        env_path = output_dir / env_filename(args.target)
         unexpected = sorted(
-            path.name for path in output_dir.iterdir() if path.name not in {"compose.yaml", ".env"}
+            path.name for path in output_dir.iterdir() if path.name not in {"compose.yaml", env_path.name}
         )
         if unexpected:
             raise ValueError("A pasta de saída deve estar vazia ou conter somente compose.yaml e .env.")
@@ -187,10 +191,18 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
             raise ValueError("A pasta selecionada não existe.")
         entries = list(directory.iterdir())
         files = {path.name for path in entries if path.is_file()}
-        if len(entries) != 2 or len(files) != 2 or files != {"compose.yaml", ".env"}:
-            raise ValueError("A pasta deve conter somente compose.yaml e .env.")
+        env_files = files - {"compose.yaml"}
+        if (
+            len(entries) != 2
+            or len(files) != 2
+            or "compose.yaml" not in files
+            or len(env_files) != 1
+            or not env_files.issubset({".env", "stack.env"})
+        ):
+            raise ValueError("A pasta deve conter somente compose.yaml e um arquivo de ambiente (.env ou stack.env).")
         compose = (directory / "compose.yaml").read_text(encoding="utf-8")
-        env = parse_env((directory / ".env").read_text(encoding="utf-8"))
+        env_path = directory / next(iter(env_files))
+        env = parse_env(env_path.read_text(encoding="utf-8"))
         required = (
             "SCOUT_VERSION",
             "SCOUT_TAG",
@@ -219,7 +231,7 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
         if len(key) != 32:
             raise ValueError("SCOUT_ENCRYPTION_KEY_BASE64 precisa decodificar para 32 bytes.")
         if not quiet:
-            print("Deploy válido: compose.yaml e .env estão prontos.")
+            print(f"Deploy válido: compose.yaml e {env_path.name} estão prontos.")
             print(f"Arquivos gravados em: {directory}")
             print("A senha inicial do OWNER está em SCOUT_BOOTSTRAP_ADMIN_PASSWORD no .env.")
         return 0
