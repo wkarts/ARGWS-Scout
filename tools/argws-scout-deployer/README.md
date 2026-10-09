@@ -1,6 +1,6 @@
 # ARGWS Scout Deployer para Windows
 
-O deployer portátil prepara uma instalação para Docker Compose, Dockge, CloudPanel ou Portainer. Ele gera credenciais aleatórias e grava somente `compose.yaml` e `.env` na pasta escolhida. Não instala nem inicia serviços e não adiciona scripts aos pacotes de deploy.
+O deployer portátil prepara uma instalação para Docker Compose, Dockge, CloudPanel ou Portainer. Ele gera credenciais aleatórias e grava somente `compose.yaml` e o arquivo de ambiente na pasta escolhida: `.env` para Docker, Dockge e CloudPanel, `stack.env` para Portainer. Não instala nem inicia serviços e não adiciona scripts aos pacotes de deploy.
 
 ## Pacote da release
 
@@ -30,7 +30,7 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 - Produção exige URL HTTPS e usa a tag publicada `stable`; o canal develop usa a tag `develop`.
 - Cada instalação recebe chaves e senhas aleatórias. A senha do primeiro OWNER fica em `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` no `.env`.
 - Uma execução posterior preserva o `.env`. `--force` atualiza somente `compose.yaml`.
-- A validação confirma as variáveis essenciais, a chave de cifragem de 32 bytes e a presença apenas dos dois arquivos permitidos.
+- A validação confirma as variáveis essenciais, a chave de cifragem de 32 bytes e a presença apenas do Compose e do arquivo de ambiente esperado.
 - No Windows, mantenha a pasta gerada sob uma conta e um diretório com ACL restrita. O `.env` contém credenciais da instalação.
 
 ## Desenvolvimento
@@ -43,4 +43,6 @@ python -m pip install -r tools/argws-scout-deployer/requirements-build.txt
 python -m PyInstaller --clean --onefile --name argws-scout-deployer-win-x64 `
   --add-data "deploy;deploy" --add-data "VERSION;." `
   tools/argws-scout-deployer/scout_deployer.py
+python -m PyInstaller --clean --onefile --windowed --name argws-scout-deployer-gui-win-x64 `
+  tools/argws-scout-deployer/deployer_gui.py
 ```
