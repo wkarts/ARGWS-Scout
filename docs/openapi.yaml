@@ -531,7 +531,11 @@ paths:
       summary: Consulta status publicados exclusivamente pela instância vinculada ao espaço.
       parameters:
         - { in: path, name: name, required: true, schema: { type: string } }
-        - { in: query, name: page, schema: { type: integer, minimum: 1, maximum: 100, default: 1 } }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 1 },
+          }
       responses:
         "200": { description: Status da instância vinculada, sem credenciais. }
         "404": { description: Instância de outro espaço ou não vinculada. }
@@ -567,7 +571,8 @@ paths:
       responses:
         "201": { description: Status enviado. }
         "200": { description: Requisição já registrada sem novo disparo. }
-        "202": { description: Resposta remota incerta; nenhum reenvio automático. }
+        "202":
+          { description: Resposta remota incerta; nenhum reenvio automático. }
         "400": { description: Destinatário ou payload inválido. }
         "404": { description: Instância não vinculada ao espaço. }
   /whatsapp/instances/{name}/catalog:
@@ -576,10 +581,15 @@ paths:
       summary: Consulta o catálogo WhatsApp Business em modo somente leitura.
       parameters:
         - { in: path, name: name, required: true, schema: { type: string } }
-        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 30, default: 10 } }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 30, default: 10 },
+          }
         - { in: query, name: cursor, schema: { type: string, maxLength: 1024 } }
       responses:
-        "200": { description: Produtos e paginação fornecidos pela Connect API. }
+        "200":
+          { description: Produtos e paginação fornecidos pela Connect API. }
         "404": { description: Instância de outro espaço. }
         "502": { description: Catálogo não suportado/indisponível no provider. }
   /whatsapp/instances/{name}/catalog/share:
@@ -609,7 +619,11 @@ paths:
       responses:
         "201": { description: Compartilhamento confirmado. }
         "200": { description: Idempotency-Key previamente registrada. }
-        "202": { description: Envio possivelmente efetuado, sem repetição automática. }
+        "202":
+          {
+            description: Envio possivelmente efetuado,
+            sem repetição automática.,
+          }
         "400": { description: Produto ou número inválido. }
         "404": { description: Instância indisponível neste espaço. }
   /instances/{instanceId}/tokens:
