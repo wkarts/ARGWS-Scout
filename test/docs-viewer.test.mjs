@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { renderMarkdown, readOpenApiOperations } from "../apps/docs/viewer-core.mjs";
+import {
+  renderMarkdown,
+  readOpenApiOperations,
+} from "../apps/docs/viewer-core.mjs";
 
 function source(path) {
   return readFileSync(new URL("../" + path, import.meta.url), "utf8");
@@ -31,14 +34,14 @@ describe("self-hosted online documentation", () => {
     expect(rendered).toContain("<code>parâmetro</code>");
     expect(rendered).toContain("<table>");
     expect(rendered).toContain("<pre>");
-    expect(rendered).toContain('/docs/viewer.html?doc=architecture');
+    expect(rendered).toContain("/docs/viewer.html?doc=architecture");
     expect(rendered).not.toContain("<img src=x");
     expect(rendered).toContain("&lt;img");
   });
 
   it("rejects unsafe inline Markdown URLs", () => {
     const rendered = renderMarkdown("[ir](javascript:alert)");
-    expect(rendered).not.toContain("href=\"javascript:");
+    expect(rendered).not.toContain('href="javascript:');
     expect(rendered).toContain('href="#"');
   });
 
@@ -50,7 +53,9 @@ describe("self-hosted online documentation", () => {
         expect.objectContaining({ method: "POST", path: "/auth/login" }),
       ]),
     );
-    expect(operations.some((item) => item.contract.includes("responses:"))).toBe(true);
+    expect(
+      operations.some((item) => item.contract.includes("responses:")),
+    ).toBe(true);
   });
 
   it("links to HTML viewers rather than raw Markdown or OpenAPI downloads", () => {
@@ -59,15 +64,23 @@ describe("self-hosted online documentation", () => {
     expect(landing).toContain("/docs/viewer.html?doc=architecture");
     expect(landing).not.toMatch(/href="[^"]+\.(?:md|yaml)"/);
     const viewer = source("apps/docs/viewer.html");
-    expect(viewer).toContain('/docs/viewer.js');
+    expect(viewer).toContain("/docs/viewer.js");
     expect(source("apps/docs/viewer.js")).toContain("fetch(url");
     const files = readdirSync(new URL("../apps/docs/", import.meta.url));
-    for (const required of ["viewer.css", "viewer.js", "viewer-core.mjs", "viewer.html", "nginx.conf"]) {
+    for (const required of [
+      "viewer.css",
+      "viewer.js",
+      "viewer-core.mjs",
+      "viewer.html",
+      "nginx.conf",
+    ]) {
       expect(files).toContain(required);
     }
     const docker = source("Dockerfile.docs");
     expect(docker).toContain("COPY apps/docs/viewer.html");
     expect(docker).toContain("COPY apps/docs/viewer-core.mjs");
-    expect(source("apps/docs/nginx.conf")).toContain('Content-Disposition "inline"');
+    expect(source("apps/docs/nginx.conf")).toContain(
+      'Content-Disposition "inline"',
+    );
   });
 });
