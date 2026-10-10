@@ -20,13 +20,17 @@ A conta principal configurada pelo servidor é protegida no banco e na API; não
 | Visão geral         | Indicadores, tarefas recentes e estado do espaço  |
 | Instâncias          | Agrupamento de fontes e resultados                |
 | Execuções           | Enfileiramento, histórico, artefatos e publicação |
-| Connect             | API                                               | Integração com canais de comunicação, inicialmente WhatsApp |
+| Connect\|API       | Integração com canais de comunicação, inicialmente WhatsApp |
 | Agendamentos        | Regras cron de coleta periódica                   |
 | Webhooks            | Recebimento de eventos por sistemas externos      |
 | Configurações       | SMTP da organização e opções operacionais         |
 | Acesso e auditoria  | Convites, papéis e trilha administrativa          |
 | Saúde da plataforma | Dependências e diagnóstico exportável             |
 | Primeiros passos    | Assistente guiado da primeira coleta ao envio     |
+
+## Canais de comunicação
+
+A Connect|API usa URL e token administrativos **globais configurados somente no servidor**. Cada espaço administra e visualiza suas próprias instâncias WhatsApp, seus tokens e seus envios; uma instância não aparece em outro espaço. O administrador pode criar uma instância e conectar pelo QR Code. Para instâncias antigas ou importadas, precisa validar o token particular; o token global nunca é exibido no Manager. Consulte [Configuração Connect|API](whatsapp-connect-api.md).
 
 ## Perfis e e-mails
 
