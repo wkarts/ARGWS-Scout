@@ -121,7 +121,10 @@ app.addHook("onResponse", async (request, reply) => {
       },
     });
   } catch {
-    request.log.warn({ requestId: request.id }, "Falha ao persistir diagnóstico.");
+    request.log.warn(
+      { requestId: request.id },
+      "Falha ao persistir diagnóstico.",
+    );
   }
 });
 app.setNotFoundHandler((_request, reply) =>

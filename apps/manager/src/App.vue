@@ -131,7 +131,9 @@ const error = ref("");
 const me = ref<Me | null>(null);
 const activeSection = ref("overview");
 const mobileMenu = ref(false);
-const spaces = ref<{ id: string; name: string; role: string; current: boolean }[]>([]);
+const spaces = ref<
+  { id: string; name: string; role: string; current: boolean }[]
+>([]);
 const showSpaceMenu = ref(false);
 const instances = ref<Instance[]>([]);
 const sources = ref<Source[]>([]);
@@ -194,7 +196,10 @@ if (recoveryTokenFromUrl) {
   cleanUrl.hash = "";
   window.history.replaceState({}, "", cleanUrl.toString());
 }
-const inviteTokenFromUrl = new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? new URLSearchParams(window.location.search).get("invite") ?? "";
+const inviteTokenFromUrl =
+  new URLSearchParams(window.location.hash.slice(1)).get("invite") ??
+  new URLSearchParams(window.location.search).get("invite") ??
+  "";
 if (inviteTokenFromUrl) {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("invite");
@@ -202,7 +207,13 @@ if (inviteTokenFromUrl) {
   window.history.replaceState({}, "", cleanUrl.toString());
 }
 const inviteToken = ref(inviteTokenFromUrl);
-const invitation = ref<{ name: string; email: string; organization: string; hasAccount: boolean; expiresAt: string } | null>(null);
+const invitation = ref<{
+  name: string;
+  email: string;
+  organization: string;
+  hasAccount: boolean;
+  expiresAt: string;
+} | null>(null);
 const inviteForm = ref({ name: "", password: "", confirmation: "" });
 const resetToken = ref(recoveryTokenFromUrl);
 const forgotEmail = ref("");
@@ -217,7 +228,13 @@ const loginStage = ref<
   | "reset"
   | "reset-done"
   | "invitation"
->(recoveryTokenFromUrl ? "reset" : inviteTokenFromUrl ? "invitation" : "credentials");
+>(
+  recoveryTokenFromUrl
+    ? "reset"
+    : inviteTokenFromUrl
+      ? "invitation"
+      : "credentials",
+);
 const instanceForm = ref({ name: "", description: "" });
 const sourceForm = ref({
   name: "",
@@ -241,10 +258,16 @@ const tokenForm = ref({
   scopes: ["jobs:create", "jobs:read", "results:read"],
 });
 const profileForm = ref({ name: "", phone: "", locale: "pt-BR" });
-const passwordForm = ref({ currentPassword: "", newPassword: "", confirmation: "" });
+const passwordForm = ref({
+  currentPassword: "",
+  newPassword: "",
+  confirmation: "",
+});
 const avatarRevision = ref(Date.now());
 const showChangePassword = ref(false);
-const profileHasAvatar = computed(() => Boolean(me.value?.user.profile.avatarKey));
+const profileHasAvatar = computed(() =>
+  Boolean(me.value?.user.profile.avatarKey),
+);
 const recoveryEmailConfigured = ref(false);
 const smtpConfigured = ref(false);
 const smtpSettingsLoaded = ref(false);
@@ -572,7 +595,11 @@ async function cancelJob(job: Job) {
 async function loadSpaces() {
   if (!me.value) return;
   try {
-    spaces.value = (await api<{ data: { id: string; name: string; role: string; current: boolean }[] }>("/profile/spaces")).data;
+    spaces.value = (
+      await api<{
+        data: { id: string; name: string; role: string; current: boolean }[];
+      }>("/profile/spaces")
+    ).data;
   } catch {
     spaces.value = [];
   }
@@ -581,7 +608,10 @@ async function switchSpace(spaceId: string) {
   busy.value = true;
   error.value = "";
   try {
-    await api("/profile/spaces/switch", { method: "POST", body: JSON.stringify({ spaceId }) });
+    await api("/profile/spaces/switch", {
+      method: "POST",
+      body: JSON.stringify({ spaceId }),
+    });
     showSpaceMenu.value = false;
     selectedInstance.value = null;
     selectedJob.value = null;
@@ -589,7 +619,10 @@ async function switchSpace(spaceId: string) {
     await checkSession();
     notify("Espaço de trabalho alterado.");
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Falha ao mudar de espaço de trabalho.";
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : "Falha ao mudar de espaço de trabalho.";
   } finally {
     busy.value = false;
   }
@@ -735,22 +768,33 @@ async function previewInvitation() {
   busy.value = true;
   error.value = "";
   try {
-    const result = await api<{ name: string; email: string; organization: string; hasAccount: boolean; expiresAt: string }>(
-      "/auth/invitations/preview",
-      { method: "POST", body: JSON.stringify({ token: inviteToken.value }), noRefresh: true },
-    );
+    const result = await api<{
+      name: string;
+      email: string;
+      organization: string;
+      hasAccount: boolean;
+      expiresAt: string;
+    }>("/auth/invitations/preview", {
+      method: "POST",
+      body: JSON.stringify({ token: inviteToken.value }),
+      noRefresh: true,
+    });
     invitation.value = result;
     inviteForm.value.name = result.name;
     loginForm.value.email = result.email;
     loginStage.value = "invitation";
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Convite inválido ou expirado.";
+    error.value =
+      cause instanceof Error ? cause.message : "Convite inválido ou expirado.";
   } finally {
     busy.value = false;
   }
 }
 async function activateInvitation() {
-  if (!inviteToken.value || inviteForm.value.password !== inviteForm.value.confirmation) {
+  if (
+    !inviteToken.value ||
+    inviteForm.value.password !== inviteForm.value.confirmation
+  ) {
     error.value = "As senhas não coincidem.";
     return;
   }
@@ -759,16 +803,25 @@ async function activateInvitation() {
   try {
     await api("/auth/invitations/accept", {
       method: "POST",
-      body: JSON.stringify({ token: inviteToken.value, password: inviteForm.value.password, name: inviteForm.value.name }),
+      body: JSON.stringify({
+        token: inviteToken.value,
+        password: inviteForm.value.password,
+        name: inviteForm.value.name,
+      }),
       noRefresh: true,
     });
     loginForm.value.email = invitation.value?.email ?? "";
     inviteToken.value = "";
     inviteForm.value = { name: "", password: "", confirmation: "" };
     loginStage.value = "credentials";
-    notify("Conta ativada. Entre com seu e-mail e a senha que acabou de definir.");
+    notify(
+      "Conta ativada. Entre com seu e-mail e a senha que acabou de definir.",
+    );
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Não foi possível ativar a conta.";
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : "Não foi possível ativar a conta.";
   } finally {
     busy.value = false;
   }
@@ -783,9 +836,14 @@ async function acceptExistingInvitation() {
     inviteToken.value = "";
     invitation.value = null;
     await checkSession();
-    notify("Convite aceito. Você já está no espaço de trabalho correspondente.");
+    notify(
+      "Convite aceito. Você já está no espaço de trabalho correspondente.",
+    );
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Entre com o e-mail convidado para aceitar.";
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : "Entre com o e-mail convidado para aceitar.";
     loginStage.value = "credentials";
   }
 }
@@ -1078,11 +1136,18 @@ async function changePassword() {
       method: "POST",
       body: JSON.stringify(passwordForm.value),
     });
-    passwordForm.value = { currentPassword: "", newPassword: "", confirmation: "" };
+    passwordForm.value = {
+      currentPassword: "",
+      newPassword: "",
+      confirmation: "",
+    };
     showChangePassword.value = false;
     notify("Sua senha foi alterada. Outras sessões foram encerradas.");
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Não foi possível alterar a senha.";
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : "Não foi possível alterar a senha.";
   } finally {
     busy.value = false;
   }
@@ -1094,23 +1159,33 @@ async function uploadAvatar(event: Event) {
   error.value = "";
   busy.value = true;
   try {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024)
-      throw new Error("Escolha PNG, JPG ou WebP de até 5 MB para redimensionar.");
+    if (
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size > 5 * 1024 * 1024
+    )
+      throw new Error(
+        "Escolha PNG, JPG ou WebP de até 5 MB para redimensionar.",
+      );
     const url = URL.createObjectURL(file);
     let dataUrl = "";
     try {
       const image = new Image();
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
-        image.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+        image.onerror = () =>
+          reject(new Error("Não foi possível ler a imagem."));
         image.src = url;
       });
-      const scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight));
+      const scale = Math.min(
+        1,
+        256 / Math.max(image.naturalWidth, image.naturalHeight),
+      );
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
       canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
       const context = canvas.getContext("2d");
-      if (!context) throw new Error("O navegador não suporta edição de imagens.");
+      if (!context)
+        throw new Error("O navegador não suporta edição de imagens.");
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       dataUrl = canvas.toDataURL("image/webp", 0.75);
     } finally {
@@ -1119,13 +1194,20 @@ async function uploadAvatar(event: Event) {
     const parts = dataUrl.split(",");
     const prefix = parts[0] ?? "";
     const encoded = parts[1] ?? "";
-    const contentType = prefix.startsWith("data:image/webp;") ? "image/webp" : "image/png";
-    if (!encoded || encoded.length > 220000) throw new Error("A foto ainda está grande. Escolha outra imagem.");
-    await api("/profile/avatar", { method: "POST", body: JSON.stringify({ dataBase64: encoded, contentType }) });
+    const contentType = prefix.startsWith("data:image/webp;")
+      ? "image/webp"
+      : "image/png";
+    if (!encoded || encoded.length > 220000)
+      throw new Error("A foto ainda está grande. Escolha outra imagem.");
+    await api("/profile/avatar", {
+      method: "POST",
+      body: JSON.stringify({ dataBase64: encoded, contentType }),
+    });
     await checkSession();
     notify("Foto atualizada.");
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Falha ao enviar foto.";
+    error.value =
+      cause instanceof Error ? cause.message : "Falha ao enviar foto.";
   } finally {
     input.value = "";
     busy.value = false;
@@ -1145,7 +1227,13 @@ function selectSection(section: string) {
     void loadSmtpSettings();
 }
 function closeDialogs() {
-  if (mfaRecoveryCodes.value.length && !window.confirm("Você já guardou os códigos de recuperação? Eles não serão mostrados novamente.")) return;
+  if (
+    mfaRecoveryCodes.value.length &&
+    !window.confirm(
+      "Você já guardou os códigos de recuperação? Eles não serão mostrados novamente.",
+    )
+  )
+    return;
   mfaRecoveryCodes.value = [];
   showInstanceForm.value = false;
   showSourceForm.value = false;
@@ -1154,7 +1242,11 @@ function closeDialogs() {
   showWebhookForm.value = false;
   showProfile.value = false;
   showChangePassword.value = false;
-  passwordForm.value = { currentPassword: "", newPassword: "", confirmation: "" };
+  passwordForm.value = {
+    currentPassword: "",
+    newPassword: "",
+    confirmation: "",
+  };
   showMfaDialog.value = false;
   showRecoveryCodesDialog.value = false;
   showMfaDisableDialog.value = false;
@@ -1303,7 +1395,21 @@ function openScreenshot(job: Job) {
 const selectedJob = ref<Job | null>(null);
 function onEscape(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
-  if (selectedJob.value || showProfile.value || showTokenDialog.value || showInstanceForm.value || showSourceForm.value || showScheduleForm.value || showWebhookForm.value || showMfaDialog.value || showRecoveryCodesDialog.value || showMfaDisableDialog.value || issuedToken.value || issuedWebhookSecret.value) closeDialogs();
+  if (
+    selectedJob.value ||
+    showProfile.value ||
+    showTokenDialog.value ||
+    showInstanceForm.value ||
+    showSourceForm.value ||
+    showScheduleForm.value ||
+    showWebhookForm.value ||
+    showMfaDialog.value ||
+    showRecoveryCodesDialog.value ||
+    showMfaDisableDialog.value ||
+    issuedToken.value ||
+    issuedWebhookSecret.value
+  )
+    closeDialogs();
   else mobileMenu.value = false;
 }
 onMounted(() => {
@@ -1328,18 +1434,18 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           loginStage === "invitation"
             ? "Ative sua conta"
             : loginStage === "credentials"
-            ? "Acesse sua plataforma"
-            : loginStage === "setup"
-              ? "Proteja sua conta"
-              : loginStage === "totp"
-                ? "Confirme sua identidade"
-                : loginStage === "recovery-codes"
-                  ? "Guarde seus códigos reserva"
-                  : loginStage === "forgot" || loginStage === "forgot-sent"
-                    ? "Recuperar senha"
-                    : loginStage === "reset"
-                      ? "Defina uma nova senha"
-                      : "Senha redefinida"
+              ? "Acesse sua plataforma"
+              : loginStage === "setup"
+                ? "Proteja sua conta"
+                : loginStage === "totp"
+                  ? "Confirme sua identidade"
+                  : loginStage === "recovery-codes"
+                    ? "Guarde seus códigos reserva"
+                    : loginStage === "forgot" || loginStage === "forgot-sent"
+                      ? "Recuperar senha"
+                      : loginStage === "reset"
+                        ? "Defina uma nova senha"
+                        : "Senha redefinida"
         }}
       </h1>
       <p class="muted auth-copy" v-if="loginStage === 'credentials'">
@@ -1347,21 +1453,71 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       </p>
       <template v-if="loginStage === 'invitation'">
         <p class="muted" v-if="invitation">
-          Convite para participar de <strong>{{ invitation.organization }}</strong>.
-          O convite foi enviado para <strong>{{ invitation.email }}</strong>.
+          Convite para participar de
+          <strong>{{ invitation.organization }}</strong
+          >. O convite foi enviado para <strong>{{ invitation.email }}</strong
+          >.
         </p>
         <p class="muted" v-else>Validando convite...</p>
         <template v-if="invitation?.hasAccount">
-          <p class="muted">Você já possui uma conta. Entre com suas credenciais atuais para aceitar o convite.</p>
-          <button class="button primary full" @click="loginStage = 'credentials'">Entrar e aceitar convite <ArrowRight :size="16" /></button>
-          <button class="button outline full" :disabled="busy" @click="acceptExistingInvitation">Já estou conectado — aceitar</button>
+          <p class="muted">
+            Você já possui uma conta. Entre com suas credenciais atuais para
+            aceitar o convite.
+          </p>
+          <button
+            class="button primary full"
+            @click="loginStage = 'credentials'"
+          >
+            Entrar e aceitar convite <ArrowRight :size="16" />
+          </button>
+          <button
+            class="button outline full"
+            :disabled="busy"
+            @click="acceptExistingInvitation"
+          >
+            Já estou conectado — aceitar
+          </button>
         </template>
         <template v-else-if="invitation">
-          <label>Seu nome<input v-model="inviteForm.name" autocomplete="name" minlength="2" maxlength="120" /></label>
-          <label>Escolha uma senha<input v-model="inviteForm.password" type="password" autocomplete="new-password" minlength="16" maxlength="256" /></label>
-          <label>Confirme a senha<input v-model="inviteForm.confirmation" type="password" autocomplete="new-password" minlength="16" maxlength="256" /></label>
-          <button class="button primary full" :disabled="busy || inviteForm.name.length < 2 || inviteForm.password.length < 16 || !inviteForm.confirmation" @click="activateInvitation">Ativar conta <ArrowRight :size="16" /></button>
-          <p class="muted">Sua senha será conhecida apenas por você. Nunca responda ao e-mail de convite com uma senha.</p>
+          <label
+            >Seu nome<input
+              v-model="inviteForm.name"
+              autocomplete="name"
+              minlength="2"
+              maxlength="120"
+          /></label>
+          <label
+            >Escolha uma senha<input
+              v-model="inviteForm.password"
+              type="password"
+              autocomplete="new-password"
+              minlength="16"
+              maxlength="256"
+          /></label>
+          <label
+            >Confirme a senha<input
+              v-model="inviteForm.confirmation"
+              type="password"
+              autocomplete="new-password"
+              minlength="16"
+              maxlength="256"
+          /></label>
+          <button
+            class="button primary full"
+            :disabled="
+              busy ||
+              inviteForm.name.length < 2 ||
+              inviteForm.password.length < 16 ||
+              !inviteForm.confirmation
+            "
+            @click="activateInvitation"
+          >
+            Ativar conta <ArrowRight :size="16" />
+          </button>
+          <p class="muted">
+            Sua senha será conhecida apenas por você. Nunca responda ao e-mail
+            de convite com uma senha.
+          </p>
         </template>
       </template>
       <template v-else-if="loginStage === 'credentials'">
@@ -1550,14 +1706,29 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <X :size="18" />
         </button>
       </div>
-      <button class="workspace-switcher" :disabled="spaces.length <= 1" :aria-expanded="showSpaceMenu" aria-label="Selecionar espaço de trabalho" @click="showSpaceMenu = !showSpaceMenu">
+      <button
+        class="workspace-switcher"
+        :disabled="spaces.length <= 1"
+        :aria-expanded="showSpaceMenu"
+        aria-label="Selecionar espaço de trabalho"
+        @click="showSpaceMenu = !showSpaceMenu"
+      >
         <span class="workspace-mark"><Command :size="17" /></span>
-        <span><small>ESPAÇO DE TRABALHO</small><strong>{{ me.tenant.name }}</strong></span>
+        <span
+          ><small>ESPAÇO DE TRABALHO</small
+          ><strong>{{ me.tenant.name }}</strong></span
+        >
         <ChevronDown v-if="spaces.length > 1" :size="15" class="switch-caret" />
       </button>
       <div v-if="showSpaceMenu && spaces.length > 1" class="space-menu">
-        <button v-for="space in spaces" :key="space.id" :disabled="busy || space.current" @click="switchSpace(space.id)">
-          <span>{{ space.name }}</span><small>{{ space.current ? "Atual" : "Alternar" }}</small>
+        <button
+          v-for="space in spaces"
+          :key="space.id"
+          :disabled="busy || space.current"
+          @click="switchSpace(space.id)"
+        >
+          <span>{{ space.name }}</span
+          ><small>{{ space.current ? "Atual" : "Alternar" }}</small>
         </button>
       </div>
       <div class="nav-caption">PLATAFORMA</div>
@@ -1637,7 +1808,13 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <span>Conectado à API Scout</span>
         </div>
         <button class="side-user" @click="showProfile = true">
-          <span class="avatar"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" class="avatar-photo" /><template v-else>{{ initials(me.user.name) }}</template></span
+          <span class="avatar"
+            ><img
+              v-if="profileHasAvatar"
+              :src="'/api/v1/profile/avatar?rev=' + avatarRevision"
+              alt="Sua foto"
+              class="avatar-photo"
+            /><template v-else>{{ initials(me.user.name) }}</template></span
           ><span class="user-meta"
             ><strong>{{ me.user.name }}</strong
             ><small>{{ roleLabel }}</small></span
@@ -1664,13 +1841,29 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           ><strong>{{ title }}</strong>
         </div>
         <div class="top-actions">
-          <button class="icon-button" title="Primeiros passos" aria-label="Abrir orientações" @click="selectSection('guide')">
+          <button
+            class="icon-button"
+            title="Primeiros passos"
+            aria-label="Abrir orientações"
+            @click="selectSection('guide')"
+          >
             <CircleHelp :size="18" /></button
-          ><button class="icon-button notice-button" title="Saúde da plataforma" aria-label="Consultar saúde" @click="selectSection('operations')">
+          ><button
+            class="icon-button notice-button"
+            title="Saúde da plataforma"
+            aria-label="Consultar saúde"
+            @click="selectSection('operations')"
+          >
             <Bell :size="18" /><i></i></button
           ><span class="top-divider"></span
           ><button class="top-profile" @click="showProfile = true">
-            <span class="avatar small-avatar"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" class="avatar-photo" /><template v-else>{{ initials(me.user.name) }}</template></span
+            <span class="avatar small-avatar"
+              ><img
+                v-if="profileHasAvatar"
+                :src="'/api/v1/profile/avatar?rev=' + avatarRevision"
+                alt="Sua foto"
+                class="avatar-photo"
+              /><template v-else>{{ initials(me.user.name) }}</template></span
             ><span>{{ me.user.name }}</span
             ><ChevronDown :size="14" />
           </button>
@@ -2476,13 +2669,100 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 
         <template v-else-if="activeSection === 'guide'">
           <section class="panel guide-panel">
-            <div class="panel-header"><div><h2>Da primeira busca à publicação</h2><p>Conheça o fluxo completo com orientações práticas.</p></div><a class="button subtle" href="/docs/first-steps.html" target="_blank" rel="noopener noreferrer">Guia detalhado <ExternalLink :size="15" /></a></div>
+            <div class="panel-header">
+              <div>
+                <h2>Da primeira busca à publicação</h2>
+                <p>Conheça o fluxo completo com orientações práticas.</p>
+              </div>
+              <a
+                class="button subtle"
+                href="/docs/first-steps.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Guia detalhado <ExternalLink :size="15"
+              /></a>
+            </div>
             <div class="guide-steps">
-              <article><span>01</span><div><h3>Organize suas coletas</h3><p>Crie uma instância para agrupar fontes, execuções e automações.</p><button class="button primary" @click="selectSection('instances'); showInstanceForm = true">Criar instância</button></div></article>
-              <article><span>02</span><div><h3>Cadastre um site público</h3><p>Informe uma URL HTTPS e os hosts permitidos. Respeite as regras de acesso do site.</p><button class="button outline" @click="selectSection('instances'); activeTab = 'sources'">Ir para fontes</button></div></article>
-              <article><span>03</span><div><h3>Execute e confira o resultado</h3><p>Envie uma coleta para a fila, acompanhe a execução e confira o JSON.</p><button class="button outline" @click="selectSection('jobs')">Consultar execuções</button></div></article>
-              <article><span>04</span><div><h3>Conecte o canal de comunicação</h3><p>Configure Connect|API e uma instância WhatsApp. Outros canais poderão chegar futuramente.</p><button class="button outline" @click="selectSection('whatsapp')">Configurar Connect|API</button></div></article>
-              <article><span>05</span><div><h3>Publique com confirmação</h3><p>Abra uma coleta concluída, escolha “Publicar pelo WhatsApp”, revise o contato e confirme.</p><button class="button outline" @click="selectSection('jobs')">Escolher resultado</button></div></article>
+              <article>
+                <span>01</span>
+                <div>
+                  <h3>Organize suas coletas</h3>
+                  <p>
+                    Crie uma instância para agrupar fontes, execuções e
+                    automações.
+                  </p>
+                  <button
+                    class="button primary"
+                    @click="
+                      selectSection('instances');
+                      showInstanceForm = true;
+                    "
+                  >
+                    Criar instância
+                  </button>
+                </div>
+              </article>
+              <article>
+                <span>02</span>
+                <div>
+                  <h3>Cadastre um site público</h3>
+                  <p>
+                    Informe uma URL HTTPS e os hosts permitidos. Respeite as
+                    regras de acesso do site.
+                  </p>
+                  <button
+                    class="button outline"
+                    @click="
+                      selectSection('instances');
+                      activeTab = 'sources';
+                    "
+                  >
+                    Ir para fontes
+                  </button>
+                </div>
+              </article>
+              <article>
+                <span>03</span>
+                <div>
+                  <h3>Execute e confira o resultado</h3>
+                  <p>
+                    Envie uma coleta para a fila, acompanhe a execução e confira
+                    o JSON.
+                  </p>
+                  <button class="button outline" @click="selectSection('jobs')">
+                    Consultar execuções
+                  </button>
+                </div>
+              </article>
+              <article>
+                <span>04</span>
+                <div>
+                  <h3>Conecte o canal de comunicação</h3>
+                  <p>
+                    Configure Connect|API e uma instância WhatsApp. Outros
+                    canais poderão chegar futuramente.
+                  </p>
+                  <button
+                    class="button outline"
+                    @click="selectSection('whatsapp')"
+                  >
+                    Configurar Connect|API
+                  </button>
+                </div>
+              </article>
+              <article>
+                <span>05</span>
+                <div>
+                  <h3>Publique com confirmação</h3>
+                  <p>
+                    Abra uma coleta concluída, escolha “Publicar pelo WhatsApp”,
+                    revise o contato e confirme.
+                  </p>
+                  <button class="button outline" @click="selectSection('jobs')">
+                    Escolher resultado
+                  </button>
+                </div>
+              </article>
             </div>
           </section>
         </template>
@@ -3070,19 +3350,68 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           ><p class="eyebrow">CONTA</p>
           <h2>Seu perfil</h2>
           <p class="muted">Atualize suas informações pessoais.</p>
-          <label class="avatar-input">Sua foto <span class="avatar-preview"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" /><span v-else>{{ initials(me.user.name) }}</span></span><input type="file" accept="image/png,image/jpeg,image/webp" :disabled="busy" @change="uploadAvatar" /><small>A foto é redimensionada para 256 px e armazenada privadamente.</small></label>
+          <label class="avatar-input"
+            >Sua foto
+            <span class="avatar-preview"
+              ><img
+                v-if="profileHasAvatar"
+                :src="'/api/v1/profile/avatar?rev=' + avatarRevision"
+                alt="Sua foto"
+              /><span v-else>{{ initials(me.user.name) }}</span></span
+            ><input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              :disabled="busy"
+              @change="uploadAvatar"
+            /><small
+              >A foto é redimensionada para 256 px e armazenada
+              privadamente.</small
+            ></label
+          >
           <label>Nome<input v-model="profileForm.name" /></label
           ><label
             >Telefone<input
               v-model="profileForm.phone"
-              placeholder="+55 75 9xxxx-xxxx" /></label
+              placeholder="+55 75 9xxxx-xxxx"
+          /></label>
+          <button
+            class="button outline"
+            @click="showChangePassword = !showChangePassword"
           >
-          <button class="button outline" @click="showChangePassword = !showChangePassword">{{ showChangePassword ? "Ocultar alteração de senha" : "Alterar senha" }}</button>
+            {{
+              showChangePassword
+                ? "Ocultar alteração de senha"
+                : "Alterar senha"
+            }}
+          </button>
           <div v-if="showChangePassword" class="password-change-form">
-            <label>Senha atual<input v-model="passwordForm.currentPassword" type="password" autocomplete="current-password" /></label>
-            <label>Nova senha<input v-model="passwordForm.newPassword" type="password" autocomplete="new-password" minlength="16" /></label>
-            <label>Confirmar nova senha<input v-model="passwordForm.confirmation" type="password" autocomplete="new-password" minlength="16" /></label>
-            <button class="button primary" :disabled="busy || passwordForm.newPassword.length < 16" @click="changePassword">Confirmar troca de senha</button>
+            <label
+              >Senha atual<input
+                v-model="passwordForm.currentPassword"
+                type="password"
+                autocomplete="current-password"
+            /></label>
+            <label
+              >Nova senha<input
+                v-model="passwordForm.newPassword"
+                type="password"
+                autocomplete="new-password"
+                minlength="16"
+            /></label>
+            <label
+              >Confirmar nova senha<input
+                v-model="passwordForm.confirmation"
+                type="password"
+                autocomplete="new-password"
+                minlength="16"
+            /></label>
+            <button
+              class="button primary"
+              :disabled="busy || passwordForm.newPassword.length < 16"
+              @click="changePassword"
+            >
+              Confirmar troca de senha
+            </button>
           </div>
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Cancelar</button
@@ -3173,7 +3502,8 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             <MessageCircle :size="16" /> Publicar pelo WhatsApp
           </button>
           <p v-if="!whatsappConfigured" class="muted">
-            Configure a Connect|API no menu Connect|API para publicar esta coleta.
+            Configure a Connect|API no menu Connect|API para publicar esta
+            coleta.
           </p>
           <p
             v-else-if="!whatsappInstances.some((item) => item.usable)"

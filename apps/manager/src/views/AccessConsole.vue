@@ -61,11 +61,13 @@ async function load() {
   if (!["OWNER", "ADMIN"].includes(props.role)) return;
   busy.value = true;
   try {
-    const [userResponse, auditResponse, invitationResponse] = await Promise.all([
-      api<{ data: UserRow[] }>("/users"),
-      api<{ data: AuditRow[] }>("/audit"),
-      api<{ data: InvitationRow[] }>("/users/invitations"),
-    ]);
+    const [userResponse, auditResponse, invitationResponse] = await Promise.all(
+      [
+        api<{ data: UserRow[] }>("/users"),
+        api<{ data: AuditRow[] }>("/audit"),
+        api<{ data: InvitationRow[] }>("/users/invitations"),
+      ],
+    );
     users.value = userResponse.data;
     auditRows.value = auditResponse.data;
     invitations.value = invitationResponse.data;
@@ -87,7 +89,10 @@ async function createUser() {
     });
     userForm.value = { name: "", email: "", role: "OPERATOR" };
     await load();
-    emit("notify", "Convite enviado por e-mail. A pessoa definirá sua própria senha.");
+    emit(
+      "notify",
+      "Convite enviado por e-mail. A pessoa definirá sua própria senha.",
+    );
   } catch (error) {
     emit(
       "error",
@@ -98,14 +103,25 @@ async function createUser() {
   }
 }
 async function revokeInvitation(invitation: InvitationRow) {
-  if (!window.confirm("Cancelar o convite enviado para " + invitation.email + "?")) return;
+  if (
+    !window.confirm("Cancelar o convite enviado para " + invitation.email + "?")
+  )
+    return;
   busy.value = true;
   try {
-    await api("/users/invitations/" + invitation.id + "/revoke", { method: "POST", body: "{}" });
+    await api("/users/invitations/" + invitation.id + "/revoke", {
+      method: "POST",
+      body: "{}",
+    });
     await load();
     emit("notify", "Convite cancelado.");
   } catch (cause) {
-    emit("error", cause instanceof Error ? cause.message : "Não foi possível cancelar o convite.");
+    emit(
+      "error",
+      cause instanceof Error
+        ? cause.message
+        : "Não foi possível cancelar o convite.",
+    );
   } finally {
     busy.value = false;
   }
@@ -135,7 +151,10 @@ onMounted(() => void load());
     <div class="panel-header">
       <div>
         <h2>Governança da organização</h2>
-        <p>Convites por e-mail, permissões e histórico de ações. Cada pessoa escolhe sua própria senha.</p>
+        <p>
+          Convites por e-mail, permissões e histórico de ações. Cada pessoa
+          escolhe sua própria senha.
+        </p>
       </div>
       <button class="button subtle" :disabled="busy" @click="load">
         <RefreshCw :size="15" /> Atualizar
@@ -186,10 +205,36 @@ onMounted(() => void load());
       <div v-if="invitations.length" class="invitation-panel">
         <h3>Convites aguardando ativação</h3>
         <p>Convites duram 48 horas. A senha é definida pela própria pessoa.</p>
-        <div class="table-wrap"><table>
-          <thead><tr><th>NOME</th><th>E-MAIL</th><th>ACESSO</th><th>VALIDADE</th><th></th></tr></thead>
-          <tbody><tr v-for="invitation in invitations" :key="invitation.id"><td>{{ invitation.name }}</td><td>{{ invitation.email }}</td><td>{{ roleLabel(invitation.role) }}</td><td>{{ prettyDate(invitation.expiresAt) }}</td><td><button class="button outline small-button" @click="revokeInvitation(invitation)" :disabled="busy">Cancelar convite</button></td></tr></tbody>
-        </table></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>NOME</th>
+                <th>E-MAIL</th>
+                <th>ACESSO</th>
+                <th>VALIDADE</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="invitation in invitations" :key="invitation.id">
+                <td>{{ invitation.name }}</td>
+                <td>{{ invitation.email }}</td>
+                <td>{{ roleLabel(invitation.role) }}</td>
+                <td>{{ prettyDate(invitation.expiresAt) }}</td>
+                <td>
+                  <button
+                    class="button outline small-button"
+                    @click="revokeInvitation(invitation)"
+                    :disabled="busy"
+                  >
+                    Cancelar convite
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <div v-if="users.length" class="table-wrap">
         <table>
@@ -232,7 +277,10 @@ onMounted(() => void load());
       </div>
       <div v-else class="empty-state compact">
         <h3>Nenhuma pessoa ativa adicional</h3>
-        <p>Envie um convite acima. A conta ficará disponível após a ativação por e-mail.</p>
+        <p>
+          Envie um convite acima. A conta ficará disponível após a ativação por
+          e-mail.
+        </p>
       </div>
     </template>
     <div v-else-if="auditRows.length" class="table-wrap">

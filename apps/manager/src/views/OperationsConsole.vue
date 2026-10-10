@@ -23,7 +23,21 @@ const emit = defineEmits<{ error: [message: string] }>();
 const report = ref<HealthReport | null>(null);
 const busy = ref(false);
 const exporting = ref(false);
-const diagnostics = ref<{ summary: { requestFailures: number; failedJobs: number; failedDeliveries: number }; requestFailures: { id: string; requestId: string; method: string; route: string; statusCode: number; createdAt: string }[] } | null>(null);
+const diagnostics = ref<{
+  summary: {
+    requestFailures: number;
+    failedJobs: number;
+    failedDeliveries: number;
+  };
+  requestFailures: {
+    id: string;
+    requestId: string;
+    method: string;
+    route: string;
+    statusCode: number;
+    createdAt: string;
+  }[];
+} | null>(null);
 const dependencyLabels: Record<string, string> = {
   postgres: "PostgreSQL",
   redis: "Redis",
@@ -55,24 +69,37 @@ async function loadDiagnostics() {
   try {
     diagnostics.value = await api<typeof diagnostics.value>("/ops/diagnostics");
   } catch (cause) {
-    emit("error", cause instanceof Error ? cause.message : "Não foi possível recuperar eventos de diagnóstico.");
+    emit(
+      "error",
+      cause instanceof Error
+        ? cause.message
+        : "Não foi possível recuperar eventos de diagnóstico.",
+    );
   }
 }
 async function exportDiagnostics() {
   exporting.value = true;
   try {
     const snapshot = await api<Record<string, unknown>>("/ops/diagnostics");
-    const payload = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const payload = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json",
+    });
     const uri = URL.createObjectURL(payload);
     const anchor = document.createElement("a");
     anchor.href = uri;
-    anchor.download = "diagnostico-scout-" + new Date().toISOString().slice(0, 10) + ".json";
+    anchor.download =
+      "diagnostico-scout-" + new Date().toISOString().slice(0, 10) + ".json";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(uri);
   } catch (cause) {
-    emit("error", cause instanceof Error ? cause.message : "Não foi possível exportar o diagnóstico.");
+    emit(
+      "error",
+      cause instanceof Error
+        ? cause.message
+        : "Não foi possível exportar o diagnóstico.",
+    );
   } finally {
     exporting.value = false;
   }
@@ -90,7 +117,13 @@ onMounted(() => {
         <h2>Diagnóstico operacional</h2>
         <p>Conectividade atual da API e pressão de execução do workspace.</p>
       </div>
-      <button class="button outline" :disabled="exporting" @click="exportDiagnostics"><Download :size="15" /> Exportar diagnóstico JSON</button>
+      <button
+        class="button outline"
+        :disabled="exporting"
+        @click="exportDiagnostics"
+      >
+        <Download :size="15" /> Exportar diagnóstico JSON
+      </button>
       <button class="button subtle" :disabled="busy" @click="inspect">
         <RefreshCw :size="15" /> Verificar agora
       </button>
@@ -152,10 +185,54 @@ onMounted(() => {
       </article>
     </div>
     <section v-if="diagnostics" class="diagnostics-list">
-      <div class="panel-header"><div><h2>Eventos técnicos recentes</h2><p>Últimos sete dias. Erros HTTP persistidos, falhas de jobs, entregas e auditoria, sem dados sensíveis.</p></div><button class="button subtle" @click="loadDiagnostics"><RefreshCw :size="15" /> Atualizar</button></div>
-      <div class="diagnostic-counters"><span>Requisições com falha: {{ diagnostics.summary.requestFailures }}</span><span>Jobs com falha: {{ diagnostics.summary.failedJobs }}</span><span>Entregas com falha: {{ diagnostics.summary.failedDeliveries }}</span></div>
-      <div v-if="diagnostics.requestFailures.length" class="table-wrap"><table><thead><tr><th>DATA</th><th>REQUISIÇÃO</th><th>ROTA</th><th>STATUS</th></tr></thead><tbody><tr v-for="event in diagnostics.requestFailures" :key="event.id"><td>{{ prettyDate(event.createdAt) }}</td><td><code>{{ event.requestId }}</code></td><td><code>{{ event.method }} {{ event.route }}</code></td><td>{{ event.statusCode }}</td></tr></tbody></table></div>
-      <p v-else class="muted">Nenhum erro HTTP recente associado a este espaço.</p>
+      <div class="panel-header">
+        <div>
+          <h2>Eventos técnicos recentes</h2>
+          <p>
+            Últimos sete dias. Erros HTTP persistidos, falhas de jobs, entregas
+            e auditoria, sem dados sensíveis.
+          </p>
+        </div>
+        <button class="button subtle" @click="loadDiagnostics">
+          <RefreshCw :size="15" /> Atualizar
+        </button>
+      </div>
+      <div class="diagnostic-counters">
+        <span
+          >Requisições com falha:
+          {{ diagnostics.summary.requestFailures }}</span
+        ><span>Jobs com falha: {{ diagnostics.summary.failedJobs }}</span
+        ><span
+          >Entregas com falha: {{ diagnostics.summary.failedDeliveries }}</span
+        >
+      </div>
+      <div v-if="diagnostics.requestFailures.length" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>DATA</th>
+              <th>REQUISIÇÃO</th>
+              <th>ROTA</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="event in diagnostics.requestFailures" :key="event.id">
+              <td>{{ prettyDate(event.createdAt) }}</td>
+              <td>
+                <code>{{ event.requestId }}</code>
+              </td>
+              <td>
+                <code>{{ event.method }} {{ event.route }}</code>
+              </td>
+              <td>{{ event.statusCode }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="muted">
+        Nenhum erro HTTP recente associado a este espaço.
+      </p>
     </section>
     <div v-if="!report" class="empty-state compact">
       <h3>

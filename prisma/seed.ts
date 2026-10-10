@@ -34,7 +34,9 @@ async function main(): Promise<void> {
     if (
       configuredUser &&
       !configuredUser.isPlatformMaster &&
-      configuredUser.memberships.some((item) => item.role === TenantRole.OWNER) &&
+      configuredUser.memberships.some(
+        (item) => item.role === TenantRole.OWNER,
+      ) &&
       (await prisma.user.count({ where: { isPlatformMaster: true } })) === 0
     ) {
       await prisma.user.update({

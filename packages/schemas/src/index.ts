@@ -120,7 +120,12 @@ export const webhookCreateSchema = z.object({
 });
 export const profileUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  profile: z.object({ phone: z.string().trim().max(30).optional(), locale: z.literal("pt-BR").optional() }).default({}),
+  profile: z
+    .object({
+      phone: z.string().trim().max(30).optional(),
+      locale: z.literal("pt-BR").optional(),
+    })
+    .default({}),
 });
 
 export type Engine = z.infer<typeof engineSchema>;

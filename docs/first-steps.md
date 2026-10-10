@@ -24,15 +24,15 @@ Abra **Instâncias → Nova instância**. Informe o nome, por exemplo **Monitora
 
 Na instância criada, abra **Fontes → Adicionar fonte**:
 
-| Campo | Exemplo |
-| --- | --- |
-| Nome | Página de exemplo |
-| Mecanismo | HTTP |
-| URL | https://example.org |
-| Hosts permitidos | example.org |
-| Seletor opcional | h1 |
-| Respeitar robots.txt | Sim |
-| Intervalo mínimo | 5000 ms |
+| Campo                | Exemplo             |
+| -------------------- | ------------------- |
+| Nome                 | Página de exemplo   |
+| Mecanismo            | HTTP                |
+| URL                  | https://example.org |
+| Hosts permitidos     | example.org         |
+| Seletor opcional     | h1                  |
+| Respeitar robots.txt | Sim                 |
+| Intervalo mínimo     | 5000 ms             |
 
 **Observação:** use somente páginas que você tem autorização para consultar e respeite políticas de acesso, direitos autorais, robots.txt e limites de tráfego. O Scout não deve ser utilizado para contornar login, paywall, DRM ou proteção de streaming. A visualização de um player de vídeo, por exemplo, não concede licença para copiá-lo.
 

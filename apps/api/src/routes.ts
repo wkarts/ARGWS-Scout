@@ -1002,7 +1002,12 @@ export async function registerRoutes(
         data: {
           name: body.name,
           profile: {
-            ...((await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } }))?.profile as Record<string, unknown> ?? {}),
+            ...(((
+              await prisma.user.findUnique({
+                where: { id: request.principal.userId! },
+                select: { profile: true },
+              })
+            )?.profile as Record<string, unknown>) ?? {}),
             phone: body.profile.phone ?? "",
             locale: "pt-BR",
           } as Prisma.InputJsonValue,
@@ -1023,52 +1028,144 @@ export async function registerRoutes(
   // Alteração de senha exige a senha atual e revoga sessões antigas.
   app.post(
     "/profile/password",
-    { preHandler: authenticated(), config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } },
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       if (request.principal?.kind !== "user")
-        return fail(reply, 403, "USER_REQUIRED", "Apenas o próprio usuário pode mudar sua senha.");
+        return fail(
+          reply,
+          403,
+          "USER_REQUIRED",
+          "Apenas o próprio usuário pode mudar sua senha.",
+        );
       const body = parsed(
-        z.object({ currentPassword: z.string().min(1).max(256), newPassword: z.string().min(16).max(256) }),
-        request.body, reply,
+        z.object({
+          currentPassword: z.string().min(1).max(256),
+          newPassword: z.string().min(16).max(256),
+        }),
+        request.body,
+        reply,
       );
       if (!body) return;
-      const user = await prisma.user.findUnique({ where: { id: request.principal.userId! } });
-      if (!user || !(await verifyPassword(user.passwordHash, body.currentPassword)))
-        return fail(reply, 401, "CURRENT_PASSWORD_INVALID", "A senha atual não confere.");
+      const user = await prisma.user.findUnique({
+        where: { id: request.principal.userId! },
+      });
+      if (
+        !user ||
+        !(await verifyPassword(user.passwordHash, body.currentPassword))
+      )
+        return fail(
+          reply,
+          401,
+          "CURRENT_PASSWORD_INVALID",
+          "A senha atual não confere.",
+        );
       if (await verifyPassword(user.passwordHash, body.newPassword))
-        return fail(reply, 400, "PASSWORD_REUSED", "Escolha uma senha diferente da atual.");
+        return fail(
+          reply,
+          400,
+          "PASSWORD_REUSED",
+          "Escolha uma senha diferente da atual.",
+        );
       await prisma.$transaction([
-        prisma.user.update({ where: { id: user.id }, data: { passwordHash: await argon2.hash(body.newPassword, { type: argon2.argon2id }) } }),
-        prisma.authSession.updateMany({ where: { userId: user.id, id: { not: request.principal.sessionId! }, revokedAt: null }, data: { revokedAt: new Date() } }),
-        prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
+        prisma.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: await argon2.hash(body.newPassword, {
+              type: argon2.argon2id,
+            }),
+          },
+        }),
+        prisma.authSession.updateMany({
+          where: {
+            userId: user.id,
+            id: { not: request.principal.sessionId! },
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        }),
+        prisma.passwordResetToken.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        }),
       ]);
-      await audit({ tenantId: tenantId(request), actorUserId: user.id, action: "profile.password.changed", resourceType: "user", resourceId: user.id });
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: user.id,
+        action: "profile.password.changed",
+        resourceType: "user",
+        resourceId: user.id,
+      });
       return { changed: true };
     },
   );
 
   app.post(
     "/profile/avatar",
-    { preHandler: authenticated(), config: { rateLimit: { max: 8, timeWindow: "15 minutes" } } },
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 8, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       if (request.principal?.kind !== "user")
-        return fail(reply, 403, "USER_REQUIRED", "Imagem disponível somente ao próprio usuário.");
+        return fail(
+          reply,
+          403,
+          "USER_REQUIRED",
+          "Imagem disponível somente ao próprio usuário.",
+        );
       const body = parsed(
-        z.object({ dataBase64: z.string().min(16).max(220000), contentType: z.enum(["image/png", "image/jpeg", "image/webp"]) }),
-        request.body, reply,
+        z.object({
+          dataBase64: z.string().min(16).max(220000),
+          contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+        }),
+        request.body,
+        reply,
       );
       if (!body) return;
       const bytes = Buffer.from(body.dataBase64, "base64");
-      if (!bytes.length || bytes.byteLength > 160 * 1024 || bytes.toString("base64") !== body.dataBase64)
+      if (
+        !bytes.length ||
+        bytes.byteLength > 160 * 1024 ||
+        bytes.toString("base64") !== body.dataBase64
+      )
         return fail(reply, 400, "AVATAR_SIZE", "Use uma imagem de até 160 KB.");
-      const png = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
-      const jpeg = bytes.length >= 3 && bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex"));
-      const webp = bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
-      const actual = png ? "image/png" : jpeg ? "image/jpeg" : webp ? "image/webp" : null;
+      const png =
+        bytes.length >= 8 &&
+        bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+      const jpeg =
+        bytes.length >= 3 &&
+        bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex"));
+      const webp =
+        bytes.length >= 12 &&
+        bytes.toString("ascii", 0, 4) === "RIFF" &&
+        bytes.toString("ascii", 8, 12) === "WEBP";
+      const actual = png
+        ? "image/png"
+        : jpeg
+          ? "image/jpeg"
+          : webp
+            ? "image/webp"
+            : null;
       if (!actual || actual !== body.contentType)
-        return fail(reply, 400, "AVATAR_FORMAT", "Escolha uma imagem PNG, JPG ou WebP válida.");
-      const user = await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } });
-      const profile = user?.profile && typeof user.profile === "object" && !Array.isArray(user.profile) ? user.profile as Record<string, unknown> : {};
+        return fail(
+          reply,
+          400,
+          "AVATAR_FORMAT",
+          "Escolha uma imagem PNG, JPG ou WebP válida.",
+        );
+      const user = await prisma.user.findUnique({
+        where: { id: request.principal.userId! },
+        select: { profile: true },
+      });
+      const profile =
+        user?.profile &&
+        typeof user.profile === "object" &&
+        !Array.isArray(user.profile)
+          ? (user.profile as Record<string, unknown>)
+          : {};
       const artifact = await storeArtifact({
         tenantId: tenantId(request),
         jobId: "profile-" + request.principal.userId!,
@@ -1078,32 +1175,69 @@ export async function registerRoutes(
       });
       await prisma.user.update({
         where: { id: request.principal.userId! },
-        data: { profile: { ...profile, avatarKey: artifact.objectKey, avatarType: actual } as Prisma.InputJsonValue },
+        data: {
+          profile: {
+            ...profile,
+            avatarKey: artifact.objectKey,
+            avatarType: actual,
+          } as Prisma.InputJsonValue,
+        },
       });
-      await audit({ tenantId: tenantId(request), actorUserId: request.principal.userId, action: "profile.avatar.updated", resourceType: "user", resourceId: request.principal.userId });
+      await audit({
+        tenantId: tenantId(request),
+        actorUserId: request.principal.userId,
+        action: "profile.avatar.updated",
+        resourceType: "user",
+        resourceId: request.principal.userId,
+      });
       return { updated: true };
     },
   );
 
-  app.get("/profile/avatar", { preHandler: authenticated() }, async (request, reply) => {
-    if (request.principal?.kind !== "user") return fail(reply, 403, "USER_REQUIRED", "Imagem indisponível.");
-    const user = await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } });
-    const profile = user?.profile && typeof user.profile === "object" && !Array.isArray(user.profile) ? user.profile as Record<string, unknown> : {};
-    const key = profile.avatarKey;
-    const contentType = profile.avatarType;
-    if (typeof key !== "string" || typeof contentType !== "string" || !["image/png", "image/jpeg", "image/webp"].includes(contentType))
-      return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não configurada.");
-    if (!key.startsWith(tenantId(request) + "/profile-" + request.principal.userId! + "/"))
-      return fail(reply, 403, "AVATAR_FORBIDDEN", "Foto indisponível.");
-    try {
-      const object = await getArtifactStream(key);
-      const bytes = await object.Body?.transformToByteArray();
-      if (!bytes) return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
-      return reply.header("Cache-Control", "private, no-store").type(contentType).send(Buffer.from(bytes));
-    } catch {
-      return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
-    }
-  });
+  app.get(
+    "/profile/avatar",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (request.principal?.kind !== "user")
+        return fail(reply, 403, "USER_REQUIRED", "Imagem indisponível.");
+      const user = await prisma.user.findUnique({
+        where: { id: request.principal.userId! },
+        select: { profile: true },
+      });
+      const profile =
+        user?.profile &&
+        typeof user.profile === "object" &&
+        !Array.isArray(user.profile)
+          ? (user.profile as Record<string, unknown>)
+          : {};
+      const key = profile.avatarKey;
+      const contentType = profile.avatarType;
+      if (
+        typeof key !== "string" ||
+        typeof contentType !== "string" ||
+        !["image/png", "image/jpeg", "image/webp"].includes(contentType)
+      )
+        return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não configurada.");
+      if (
+        !key.startsWith(
+          tenantId(request) + "/profile-" + request.principal.userId! + "/",
+        )
+      )
+        return fail(reply, 403, "AVATAR_FORBIDDEN", "Foto indisponível.");
+      try {
+        const object = await getArtifactStream(key);
+        const bytes = await object.Body?.transformToByteArray();
+        if (!bytes)
+          return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
+        return reply
+          .header("Cache-Control", "private, no-store")
+          .type(contentType)
+          .send(Buffer.from(bytes));
+      } catch {
+        return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
+      }
+    },
+  );
 
   app.post(
     "/profile/mfa/setup",
@@ -1221,7 +1355,19 @@ export async function registerRoutes(
       },
       orderBy: { createdAt: "asc" },
     });
-    return { data: rows.filter(({ user }) => !isProtectedUser(user)).map(({ role, user }) => ({ id: user.id, name: user.name, email: user.email, role, mfaEnabled: user.mfaEnabled, disabledAt: user.disabledAt, createdAt: user.createdAt })) };
+    return {
+      data: rows
+        .filter(({ user }) => !isProtectedUser(user))
+        .map(({ role, user }) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role,
+          mfaEnabled: user.mfaEnabled,
+          disabledAt: user.disabledAt,
+          createdAt: user.createdAt,
+        })),
+    };
   });
 
   app.post(
@@ -1230,7 +1376,12 @@ export async function registerRoutes(
     async (request, reply) => {
       if (!(await mayAdmin(request, reply))) return;
       if (process.env.SCOUT_LEGACY_USER_CREATE !== "true")
-        return fail(reply, 410, "USE_INVITATIONS", "Convide a pessoa por e-mail para que ela ative a própria conta.");
+        return fail(
+          reply,
+          410,
+          "USE_INVITATIONS",
+          "Convide a pessoa por e-mail para que ela ative a própria conta.",
+        );
       const body = parsed(
         z.object({
           name: z.string().trim().min(2).max(120),
@@ -1244,10 +1395,20 @@ export async function registerRoutes(
       if (!body) return;
       const email = body.email.toLowerCase();
       if (isProtectedUser({ email, isPlatformMaster: false }))
-        return fail(reply, 403, "ACCOUNT_PROTECTED", "Esta conta não pode ser administrada por este recurso.");
+        return fail(
+          reply,
+          403,
+          "ACCOUNT_PROTECTED",
+          "Esta conta não pode ser administrada por este recurso.",
+        );
       let user = await prisma.user.findUnique({ where: { email } });
       if (user && isProtectedUser(user))
-        return fail(reply, 403, "ACCOUNT_PROTECTED", "Esta conta não pode ser administrada por este recurso.");
+        return fail(
+          reply,
+          403,
+          "ACCOUNT_PROTECTED",
+          "Esta conta não pode ser administrada por este recurso.",
+        );
       if (
         user &&
         (await prisma.membership.findUnique({
@@ -1311,7 +1472,12 @@ export async function registerRoutes(
         include: { user: { select: { email: true, isPlatformMaster: true } } },
       });
       if (membership && isProtectedUser(membership.user))
-        return fail(reply, 403, "ACCOUNT_PROTECTED", "Não é permitido alterar a autenticação desta conta.");
+        return fail(
+          reply,
+          403,
+          "ACCOUNT_PROTECTED",
+          "Não é permitido alterar a autenticação desta conta.",
+        );
       if (!membership)
         return fail(
           reply,
@@ -2331,10 +2497,14 @@ export async function registerRoutes(
   );
 
   async function excludedMasterIds(): Promise<string[]> {
-    const configured = process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+    const configured =
+      process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
     const rows = await prisma.user.findMany({
       where: {
-        OR: [{ isPlatformMaster: true }, ...(configured ? [{ email: configured }] : [])],
+        OR: [
+          { isPlatformMaster: true },
+          ...(configured ? [{ email: configured }] : []),
+        ],
       },
       select: { id: true },
     });
@@ -2348,10 +2518,14 @@ export async function registerRoutes(
     const data = await prisma.auditLog.findMany({
       where: {
         tenantId: tenantId(request),
-        ...(excluded.length ? { NOT: [
-          { actorUserId: { in: excluded } },
-          { resourceId: { in: excluded } },
-        ] } : {}),
+        ...(excluded.length
+          ? {
+              NOT: [
+                { actorUserId: { in: excluded } },
+                { resourceId: { in: excluded } },
+              ],
+            }
+          : {}),
       },
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       take: 100,
@@ -2360,34 +2534,107 @@ export async function registerRoutes(
     return { data, nextCursor: data.length === 100 ? data.at(-1)?.id : null };
   });
 
-  app.get("/ops/diagnostics", { preHandler: authenticated() }, async (request, reply) => {
-    if (!(await mayAdmin(request, reply))) return;
-    const owner = tenantId(request);
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const excluded = await excludedMasterIds();
-    const [errors, failedJobs, recentAudit, failedDeliveries, counters] = await Promise.all([
-      prisma.diagnosticLog.findMany({
-        where: { tenantId: owner, createdAt: { gte: since } },
-        orderBy: { createdAt: "desc" },
-        take: 200,
-        select: { id: true, requestId: true, method: true, route: true, statusCode: true, createdAt: true },
-      }),
-      prisma.job.findMany({
-        where: { tenantId: owner, status: JobStatus.FAILED, createdAt: { gte: since } },
-        orderBy: { createdAt: "desc" }, take: 100,
-        select: { id: true, status: true, errorCode: true, attempts: true, createdAt: true, finishedAt: true, source: { select: { name: true } } },
-      }),
-      prisma.auditLog.findMany({ where: { tenantId: owner, createdAt: { gte: since }, ...(excluded.length ? { NOT: [{ actorUserId: { in: excluded } }, { resourceId: { in: excluded } }] } : {}) }, orderBy: { createdAt: "desc" }, take: 100,
-        select: { id: true, action: true, resourceType: true, resourceId: true, createdAt: true } }),
-      prisma.webhookDelivery.findMany({ where: { webhook: { tenantId: owner }, status: "FAILED", createdAt: { gte: since } },
-        orderBy: { createdAt: "desc" }, take: 100,
-        select: { id: true, status: true, attempts: true, lastStatusCode: true, createdAt: true } }),
-      prisma.diagnosticLog.count({ where: { tenantId: owner, createdAt: { gte: since } } }),
-    ]);
-    return { schemaVersion: 1, generatedAt: new Date().toISOString(), windowDays: 7,
-      version: buildVersion, summary: { requestFailures: counters, failedJobs: failedJobs.length, failedDeliveries: failedDeliveries.length },
-      requestFailures: errors, jobs: failedJobs, audit: recentAudit, webhookFailures: failedDeliveries };
-  });
+  app.get(
+    "/ops/diagnostics",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!(await mayAdmin(request, reply))) return;
+      const owner = tenantId(request);
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const excluded = await excludedMasterIds();
+      const [errors, failedJobs, recentAudit, failedDeliveries, counters] =
+        await Promise.all([
+          prisma.diagnosticLog.findMany({
+            where: { tenantId: owner, createdAt: { gte: since } },
+            orderBy: { createdAt: "desc" },
+            take: 200,
+            select: {
+              id: true,
+              requestId: true,
+              method: true,
+              route: true,
+              statusCode: true,
+              createdAt: true,
+            },
+          }),
+          prisma.job.findMany({
+            where: {
+              tenantId: owner,
+              status: JobStatus.FAILED,
+              createdAt: { gte: since },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 100,
+            select: {
+              id: true,
+              status: true,
+              errorCode: true,
+              attempts: true,
+              createdAt: true,
+              finishedAt: true,
+              source: { select: { name: true } },
+            },
+          }),
+          prisma.auditLog.findMany({
+            where: {
+              tenantId: owner,
+              createdAt: { gte: since },
+              ...(excluded.length
+                ? {
+                    NOT: [
+                      { actorUserId: { in: excluded } },
+                      { resourceId: { in: excluded } },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: { createdAt: "desc" },
+            take: 100,
+            select: {
+              id: true,
+              action: true,
+              resourceType: true,
+              resourceId: true,
+              createdAt: true,
+            },
+          }),
+          prisma.webhookDelivery.findMany({
+            where: {
+              webhook: { tenantId: owner },
+              status: "FAILED",
+              createdAt: { gte: since },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 100,
+            select: {
+              id: true,
+              status: true,
+              attempts: true,
+              lastStatusCode: true,
+              createdAt: true,
+            },
+          }),
+          prisma.diagnosticLog.count({
+            where: { tenantId: owner, createdAt: { gte: since } },
+          }),
+        ]);
+      return {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        windowDays: 7,
+        version: buildVersion,
+        summary: {
+          requestFailures: counters,
+          failedJobs: failedJobs.length,
+          failedDeliveries: failedDeliveries.length,
+        },
+        requestFailures: errors,
+        jobs: failedJobs,
+        audit: recentAudit,
+        webhookFailures: failedDeliveries,
+      };
+    },
+  );
 
   app.get(
     "/ops/health",

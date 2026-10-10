@@ -4,5 +4,8 @@ export function isProtectedUser(
   configuredEmail: string | undefined = process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL,
 ): boolean {
   const principalEmail = configuredEmail?.trim().toLowerCase();
-  return user.isPlatformMaster || Boolean(principalEmail && user.email.toLowerCase() === principalEmail);
+  return (
+    user.isPlatformMaster ||
+    Boolean(principalEmail && user.email.toLowerCase() === principalEmail)
+  );
 }
