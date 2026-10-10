@@ -464,11 +464,11 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
 
 async function deleteInstance(instance: WhatsAppInstance) {
   const label = instance.displayName || instance.name;
-  const localOnly = !instance.usable;
-  const question = localOnly
-    ? `Remover “${label}” deste espaço de trabalho? A instância remota não será excluída, pois seu vínculo não está validado.`
-    : `Excluir definitivamente “${label}” da Connect|API e remover seu vínculo neste espaço? Esta ação não pode ser desfeita.`;
-  if (!window.confirm(question)) return;
+  if (!instance.usable) {
+    emit("error", "O vínculo remoto precisa ser validado. Use Desvincular do espaço para remover somente o registro local.");
+    return;
+  }
+  if (!window.confirm(`Excluir definitivamente “${label}” da Connect|API e remover o vínculo? Esta ação não pode ser desfeita.`)) return;
   busy.value = true;
   try {
     const result = await api<{
@@ -755,13 +755,11 @@ onUnmounted(() => {
           <button
             v-if="canManage"
             class="button danger small-button"
-            :disabled="busy"
-            :aria-label="`${instance.usable ? 'Excluir' : 'Remover vínculo de'} ${instance.displayName || instance.name}`"
+            :disabled="busy || !instance.usable"
+            :aria-label="`Excluir ${instance.displayName || instance.name} da Connect|API`"
             @click="deleteInstance(instance)"
           >
-            <Trash2 :size="14" />{{
-              instance.usable ? "Excluir" : "Remover vínculo"
-            }}
+            <Trash2 :size="14" />Excluir na Connect|API
           </button>
           <form
             v-if="claimName === instance.name && !instance.usable"
