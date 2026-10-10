@@ -118,7 +118,7 @@ onMounted(() => {
     <div class="panel-header">
       <div>
         <h2>Diagnóstico operacional</h2>
-        <p>Conectividade atual da API e pressão de execução do workspace.</p>
+        <p>Conectividade da aplicação e atividade do espaço de trabalho.</p>
       </div>
       <button
         class="button outline"

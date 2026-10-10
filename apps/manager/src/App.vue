@@ -1838,7 +1838,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <Menu :size="20" />
         </button>
         <div class="breadcrumbs">
-          <span>Workspace</span><span class="crumb-sep">/</span
+          <span>Espaço de trabalho</span><span class="crumb-sep">/</span
           ><strong>{{ title }}</strong>
         </div>
         <div class="top-actions">
@@ -1927,7 +1927,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               <strong>{{ stats.instances }}</strong
               ><small
                 ><span class="trend"><ArrowUpRight :size="13" /> Ativas</span>
-                no seu workspace</small
+                neste espaço de trabalho</small
               >
             </article>
             <article class="stat-card">
@@ -1972,7 +1972,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             </div>
             <div v-if="!jobs.length" class="empty-state">
               <span class="empty-icon"><Sparkles :size="22" /></span>
-              <h3>Seu workspace está pronto para explorar</h3>
+              <h3>Seu espaço está pronto para começar</h3>
               <p>
                 Crie uma instância e adicione sua primeira fonte para começar.
               </p>
@@ -2834,7 +2834,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               <span class="settings-icon"><Globe2 :size="18" /></span>
               <div>
                 <strong>Organização</strong
-                ><small>{{ me.tenant.name }} · {{ me.tenant.slug }}</small>
+                ><small>{{ me.tenant.name }}</small>
               </div>
             </div>
             <div class="settings-row">
@@ -3019,7 +3019,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         </button>
         <p v-if="error" class="inline-error modal-error" role="alert">{{ error }}</p>
         <template v-if="showInstanceForm"
-          ><p class="eyebrow">WORKSPACE</p>
+          ><p class="eyebrow">ESPAÇO DE TRABALHO</p>
           <h2>Nova instância</h2>
           <p class="muted">Agrupe fontes por cliente, área ou objetivo.</p>
           <label
