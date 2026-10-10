@@ -79,7 +79,10 @@ describe("deleting a workspace instance preserves cross-workspace security", () 
       "where: { name: instance.name, tenantId: tenant }",
     );
     expect(section).toContain("connectDefaultInstanceName: instance.name");
-    expect(section).toContain("action: remotelyClaimed");
+    expect(section).toContain('z.enum(["remote", "unlink"]).default("remote")');
+    expect(section).toContain('mode.data.mode === "remote" && remotelyClaimed');
+    expect(section).toContain('action: remotelyClaimed && mode.data.mode === "remote"');
+    expect(section).toContain("mode: mode.data.mode");
     expect(section).toContain('? "whatsapp.instance.deleted"');
     expect(section).toContain(': "whatsapp.instance.unlinked"');
   });
