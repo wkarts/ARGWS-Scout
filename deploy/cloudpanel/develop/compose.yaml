@@ -210,7 +210,7 @@ services:
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.4}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.5}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
