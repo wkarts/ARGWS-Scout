@@ -7,6 +7,14 @@ targets=("docker","dockge","cloudpanel","portainer")
 channels=("develop","production")
 ports={"docker":{"develop":48080,"production":48180},"dockge":{"develop":48081,"production":48181},"cloudpanel":{"develop":48082,"production":48182},"portainer":{"develop":48083,"production":48183}}
 version=(root/"VERSION").read_text().strip()
+# Versões em tela e na API precisam identificar o commit efetivamente publicado no GHCR.
+runtime_docker=(root/"Dockerfile").read_text(encoding="utf-8")
+manager_docker=(root/"Dockerfile.manager").read_text(encoding="utf-8")
+publisher=(root/".github/workflows/ghcr-publish-application.yml").read_text(encoding="utf-8")
+assert "ENV SCOUT_BUILD_SHA=${SCOUT_GIT_SHA}" in runtime_docker
+assert 'VITE_BUILD_SHA="${SCOUT_GIT_SHA}"' in manager_docker
+assert "SCOUT_GIT_SHA=${{ github.event.workflow_run.head_sha }}" in publisher
+assert "SCOUT_CHANNEL=${{ github.event.workflow_run.head_branch }}" in publisher
 compose_hashes=set()
 projects=set()
 for target in targets:
