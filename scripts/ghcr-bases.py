@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_IMAGE = re.compile(
-    r"(?:docker\.io|mcr\.microsoft\.com|quay\.io)/[a-z0-9._/-]+:[A-Za-z0-9_.-]+"
+    r"(?:docker\.io|mcr\.microsoft\.com)/[a-z0-9._/-]+:[A-Za-z0-9_.-]+"
 )
 PACKAGE_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 IMAGE_TAG = re.compile(r"[A-Za-z0-9_.-]+")
@@ -47,14 +47,30 @@ def load_catalog(owner):
             raise ValueError(f"floating or invalid GHCR tag: {tag!r}")
         if not SOURCE_IMAGE.fullmatch(source):
             raise ValueError(f"invalid pinned source image: {source!r}")
-        if package == "argws-scout-minio" and not source.startswith("quay.io/minio/minio:RELEASE."):
-            raise ValueError("MinIO must use a pinned official Quay release")
         target = (package, tag)
         if target in targets:
             raise ValueError(f"duplicate GHCR target: {package}:{tag}")
         targets.add(target)
 
-    available_packages = {image["package"] for image in images}
+    # The MinIO container source registries are archived or no longer accessible.
+    # Build the same immutable upstream GitHub Release with verified SHA-256 instead.
+    built = catalog.get("built_images", [])
+    if len(built) != 1 or built[0].get("package") != "argws-scout-minio":
+        raise ValueError("MinIO must be declared as a verified built image")
+    minio = built[0]
+    tag = "RELEASE.2025-09-07T16-13-09Z"
+    if (minio.get("tag") != tag or minio.get("dockerfile") != "Dockerfile.minio"
+            or minio.get("source_release") != f"https://github.com/minio/minio/releases/tag/{tag}"):
+        raise ValueError("unexpected MinIO release or Dockerfile")
+    dockerfile_content = (ROOT / "Dockerfile.minio").read_text(encoding="utf-8")
+    if "ghcr.io/wkarts/argws-scout-alpine:3.23" not in dockerfile_content:
+        raise ValueError("MinIO must build on the pinned GHCR Alpine base")
+    for architecture in ("amd64", "arm64"):
+        digest = minio.get("sha256", {}).get(architecture, "")
+        if not re.fullmatch(r"[a-f0-9]{64}", digest) or digest not in dockerfile_content:
+            raise ValueError(f"MinIO {architecture} SHA-256 missing from Dockerfile")
+
+    available_packages = {image["package"] for image in images} | {minio["package"]}
     required_packages = {
         "argws-scout-postgres",
         "argws-scout-redis",
