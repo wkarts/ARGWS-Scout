@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
   Link2,
   MessageCircle,
@@ -8,6 +8,9 @@ import {
   Server,
   Trash2,
   Unplug,
+  X,
+  QrCode,
+  Smartphone,
 } from "@lucide/vue";
 import { api } from "../api";
 
@@ -57,6 +60,7 @@ const defaultInstanceName = ref<string | null>(null);
 const instances = ref<WhatsAppInstance[]>([]);
 const publications = ref<Publication[]>([]);
 const createName = ref("");
+const createProvider = ref<"WHATSAPP-BAILEYS" | "WHATSAPP-ZAPO">("WHATSAPP-BAILEYS");
 const importName = ref("");
 const importToken = ref("");
 const claimName = ref("");
@@ -65,6 +69,14 @@ const showCreate = ref(false);
 const showImport = ref(false);
 const connectionPayload = ref<unknown>(null);
 const connectionInstance = ref("");
+const pairingInstance = ref<WhatsAppInstance | null>(null);
+const pairingMode = ref<"qr" | "code">("qr");
+const pairingPhone = ref("");
+const pairingBusy = ref(false);
+const pairingError = ref("");
+const pairingState = ref("connecting");
+let pairingTimer: ReturnType<typeof setTimeout> | null = null;
+let pairingEpoch = 0;
 
 const canManage = computed(() => ["OWNER", "ADMIN"].includes(props.role));
 const usableInstances = computed(() =>
@@ -128,6 +140,124 @@ function formatState(state?: string | null) {
   );
 }
 
+function closePairing() {
+  pairingEpoch++;
+  if (pairingTimer !== null) clearTimeout(pairingTimer);
+  pairingTimer = null;
+  pairingInstance.value = null;
+  connectionPayload.value = null;
+  pairingPhone.value = "";
+  pairingError.value = "";
+  pairingBusy.value = false;
+  pairingState.value = "connecting";
+}
+
+function planConnectionCheck(epoch: number) {
+  if (epoch !== pairingEpoch || !pairingInstance.value || pairingTimer !== null) return;
+  pairingTimer = setTimeout(() => {
+    pairingTimer = null;
+    void checkPairingState(epoch);
+  }, 4500);
+}
+
+async function checkPairingState(epoch: number) {
+  const instance = pairingInstance.value;
+  if (!instance || epoch !== pairingEpoch) return;
+  if (pairingBusy.value) {
+    planConnectionCheck(epoch);
+    return;
+  }
+  try {
+    const result = await api<{ state?: string }>(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}/status`,
+      { method: "POST", body: "{}" },
+    );
+    if (epoch !== pairingEpoch || pairingInstance.value?.id !== instance.id) return;
+    const state = String(result.state || "unknown").toLowerCase();
+    pairingState.value = state;
+    if (state === "open") {
+      const name = instance.displayName || instance.name;
+      closePairing();
+      await refresh();
+      emit("notify", `WhatsApp conectado: ${name}.`);
+      return;
+    }
+  } catch {
+    // A failed status query does not mean a failed WhatsApp connection.
+    // Keep the modal open, without touching the QR/pairing code.
+  }
+  planConnectionCheck(epoch);
+}
+
+async function requestPairing() {
+  const instance = pairingInstance.value;
+  if (!instance || pairingBusy.value) return;
+  const epoch = pairingEpoch;
+  const isCode = pairingMode.value === "code";
+  const digits = pairingPhone.value.replace(/\D/g, "");
+  if (isCode && !/^[1-9]\d{7,14}$/.test(digits)) {
+    pairingError.value = "Informe o telefone com país, DDD e número (ex.: 5575988881111).";
+    return;
+  }
+  pairingBusy.value = true;
+  pairingError.value = "";
+  connectionPayload.value = null;
+  if (pairingTimer !== null) clearTimeout(pairingTimer);
+  pairingTimer = null;
+  try {
+    const result = await api<{ result?: unknown }>(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}/${isCode ? "pairing" : "connect"}`,
+      { method: "POST", body: JSON.stringify(isCode ? { number: digits } : {}) },
+    );
+    if (epoch !== pairingEpoch || pairingInstance.value?.id !== instance.id) return;
+    connectionPayload.value = result.result ?? {};
+    if (isCode && !findString(result.result, ["pairingCode", "pairing_code"]))
+      pairingError.value = "O provedor não retornou o código. Confira o número e tente novamente.";
+    else if (!isCode && !findQrImage(result.result))
+      pairingError.value = "QR Code não disponível. Você pode tentar novamente ou usar o código de pareamento.";
+  } catch (error) {
+    if (epoch === pairingEpoch) {
+      pairingError.value = error instanceof Error ? error.message : "Falha ao solicitar pareamento.";
+    }
+  } finally {
+    if (epoch === pairingEpoch) {
+      pairingBusy.value = false;
+      planConnectionCheck(epoch);
+    }
+  }
+}
+
+function openPairing(instance: WhatsAppInstance) {
+  closePairing();
+  pairingInstance.value = instance;
+  connectionInstance.value = instance.displayName || instance.name;
+  pairingMode.value = "qr";
+  pairingState.value = instance.connectionState ?? "connecting";
+  void requestPairing();
+}
+
+function choosePairingMode(mode: "qr" | "code") {
+  if (pairingMode.value === mode) return;
+  pairingMode.value = mode;
+  connectionPayload.value = null;
+  pairingError.value = "";
+  if (mode === "qr") void requestPairing();
+}
+
+function pairingEscape(event: KeyboardEvent) {
+  if (event.key === "Escape" && pairingInstance.value) closePairing();
+}
+
+async function copyPairingCode() {
+  if (!pairingCode.value) return;
+  try {
+    await navigator.clipboard.writeText(pairingCode.value);
+    emit("notify", "Código de pareamento copiado.");
+  } catch {
+    emit("error", "Não foi possível copiar o código. Selecione-o manualmente.");
+  }
+}
+
 async function refresh() {
   loading.value = true;
   try {
@@ -176,9 +306,9 @@ async function syncInstances() {
 async function createInstance() {
   busy.value = true;
   try {
-    await api("/whatsapp/instances", {
+    const created = await api<{ instance: WhatsAppInstance }>("/whatsapp/instances", {
       method: "POST",
-      body: JSON.stringify({ name: createName.value }),
+      body: JSON.stringify({ name: createName.value, provider: createProvider.value }),
     });
     createName.value = "";
     showCreate.value = false;
@@ -187,6 +317,7 @@ async function createInstance() {
       "Instância WhatsApp criada. Abra o pareamento para conectar o telefone.",
     );
     await refresh();
+    if (created.instance) openPairing(created.instance);
   } catch (error) {
     emit(
       "error",
@@ -281,16 +412,12 @@ async function chooseDefault(name: string | null) {
 
 async function instanceAction(instance: WhatsAppInstance, action: string) {
   busy.value = true;
-  connectionPayload.value = null;
   try {
     const result = await api<{ result?: unknown; state?: string }>(
       `/whatsapp/instances/${encodeURIComponent(instance.name)}/${action}`,
       { method: "POST", body: "{}" },
     );
-    if (action === "connect") {
-      connectionInstance.value = instance.displayName || instance.name;
-      connectionPayload.value = result.result;
-    } else if (action === "status") {
+    if (action === "status") {
       emit("notify", `${instance.name}: ${formatState(result.state)}.`);
       await refresh();
     } else {
@@ -350,7 +477,14 @@ function statusClass(value: string) {
         : "queued";
 }
 
-onMounted(() => void refresh());
+onMounted(() => {
+  window.addEventListener("keydown", pairingEscape);
+  void refresh();
+});
+onUnmounted(() => {
+  window.removeEventListener("keydown", pairingEscape);
+  closePairing();
+});
 </script>
 
 <template>
