@@ -499,6 +499,20 @@ async function deleteInstance(instance: WhatsAppInstance) {
   }
 }
 
+async function unlinkInstance(instance: WhatsAppInstance) {
+  if (!window.confirm(
+    `Desvincular “${instance.displayName || instance.name}” apenas deste espaço? A instância remota e o WhatsApp permanecerão ativos na Connect|API.`,
+  )) return;
+  busy.value = true;
+  try {
+    await api(`/whatsapp/instances/${encodeURIComponent(instance.name)}?mode=unlink`, { method: "DELETE" });
+    emit("notify", "A instância foi desvinculada deste espaço. Nenhuma sessão remota foi apagada.");
+    await refresh();
+  } catch (error) {
+    emit("error", error instanceof Error ? error.message : "Não foi possível desvincular.");
+  } finally { busy.value = false; }
+}
+
 function statusClass(value: string) {
   return value === "SENT"
     ? "succeeded"
@@ -728,6 +742,15 @@ onUnmounted(() => {
             @click="instanceAction(instance, 'logout')"
           >
             <Unplug :size="14" />Desconectar
+          </button>
+          <button
+            v-if="canManage"
+            class="button outline small-button"
+            :disabled="busy"
+            :aria-label="`Desvincular ${instance.displayName || instance.name} do espaço`"
+            @click="unlinkInstance(instance)"
+          >
+            <Unplug :size="14" /> Desvincular do espaço
           </button>
           <button
             v-if="canManage"
