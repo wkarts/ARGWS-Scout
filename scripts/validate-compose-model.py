@@ -48,7 +48,7 @@ published = [(name, port) for name, service in model["services"].items() for por
 assert len(published) == 1, f"{folder}: expected exactly one published port, got {published}"
 service, port = published[0]
 assert service == "manager" and port.get("host_ip") == "127.0.0.1", (folder, service, port)
-assert port.get("published") == {"docker": {"develop":"8080", "production":"8180"}, "dockge": {"develop":"8081", "production":"8181"}, "cloudpanel": {"develop":"8082", "production":"8182"}, "portainer": {"develop":"8083", "production":"8183"}}[target][channel], (folder, port)
+assert port.get("published") == {"docker": {"develop":"48080", "production":"48180"}, "dockge": {"develop":"48081", "production":"48181"}, "cloudpanel": {"develop":"48082", "production":"48182"}, "portainer": {"develop":"48083", "production":"48183"}}[target][channel], (folder, port)
 for name, mount_target in (
     ("postgres", "/var/lib/postgresql/data"),
     ("redis", "/data"),
@@ -59,12 +59,21 @@ for name, mount_target in (
     mounts = model["services"][name].get("volumes", [])
     data_mount = next((mount for mount in mounts if mount.get("target") == mount_target), None)
     assert data_mount, f"{folder}: {name} missing persistent storage for {mount_target}"
-    if target == "portainer":
-        volume_name = data_mount.get("source", "")
-        volume = model.get("volumes", {}).get(volume_name, {})
-        assert data_mount.get("type") == "volume" and volume.get("name", "").startswith(project + "-"), (folder, name, data_mount, volume)
-    else:
-        assert data_mount.get("type") == "bind" and pathlib.Path(data_mount.get("source", "")).is_relative_to(folder), (folder, name, data_mount)
+    assert data_mount.get("type") == "bind" and pathlib.Path(data_mount.get("source", "")).is_relative_to(folder), (
+        folder, name, data_mount
+    )
+assert not model.get("volumes"), f"{folder}: project must not allocate named volumes"
+for name, container_path in (
+    ("garage", "/etc/garage-config"),
+    ("garage-config-init", "/config"),
+    ("garage-init", "/etc/garage-config"),
+):
+    mount = next((item for item in model["services"][name].get("volumes", [])
+                  if item.get("target") == container_path), None)
+    assert mount and mount.get("type") == "bind", f"{folder}/{name}: Garage configuration must use local bind"
+    assert pathlib.Path(mount["source"]) == folder / "volumes" / "garage" / "config", (
+        folder, name, mount
+    )
 # Garage CLI runs in its own container: sharing Garage's network namespace
 # does not share its filesystem. It needs the node key stored in metadata_dir.
 garage_meta = next(
@@ -90,6 +99,9 @@ assert model["services"]["api"]["depends_on"]["bootstrap"]["condition"] == "serv
     f"{folder}: API must not start before OWNER provisioning is checked"
 )
 browser_environment = model["services"]["browser-worker"].get("environment", {})
+assert browser_environment.get("SCOUT_BROWSER_CONCURRENCY") == env["SCOUT_BROWSER_CONCURRENCY"], (
+    f"{folder}: browser concurrency was not propagated"
+)
 assert browser_environment.get("SCOUT_BROWSER_CHROMIUM_SANDBOX") == "false", (
     f"{folder}: unsupported Chromium sandbox must be explicitly disabled only in isolated browser-worker"
 )
