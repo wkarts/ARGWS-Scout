@@ -42,6 +42,8 @@ class ScoutDeployerTests(unittest.TestCase):
             self.assertEqual({path.name for path in output.iterdir()}, {"compose.yaml", ".env"})
             env = scout_deployer.parse_env((output / ".env").read_text(encoding="utf-8"))
             self.assertEqual(env["SCOUT_TAG"], "stable")
+            self.assertEqual(env["SCOUT_MANAGER_PORT"], "48180")
+            self.assertEqual(env["SCOUT_BROWSER_CONCURRENCY"], "1")
             self.assertEqual(env["SCOUT_VERSION"], SCOUT_RELEASE_VERSION)
             self.assertEqual(len(base64.b64decode(env["SCOUT_ENCRYPTION_KEY_BASE64"])), 32)
             self.assertGreaterEqual(len(env["SCOUT_JWT_SECRET"]), 32)
@@ -75,12 +77,17 @@ class ScoutDeployerTests(unittest.TestCase):
                 self.assertEqual(scout_deployer.main(args), 0)
             env_path = output / ".env"
             env_path.write_text(env_path.read_text(encoding="utf-8") + "CUSTOM_VALUE=keep-me\n", encoding="utf-8")
+            database = output / "volumes" / "postgres"
+            database.mkdir(parents=True)
+            marker = database / "DO-NOT-DELETE"
+            marker.write_text("preserved", encoding="utf-8")
             compose_path = output / "compose.yaml"
             compose_path.write_text("old compose\n", encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(scout_deployer.main([*args, "--force"]), 0)
             self.assertIn("CUSTOM_VALUE=keep-me", env_path.read_text(encoding="utf-8"))
             self.assertIn("services:", compose_path.read_text(encoding="utf-8"))
+            self.assertEqual(marker.read_text(encoding="utf-8"), "preserved")
 
     def test_all_eight_bundles_generate(self) -> None:
         for target in scout_deployer.TARGETS:
@@ -97,6 +104,57 @@ class ScoutDeployerTests(unittest.TestCase):
                     expected_tag = "develop" if environment == "develop" else "stable"
                     self.assertIn(f"SCOUT_TAG:-{expected_tag}", compose)
                     self.assertIn(f"SCOUT_VERSION:-{SCOUT_RELEASE_VERSION}", compose)
+                    for mount in ("postgres", "redis", "rabbitmq", "garage/config", "garage/meta", "garage/data"):
+                        self.assertIn(f"./volumes/{mount}:", compose)
+
+    def test_smtp_and_browser_settings_are_rendered_without_leaking_password(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            command = self.command(
+                "dockge", "production", output,
+                "--browser-concurrency", "3",
+                "--recovery-smtp-host", "smtp.example.org",
+                "--recovery-smtp-port", "587",
+                "--recovery-smtp-secure", "false",
+                "--recovery-smtp-username", "mailer@example.org",
+                "--recovery-smtp-password-stdin",
+                "--recovery-smtp-from-email", "suporte@example.org",
+                "--recovery-smtp-from-name", "Equipe Scout",
+            )
+            original_stdin = sys.stdin
+            password = "complex#pass$word'123"
+            try:
+                sys.stdin = io.StringIO(password + "\n")
+                output_log = io.StringIO()
+                with contextlib.redirect_stdout(output_log):
+                    self.assertEqual(scout_deployer.main(command), 0)
+            finally:
+                sys.stdin = original_stdin
+            self.assertNotIn(password, output_log.getvalue())
+            raw_env = (output / ".env").read_text(encoding="utf-8")
+            env = scout_deployer.parse_env(raw_env)
+            self.assertEqual(env["SCOUT_RECOVERY_SMTP_HOST"], "smtp.example.org")
+            self.assertEqual(env["SCOUT_RECOVERY_SMTP_PASSWORD"], password)
+            self.assertEqual(env["SCOUT_RECOVERY_SMTP_FROM_EMAIL"], "suporte@example.org")
+            self.assertEqual(env["SCOUT_RECOVERY_SMTP_FROM_NAME"], "Equipe Scout")
+            self.assertEqual(env["SCOUT_BROWSER_CONCURRENCY"], "3")
+            self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 0)
+            self.assertIn("./volumes/garage/config:", (output / "compose.yaml").read_text())
+
+    def test_invalid_ports_concurrency_and_smtp_configurations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            for extra in (
+                ("--manager-port", "8181"),
+                ("--manager-port", "50000"),
+                ("--browser-concurrency", "0"),
+                ("--browser-concurrency", "17"),
+                ("--recovery-smtp-host", "smtp.example.org"),
+                ("--recovery-smtp-username", "mailer"),
+            ):
+                with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(scout_deployer.main(self.command("docker", "production", output, *extra)), 1)
+                self.assertFalse((output / "compose.yaml").exists())
 
     def test_rejects_http_in_production_and_bad_slug(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -126,15 +184,19 @@ class ScoutDeployerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(scout_deployer.main(args), 0)
             env = scout_deployer.parse_env((output / "stack.env").read_text(encoding="utf-8"))
-            self.assertEqual(env["SCOUT_MANAGER_PORT"], "8083")
+            self.assertEqual(env["SCOUT_MANAGER_PORT"], "48083")
 
-    def test_validation_rejects_extra_directories(self) -> None:
+    def test_accepts_local_volumes_but_rejects_unrelated_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "deploy"
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(scout_deployer.main(self.command("docker", "production", output)), 0)
+            (output / "volumes" / "postgres").mkdir(parents=True)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 0)
             (output / "extra").mkdir()
-            self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 1)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 1)
 
     def test_generation_refuses_to_write_into_unrelated_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
