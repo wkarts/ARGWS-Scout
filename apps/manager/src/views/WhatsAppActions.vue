@@ -100,6 +100,10 @@ function selectProduct(item: Product) {
   share.value.description = item.description;
   emit("notify", "Revise o texto, o link do produto e o destinatário antes de compartilhar.");
 }
+function statusId(item: Record<string, unknown>): string {
+  const key = asRecord(item.key);
+  return String(key.id ?? item.id ?? "");
+}
 function parsedRecipients() {
   return [...new Set(recipients.value.split(/[;,\s]+/).filter(Boolean))];
 }
@@ -200,7 +204,7 @@ async function shareProduct() {
               <strong>Publicações encontradas: {{ statuses.length }}</strong>
               <div v-for="(item, i) in statuses" :key="i">
                 <span>{{ String(item.messageTimestamp ?? item.createdAt ?? item.timestamp ?? "") }}</span>
-                <small>{{ String(item.key && typeof item.key === "object" ? (item.key as Record<string, unknown>).id ?? "" : item.id ?? "") }}</small>
+                <small>{{ statusId(item) }}</small>
               </div>
             </div>
           </form>
