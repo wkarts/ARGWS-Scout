@@ -3009,7 +3009,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       class="modal-backdrop"
       @click.self="closeDialogs"
     >
-      <section class="modal-card">
+      <section class="modal-card" role="dialog" aria-modal="true" :aria-label="showProfile ? 'Seu perfil' : 'Formulário da plataforma'">
         <button
           class="icon-button modal-close"
           aria-label="Fechar"
@@ -3017,6 +3017,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         >
           <X :size="18" />
         </button>
+        <p v-if="error" class="inline-error modal-error" role="alert">{{ error }}</p>
         <template v-if="showInstanceForm"
           ><p class="eyebrow">WORKSPACE</p>
           <h2>Nova instância</h2>
@@ -3464,12 +3465,13 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       class="modal-backdrop"
       @click.self="selectedJob = null"
     >
-      <section class="modal-card result-modal">
+      <section class="modal-card result-modal" role="dialog" aria-modal="true" aria-label="Resultado da execução">
         <button class="icon-button modal-close" @click="selectedJob = null">
           <X :size="18" />
         </button>
         <p class="eyebrow">RESULTADO DA EXECUÇÃO</p>
         <h2>{{ selectedJob.source?.name ?? "Job" }}</h2>
+        <p v-if="error" class="inline-error modal-error" role="alert">{{ error }}</p>
         <div class="result-meta">
           <span class="status-pill" :class="selectedJob.status.toLowerCase()"
             ><i></i>{{ statusLabel(selectedJob.status) }}</span
@@ -3663,7 +3665,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         }}</pre>
       </section>
     </div>
-    <div v-if="issuedToken || issuedWebhookSecret" class="modal-backdrop">
+    <div v-if="issuedToken || issuedWebhookSecret" class="modal-backdrop" @click.self="closeDialogs">
       <section class="modal-card">
         <p class="eyebrow">MOSTRADO UMA ÚNICA VEZ</p>
         <h2>{{ issuedToken ? "Token criado" : "Segredo do webhook" }}</h2>
