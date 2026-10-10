@@ -75,7 +75,7 @@ function isUsable(invite: {
   );
 }
 
-async function provisionIndependentSpace(
+export async function provisionIndependentSpace(
   tx: Prisma.TransactionClient,
   userId: string,
   label: string,
@@ -97,6 +97,16 @@ async function provisionIndependentSpace(
   });
   await tx.membership.create({
     data: { tenantId: space.id, userId, role: TenantRole.OWNER },
+  });
+  // A pessoa já recebe uma instância inicial, mas sem sites ou credenciais
+  // importados de outros espaços. Todas as integrações começam vazias.
+  await tx.instance.create({
+    data: {
+      tenantId: space.id,
+      name: "Minha primeira instância",
+      slug: "primeira-instancia",
+      description: "Cadastre aqui sua primeira fonte de dados.",
+    },
   });
   return space.id;
 }
