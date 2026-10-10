@@ -1,0 +1,36 @@
+name: Temporary Scout build metadata formatter
+on:
+  push:
+    branches: [feat/scout-manager-account-security-onboarding-20261009]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Normalize new build metadata and UI
+        run: pnpm exec prettier --write apps/api/src/routes.ts apps/api/src/server.ts apps/manager/src/App.vue apps/manager/src/style.css apps/manager/src/views/OperationsConsole.vue apps/manager/src/views/AccessConsole.vue docs/operations.md .github/workflows/ghcr-publish-application.yml
+      - name: Save formatting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add apps/api/src/routes.ts apps/api/src/server.ts apps/manager/src/App.vue apps/manager/src/style.css apps/manager/src/views/OperationsConsole.vue apps/manager/src/views/AccessConsole.vue docs/operations.md .github/workflows/ghcr-publish-application.yml
+          if git diff --cached --quiet; then
+            echo "Formatting already clean"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: format build metadata, diagnostics and Manager UI"
+          git push origin HEAD:refs/heads/feat/scout-manager-account-security-onboarding-20261009
