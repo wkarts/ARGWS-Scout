@@ -112,10 +112,12 @@ Para inspecionar sem revelar senhas, hashes ou segredos, na pasta da stack:
 
 ```bash
 docker compose exec -T api pnpm auth:diagnose
+# Para comparar com segurança a senha inicial do .env, use o serviço isolado:
+docker compose run --rm -T --no-deps bootstrap pnpm auth:diagnose
 docker compose logs --tail=60 bootstrap
 ```
 
-O relatório indica `bootstrapAccountFound`, `bootstrapPasswordMatchesStoredHash` e as organizações do OWNER. O `GET /auth/me` devolver 401 antes do login é esperado; `POST /auth/login` com 401 indica credenciais incorretas, usuário desativado ou inexistente.
+O relatório indica `bootstrapAccountFound`, `bootstrapPasswordMatchesStoredHash` e as organizações do OWNER. No contêiner persistente da API a comparação da senha retorna `null` intencionalmente, pois a senha inicial fica restrita ao `bootstrap`. A comparação só deve ser executada no contêiner temporário de diagnóstico. O `GET /auth/me` devolver 401 antes do login é esperado; `POST /auth/login` com 401 indica credenciais incorretas, usuário desativado ou inexistente.
 
 Se houver usuário existente e você tiver controle legítimo da VPS, prefira `Esqueci minha senha` com o SMTP de recuperação corretamente configurado. Sem SMTP, é possível recuperar **somente uma conta OWNER ativa** a partir do terminal interativo do contêiner:
 
