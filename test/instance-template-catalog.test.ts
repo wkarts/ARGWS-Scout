@@ -12,10 +12,20 @@ describe("catálogo de modelos de coleta", () => {
   it("oferece modelos com IDs únicos, incluindo os marketplaces solicitados", () => {
     const ids = STARTER_TEMPLATES.map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(expect.arrayContaining([
-      "mercado-livre", "shopee", "amazon", "magalu", "aliexpress", "kabum", "olx",
-      "buscape", "ebay", "website",
-    ]));
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "mercado-livre",
+        "shopee",
+        "amazon",
+        "magalu",
+        "aliexpress",
+        "kabum",
+        "olx",
+        "buscape",
+        "ebay",
+        "website",
+      ]),
+    );
     expect(STARTER_TEMPLATES.length).toBeGreaterThanOrEqual(10);
   });
   it("gera uma fonte válida para cada modelo, sem criar jobs ou executar coleta", () => {
@@ -37,16 +47,22 @@ describe("catálogo de modelos de coleta", () => {
       selector: "h1",
       requestIntervalMs: 25000,
     });
-    expect(new URL(source.url).searchParams.get("k")).toBe("livro sobre Laravel");
+    expect(new URL(source.url).searchParams.get("k")).toBe(
+      "livro sobre Laravel",
+    );
     expect(source.engine).toBe("PLAYWRIGHT");
     expect(source.selector).toBe("h1");
     expect(source.requestIntervalMs).toBe(25000);
     expect(original.engine).toBe("HTTP");
   });
   it("nunca desabilita robots.txt automaticamente ao clonar", () => {
-    const source = buildTemplateSource(getStarterTemplate("mercado-livre")!, "fone", {
-      respectRobots: false,
-    });
+    const source = buildTemplateSource(
+      getStarterTemplate("mercado-livre")!,
+      "fone",
+      {
+        respectRobots: false,
+      },
+    );
     expect(source.respectRobots).toBe(true);
   });
   it("aceita um URL personalizado com hostname recalculado e bloqueia allowlist divergente", () => {
@@ -56,9 +72,12 @@ describe("catálogo de modelos de coleta", () => {
       selector: "h2",
     });
     expect(source.allowedHosts).toEqual(["example.com"]);
-    expect(() => buildTemplateSource(template, "teste", {
-      url: "https://example.com/custom", allowedHosts: ["another.example.com"],
-    })).toThrow();
+    expect(() =>
+      buildTemplateSource(template, "teste", {
+        url: "https://example.com/custom",
+        allowedHosts: ["another.example.com"],
+      }),
+    ).toThrow();
   });
   it("produz catálogo serializável e slugs seguros para múltiplas cópias", () => {
     const list = listStarterTemplates();

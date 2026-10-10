@@ -329,11 +329,15 @@ paths:
                     url: { type: string, format: uri }
                     selector: { type: string, maxLength: 500 }
                     engine: { type: string, enum: [HTTP, PLAYWRIGHT] }
-                    requestIntervalMs: { type: integer, minimum: 1000, maximum: 300000 }
+                    requestIntervalMs:
+                      { type: integer, minimum: 1000, maximum: 300000 }
                     captureScreenshot: { type: boolean }
       responses:
         "201": { description: Instância e fonte criadas atomicamente. }
-        "400": { description: Configuração ou URL rejeitada pelas políticas de segurança. }
+        "400":
+          {
+            description: Configuração ou URL rejeitada pelas políticas de segurança.,
+          }
         "403": { description: Perfil sem permissão. }
         "404": { description: Modelo não encontrado. }
         "409": { description: Identificador de instância indisponível. }

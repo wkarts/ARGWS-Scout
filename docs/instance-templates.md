@@ -4,18 +4,18 @@ O Scout disponibiliza **dez modelos iniciais editáveis** para iniciar monitoram
 
 ## Modelos disponíveis
 
-| Modelo | Uso inicial | Mecanismo padrão |
-| --- | --- | --- |
-| Mercado Livre | Busca pública de anúncios/produtos | HTTP |
-| Shopee | Pesquisa pública de produtos | Navegador |
-| Amazon Brasil | Resultados de busca pública | HTTP |
-| Magazine Luiza | Busca de ofertas | HTTP |
-| AliExpress | Pesquisa de produtos | HTTP |
-| KaBuM! | Informática e eletrônicos | HTTP |
-| OLX Brasil | Classificados públicos | HTTP |
-| Buscapé | Comparação e busca de produtos | HTTP |
-| eBay | Anúncios internacionais | HTTP |
-| Site genérico | Demonstração e adaptação a qualquer site autorizado | HTTP |
+| Modelo         | Uso inicial                                         | Mecanismo padrão |
+| -------------- | --------------------------------------------------- | ---------------- |
+| Mercado Livre  | Busca pública de anúncios/produtos                  | HTTP             |
+| Shopee         | Pesquisa pública de produtos                        | Navegador        |
+| Amazon Brasil  | Resultados de busca pública                         | HTTP             |
+| Magazine Luiza | Busca de ofertas                                    | HTTP             |
+| AliExpress     | Pesquisa de produtos                                | HTTP             |
+| KaBuM!         | Informática e eletrônicos                           | HTTP             |
+| OLX Brasil     | Classificados públicos                              | HTTP             |
+| Buscapé        | Comparação e busca de produtos                      | HTTP             |
+| eBay           | Anúncios internacionais                             | HTTP             |
+| Site genérico  | Demonstração e adaptação a qualquer site autorizado | HTTP             |
 
 Os modelos são **presets comunitários de páginas públicas**, e **não integrações oficiais** ou credenciais autorizadas dos marketplaces. Não garantimos que a página responderá: alguns sites usam JavaScript, redirecionamentos, verificações de acesso e mudanças frequentes de layout.
 
@@ -43,11 +43,11 @@ Para operações comerciais autenticadas, catálogos privados, pedidos e preços
 
 ## Endpoints disponíveis
 
-| Endpoint | Ação |
-| --- | --- |
-| `GET /api/v1/instance-templates` | Lista modelos e exemplos, requer sessão do Manager |
-| `POST /api/v1/instance-templates/{templateId}/create` | Cria instância e primeira fonte num único cadastro, para OWNER/ADMIN/OPERATOR |
-| `PATCH /api/v1/sources/{sourceId}` | Personaliza a fonte existente mediante autorização no espaço e validação anti-SSRF |
+| Endpoint                                              | Ação                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `GET /api/v1/instance-templates`                      | Lista modelos e exemplos, requer sessão do Manager                                 |
+| `POST /api/v1/instance-templates/{templateId}/create` | Cria instância e primeira fonte num único cadastro, para OWNER/ADMIN/OPERATOR      |
+| `PATCH /api/v1/sources/{sourceId}`                    | Personaliza a fonte existente mediante autorização no espaço e validação anti-SSRF |
 
 Exemplo de criação pelo Manager (o token de sessão é enviado por cookie HTTP-only e a aplicação adiciona proteção CSRF conforme sua configuração):
 

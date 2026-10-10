@@ -1841,7 +1841,11 @@ export async function registerRoutes(
           name: z.string().trim().min(2).max(120).optional(),
           enabled: z.boolean().optional(),
           url: z.string().url().max(2048).optional(),
-          allowedHosts: z.array(z.string().trim().toLowerCase().min(1).max(253)).min(1).max(20).optional(),
+          allowedHosts: z
+            .array(z.string().trim().toLowerCase().min(1).max(253))
+            .min(1)
+            .max(20)
+            .optional(),
           engine: z.enum(["HTTP", "PLAYWRIGHT"]).optional(),
           selector: z.string().trim().max(500).nullable().optional(),
           respectRobots: z.boolean().optional(),
@@ -1857,13 +1861,21 @@ export async function registerRoutes(
         engine: body.engine ?? source.engine,
         url: body.url ?? source.urlTemplate,
         allowedHosts: body.allowedHosts ?? source.allowedHosts,
-        selector: body.selector === null ? undefined : (body.selector ?? source.selector ?? undefined),
+        selector:
+          body.selector === null
+            ? undefined
+            : (body.selector ?? source.selector ?? undefined),
         respectRobots: body.respectRobots ?? source.respectRobots,
         captureScreenshot: body.captureScreenshot ?? source.captureScreenshot,
         requestIntervalMs: body.requestIntervalMs ?? source.requestIntervalMs,
       });
       if (!candidate.success)
-        return fail(reply, 400, "VALIDATION_ERROR", "Confira URL, hosts permitidos e configurações da fonte.");
+        return fail(
+          reply,
+          400,
+          "VALIDATION_ERROR",
+          "Confira URL, hosts permitidos e configurações da fonte.",
+        );
       if (body.url !== undefined || body.allowedHosts !== undefined) {
         try {
           await assertSafePublicUrl(
@@ -1872,7 +1884,12 @@ export async function registerRoutes(
             process.env.SCOUT_ALLOW_HTTP === "true",
           );
         } catch (cause) {
-          return fail(reply, 400, "SOURCE_URL_BLOCKED", cause instanceof Error ? cause.message : "URL não permitida.");
+          return fail(
+            reply,
+            400,
+            "SOURCE_URL_BLOCKED",
+            cause instanceof Error ? cause.message : "URL não permitida.",
+          );
         }
       }
       const updated = await prisma.source.update({

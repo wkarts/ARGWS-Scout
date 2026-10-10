@@ -15,25 +15,48 @@ import {
 const createFromTemplateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().max(500).optional(),
-  query: z.string().trim().min(2).max(100)
-    .refine((value) => !/[\u0000-\u001f\u007f-\u009f]/.test(value), "Termo de busca inválido."),
-  source: z.object({
-    name: z.string().trim().min(2).max(120).optional(),
-    url: z.string().url().max(2048).optional(),
-    allowedHosts: z.array(z.string().min(1).max(253)).min(1).max(20).optional(),
-    engine: z.enum(["HTTP", "PLAYWRIGHT"]).optional(),
-    selector: z.string().trim().max(500).optional(),
-    captureScreenshot: z.boolean().optional(),
-    requestIntervalMs: z.number().int().min(1000).max(300000).optional(),
-  }).optional(),
+  query: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    .refine(
+      (value) => !/[\u0000-\u001f\u007f-\u009f]/.test(value),
+      "Termo de busca inválido.",
+    ),
+  source: z
+    .object({
+      name: z.string().trim().min(2).max(120).optional(),
+      url: z.string().url().max(2048).optional(),
+      allowedHosts: z
+        .array(z.string().min(1).max(253))
+        .min(1)
+        .max(20)
+        .optional(),
+      engine: z.enum(["HTTP", "PLAYWRIGHT"]).optional(),
+      selector: z.string().trim().max(500).optional(),
+      captureScreenshot: z.boolean().optional(),
+      requestIntervalMs: z.number().int().min(1000).max(300000).optional(),
+    })
+    .optional(),
 });
 
-export async function registerTemplateRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/instance-templates", { preHandler: authenticated() }, async (request, reply) => {
-    if (!isManagerUser(request))
-      return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Use uma sessão do Manager." } });
-    return { version: 1, data: listStarterTemplates() };
-  });
+export async function registerTemplateRoutes(
+  app: FastifyInstance,
+): Promise<void> {
+  app.get(
+    "/instance-templates",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!isManagerUser(request))
+        return reply
+          .code(403)
+          .send({
+            error: { code: "FORBIDDEN", message: "Use uma sessão do Manager." },
+          });
+      return { version: 1, data: listStarterTemplates() };
+    },
+  );
 
   app.post(
     "/instance-templates/:templateId/create",
@@ -42,15 +65,42 @@ export async function registerTemplateRoutes(app: FastifyInstance): Promise<void
       config: { rateLimit: { max: 15, timeWindow: "1 hour" } },
     },
     async (request, reply) => {
-      if (!isManagerUser(request) ||
-          !hasRole(request, TenantRole.OWNER, TenantRole.ADMIN, TenantRole.OPERATOR))
-        return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Esta ação exige acesso de operação." } });
-      const params = z.object({ templateId: z.string().min(2).max(80) }).safeParse(request.params);
+      if (
+        !isManagerUser(request) ||
+        !hasRole(
+          request,
+          TenantRole.OWNER,
+          TenantRole.ADMIN,
+          TenantRole.OPERATOR,
+        )
+      )
+        return reply
+          .code(403)
+          .send({
+            error: {
+              code: "FORBIDDEN",
+              message: "Esta ação exige acesso de operação.",
+            },
+          });
+      const params = z
+        .object({ templateId: z.string().min(2).max(80) })
+        .safeParse(request.params);
       if (!params.success)
-        return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Modelo inválido." } });
+        return reply
+          .code(400)
+          .send({
+            error: { code: "VALIDATION_ERROR", message: "Modelo inválido." },
+          });
       const template = getStarterTemplate(params.data.templateId);
       if (!template)
-        return reply.code(404).send({ error: { code: "TEMPLATE_NOT_FOUND", message: "Modelo não encontrado." } });
+        return reply
+          .code(404)
+          .send({
+            error: {
+              code: "TEMPLATE_NOT_FOUND",
+              message: "Modelo não encontrado.",
+            },
+          });
       const parsed = createFromTemplateSchema.safeParse(request.body);
       if (!parsed.success)
         return reply.code(400).send({
@@ -66,23 +116,34 @@ export async function registerTemplateRoutes(app: FastifyInstance): Promise<void
 
       let source;
       try {
-        source = buildTemplateSource(template, parsed.data.query, parsed.data.source);
+        source = buildTemplateSource(
+          template,
+          parsed.data.query,
+          parsed.data.source,
+        );
         await assertSafePublicUrl(
           source.url.replace(/\{\{input\.[\w.-]+\}\}/g, "probe"),
           source.allowedHosts,
           process.env.SCOUT_ALLOW_HTTP === "true",
         );
       } catch (cause) {
-        request.log.info({ templateId: template.id }, "Template source validation rejected");
+        request.log.info(
+          { templateId: template.id },
+          "Template source validation rejected",
+        );
         return reply.code(400).send({
           error: {
             code: "TEMPLATE_SOURCE_BLOCKED",
-            message: cause instanceof Error ? cause.message : "Fonte do modelo não é permitida.",
+            message:
+              cause instanceof Error
+                ? cause.message
+                : "Fonte do modelo não é permitida.",
           },
         });
       }
       const tenantId = request.principal!.tenantId;
-      const description = parsed.data.description ??
+      const description =
+        parsed.data.description ??
         `${template.description} Modelo inicial editável: revise as regras do site antes de executar.`;
       try {
         const instance = await prisma.instance.create({
@@ -130,9 +191,16 @@ export async function registerTemplateRoutes(app: FastifyInstance): Promise<void
           note: "Instância e fonte criadas. Verifique a página, os seletores e as regras antes da primeira coleta.",
         });
       } catch (cause) {
-        if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === "P2002")
+        if (
+          cause instanceof Prisma.PrismaClientKnownRequestError &&
+          cause.code === "P2002"
+        )
           return reply.code(409).send({
-            error: { code: "INSTANCE_ALREADY_EXISTS", message: "Já existe uma instância com identificador semelhante. Tente novamente." },
+            error: {
+              code: "INSTANCE_ALREADY_EXISTS",
+              message:
+                "Já existe uma instância com identificador semelhante. Tente novamente.",
+            },
           });
         throw cause;
       }

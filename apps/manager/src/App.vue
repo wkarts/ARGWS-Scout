@@ -901,14 +901,24 @@ function openSourceForm(source?: Source) {
   } else {
     editingSourceId.value = null;
     sourceForm.value = {
-      name: "", engine: "HTTP", url: "", allowedHosts: "", selector: "",
-      respectRobots: true, captureScreenshot: false, requestIntervalMs: 5000,
+      name: "",
+      engine: "HTTP",
+      url: "",
+      allowedHosts: "",
+      selector: "",
+      respectRobots: true,
+      captureScreenshot: false,
+      requestIntervalMs: 5000,
     };
   }
   showSourceForm.value = true;
 }
 
-async function onTemplateCreated(instance: { id: string; name: string; slug: string }) {
+async function onTemplateCreated(instance: {
+  id: string;
+  name: string;
+  slug: string;
+}) {
   await loadData();
   const created = instances.value.find((item) => item.id === instance.id);
   if (created) openInstance(created);
@@ -2117,7 +2127,10 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             </div>
             <div v-else class="quiet-empty">
               Nenhuma instância criada ainda.
-              <button class="button outline" @click="selectSection('templates')">
+              <button
+                class="button outline"
+                @click="selectSection('templates')"
+              >
                 <Sparkles :size="16" /> Criar com modelo pronto
               </button>
               <button class="text-button" @click="showInstanceForm = true">
@@ -2132,18 +2145,24 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             <div class="panel-header">
               <div>
                 <h2>Instâncias</h2>
-                <p>Crie do zero ou comece com um modelo pronto, que você poderá personalizar.</p>
+                <p>
+                  Crie do zero ou comece com um modelo pronto, que você poderá
+                  personalizar.
+                </p>
               </div>
               <div class="template-heading-actions">
-                <button class="button outline" @click="selectSection('templates')">
+                <button
+                  class="button outline"
+                  @click="selectSection('templates')"
+                >
                   <Sparkles :size="16" /> Escolher modelo
                 </button>
                 <div class="search-box">
-                                <Search :size="16" /><input
-                                  v-model="searchTerm"
-                                  placeholder="Buscar instância"
-                                />
-                              </div>
+                  <Search :size="16" /><input
+                    v-model="searchTerm"
+                    placeholder="Buscar instância"
+                  />
+                </div>
               </div>
             </div>
             <div v-if="filteredInstances.length" class="table-wrap">
@@ -2293,8 +2312,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                     class="button outline small-button"
                     @click="openSourceForm(source)"
                   >
-                    Editar fonte
-                  </button
+                    Editar fonte</button
                   ><button
                     class="button outline small-button"
                     @click="toggleSource(source)"
@@ -2775,7 +2793,10 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                   >
                     Criar instância
                   </button>
-                  <button class="button outline" @click="selectSection('templates')">
+                  <button
+                    class="button outline"
+                    @click="selectSection('templates')"
+                  >
                     <Sparkles :size="15" /> Usar modelo pronto
                   </button>
                 </div>
@@ -3127,7 +3148,13 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               placeholder="Para que será usada esta instância?"
             />
           </label>
-          <button class="button outline" @click="closeDialogs(); selectSection('templates')">
+          <button
+            class="button outline"
+            @click="
+              closeDialogs();
+              selectSection('templates');
+            "
+          >
             <Sparkles :size="16" /> Escolher modelo pronto
           </button>
           <div class="modal-actions">
@@ -3194,7 +3221,13 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               :disabled="busy || sourceForm.name.length < 2 || !sourceForm.url"
               @click="createSource"
             >
-              {{ busy ? "Salvando…" : editingSourceId ? "Salvar alterações" : "Salvar fonte" }}
+              {{
+                busy
+                  ? "Salvando…"
+                  : editingSourceId
+                    ? "Salvar alterações"
+                    : "Salvar fonte"
+              }}
             </button>
           </div></template
         >
