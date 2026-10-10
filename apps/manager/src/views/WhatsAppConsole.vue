@@ -13,6 +13,7 @@ import {
   Smartphone,
 } from "@lucide/vue";
 import { api } from "../api";
+import WhatsAppActions from "./WhatsAppActions.vue";
 
 type WhatsAppInstance = {
   id: string;
@@ -783,6 +784,8 @@ onUnmounted(() => {
         </p>
       </div>
     </section>
+
+    <WhatsAppActions v-if="configured" :instances="usableInstances" :role="props.role" @error="emit('error', $event)" @notify="emit('notify', $event)" />
 
     <section v-if="configured" class="panel">
       <div class="panel-header">
