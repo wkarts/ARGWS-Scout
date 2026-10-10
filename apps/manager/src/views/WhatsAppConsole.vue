@@ -59,6 +59,8 @@ const publications = ref<Publication[]>([]);
 const createName = ref("");
 const importName = ref("");
 const importToken = ref("");
+const claimName = ref("");
+const claimToken = ref("");
 const showCreate = ref(false);
 const showImport = ref(false);
 const connectionPayload = ref<unknown>(null);
@@ -225,17 +227,20 @@ async function importInstance() {
 }
 
 async function claimExistingInstance(instance: WhatsAppInstance) {
+  if (!claimToken.value.trim()) return;
   busy.value = true;
   try {
     await api("/whatsapp/instances/claim", {
       method: "POST",
-      body: JSON.stringify({ name: instance.name }),
+      body: JSON.stringify({ name: instance.name, token: claimToken.value }),
     });
+    claimName.value = "";
     emit("notify", "Vínculo da instância revalidado com seu token particular.");
     await refresh();
   } catch (error) {
     emit("error", error instanceof Error ? error.message : "Não foi possível revalidar esta instância.");
   } finally {
+    claimToken.value = "";
     busy.value = false;
   }
 }
@@ -518,7 +523,7 @@ onMounted(() => void refresh());
             v-if="canManage && !instance.usable && configured"
             class="button outline small-button"
             :disabled="busy"
-            @click="claimExistingInstance(instance)"
+            @click="claimName = claimName === instance.name ? '' : instance.name; claimToken = ''"
           >
             <RefreshCw :size="14" /> Revalidar vínculo
           </button>
@@ -553,12 +558,25 @@ onMounted(() => void refresh());
           <button
             v-if="canManage"
             class="button danger small-button"
-            :disabled="busy"
-            :aria-label="`Excluir ${instance.name}`"
+            :disabled="busy || !instance.usable"
+            :aria-label="`Excluir ${instance.displayName || instance.name}`"
             @click="deleteInstance(instance)"
           >
             <Trash2 :size="14" />Excluir
           </button>
+          <form
+            v-if="claimName === instance.name && !instance.usable"
+            class="wa-claim-form"
+            @submit.prevent="claimExistingInstance(instance)"
+          >
+            <label>
+              Token particular para revalidar o vínculo
+              <input v-model="claimToken" type="password" autocomplete="off"
+                minlength="8" required placeholder="Token exclusivo da instância" />
+            </label>
+            <button class="button primary" :disabled="busy || claimToken.length < 8">Revalidar</button>
+            <button type="button" class="button subtle" @click="claimName = ''; claimToken = ''">Cancelar</button>
+          </form>
         </article>
       </div>
       <div v-else class="empty-state compact">
@@ -816,4 +834,9 @@ onMounted(() => void refresh());
   .wa-instance-info { flex:1 1 100%; }
   .wa-instance-card .button { flex:1 1 135px; }
 }
+.wa-claim-form { flex:1 1 100%; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-top:1px solid #e8edf4; padding-top:12px; min-width:0; }
+.wa-claim-form label { display:grid; gap:6px; flex:1 1 240px; min-width:0; font-size:13px; color:#42536a; }
+.wa-claim-form input { width:100%; min-height:40px; border:1px solid #dfe6ef; border-radius:8px; padding:0 10px; }
+.wa-claim-form > button { flex:0 1 auto; }
+@media (max-width:500px) { .wa-claim-form > button { flex:1 1 110px; } }
 </style>
