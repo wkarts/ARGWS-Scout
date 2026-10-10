@@ -48,6 +48,7 @@ import {
 } from "./email.ts";
 import { consumeRecoveryCode, replaceRecoveryCodes } from "./mfa.ts";
 import { registerWhatsAppRoutes } from "./whatsapp-routes.ts";
+import { registerInvitationRoutes } from "./invitations.ts";
 import {
   authenticated,
   clearSessionCookies,
@@ -180,6 +181,7 @@ export async function registerRoutes(
   options: { prefix?: string; redis: Redis },
 ): Promise<void> {
   await registerWhatsAppRoutes(app);
+  await registerInvitationRoutes(app);
   app.post(
     "/integrations/smtp/test",
     {
