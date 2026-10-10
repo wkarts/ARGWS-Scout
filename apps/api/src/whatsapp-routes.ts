@@ -893,18 +893,20 @@ export async function registerWhatsAppRoutes(
       } catch {
         return fail(reply, 500, "LOCAL_DELETE_FAILED", "Não foi possível concluir a remoção local. Atualize e tente novamente.");
       }
-      await audit({
-        tenantId: tenant,
-        actorUserId: request.principal?.userId,
-        action: remotelyClaimed ? "whatsapp.instance.deleted" : "whatsapp.instance.unlinked",
-        resourceType: "whatsapp-instance",
-        resourceId: instance.id,
-        metadata: {
-          name: instance.name,
-          remoteResult,
-          // Tokens, numbers, payloads and full Connect configuration must not enter audit.
-        },
-      });
+      try {
+        await audit({
+          tenantId: tenant,
+          actorUserId: request.principal?.userId,
+          action: remotelyClaimed ? "whatsapp.instance.deleted" : "whatsapp.instance.unlinked",
+          resourceType: "whatsapp-instance",
+          resourceId: instance.id,
+          metadata: { name: instance.name, remoteResult },
+        });
+      } catch {
+        // The remote and local deletes have already been committed.
+        // Audit delivery problems must not turn success into a false HTTP 500.
+        request.log.warn({ requestId: request.id }, "Falha ao registrar auditoria da remoção de instância.");
+      }
       return {
         deleted: true,
         remoteDeleted: remoteResult === "removed" || remoteResult === "already-missing",
