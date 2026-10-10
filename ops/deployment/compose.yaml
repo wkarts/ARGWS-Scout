@@ -233,7 +233,7 @@ services:
       SCOUT_BOOTSTRAP_ADMIN_PASSWORD: ""
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.7.0}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.8.0}
       SCOUT_CONTENT_ENABLED: ${SCOUT_CONTENT_ENABLED:-false}
       SCOUT_CONTENT_ENGINE_KEY: ""
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
