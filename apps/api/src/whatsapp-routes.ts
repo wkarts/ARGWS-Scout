@@ -12,6 +12,7 @@ import { authenticated, hasRole, isManagerUser } from "./auth.ts";
 import {
   connectApiRequest,
   connectInstancePath,
+  connectPairingPath,
   connectSendTextPath,
   ConnectApiError,
   createWhatsAppInstancePayload,
@@ -33,7 +34,10 @@ const nameSchema = z
     /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u,
     "Use letras, números, espaço, ponto, hífen ou sublinhado no nome da instância.",
   );
-const createSchema = z.object({ name: nameSchema });
+const createSchema = z.object({
+  name: nameSchema,
+  provider: z.enum(["WHATSAPP-BAILEYS", "WHATSAPP-ZAPO"]).default("WHATSAPP-BAILEYS"),
+});
 const importSchema = z.object({
   name: nameSchema,
   token: z.string().trim().min(8).max(4096),
@@ -365,7 +369,7 @@ export async function registerWhatsAppRoutes(
             tenantId: tenant,
             name: remoteName,
             displayName: body.data.name,
-            integration: "WHATSAPP-BAILEYS",
+            integration: body.data.provider,
             tokenEncrypted: encryptSecret(token),
             connectionState: "connecting",
             present: false,
@@ -378,7 +382,7 @@ export async function registerWhatsAppRoutes(
           apiKey: auth.apiKey,
           path: "instance/create",
           method: "POST",
-          body: createWhatsAppInstancePayload(remoteName, token),
+          body: createWhatsAppInstancePayload(remoteName, token, body.data.provider),
         });
       } catch (error) {
         const mayHaveCreated = !(
@@ -721,13 +725,21 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NAME_INVALID",
           "Nome de instância inválido.",
         );
-      if (!["connect", "status", "restart", "logout"].includes(action))
+      if (!["connect", "pairing", "status", "restart", "logout"].includes(action))
         return fail(
           reply,
           404,
           "ACTION_NOT_FOUND",
           "Ação de instância não encontrada.",
         );
+      let pairingNumber: string | null = null;
+      if (action === "pairing") {
+        const body = z.object({ number: z.string().trim().min(8).max(24) }).safeParse(request.body);
+        if (!body.success) return fail(reply, 400, "PAIRING_NUMBER_REQUIRED", "Informe o número com DDI e DDD.");
+        pairingNumber = normalizedNumber(body.data.number);
+        if (!pairingNumber)
+          return fail(reply, 400, "PAIRING_NUMBER_INVALID", "Use telefone internacional com DDI, DDD e número.");
+      }
       const tenant = tenantId(request);
       const instance = await loadRemoteInstance(tenant, parsedName.data);
       if (!instance || !instance.tokenEncrypted)
@@ -753,14 +765,18 @@ export async function registerWhatsAppRoutes(
           ? "connectionState"
           : action === "logout"
             ? "logout"
-            : action;
+            : action === "pairing" ? "connect" : action;
       try {
         const result = await connectApiRequest<unknown>({
           baseUrl: auth.baseUrl,
           apiKey: token,
           method,
-          path: connectInstancePath(instance.name, apiAction),
+          path: action === "pairing" && pairingNumber
+            ? connectPairingPath(instance.name, pairingNumber)
+            : connectInstancePath(instance.name, apiAction),
         });
+        if (result && typeof result === "object" && (result as Record<string, unknown>).error === true)
+          return fail(reply, 502, "CONNECT_PAIRING_FAILED", "Não foi possível obter o QR Code ou código. Tente novamente.");
         if (action === "status") {
           const root =
             result && typeof result === "object"
@@ -771,7 +787,10 @@ export async function registerWhatsAppRoutes(
               ? (root.instance as Record<string, unknown>)
               : root;
           const state =
-            typeof detail.state === "string" ? detail.state : "unknown";
+            typeof detail.state === "string" ? detail.state
+              : typeof detail.status === "string" ? detail.status
+              : typeof detail.connectionStatus === "string" ? detail.connectionStatus
+              : "unknown";
           const updated = await prisma.connectApiInstance.update({
             where: { id: instance.id },
             data: { connectionState: state },
