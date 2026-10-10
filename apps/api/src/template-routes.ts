@@ -49,11 +49,9 @@ export async function registerTemplateRoutes(
     { preHandler: authenticated() },
     async (request, reply) => {
       if (!isManagerUser(request))
-        return reply
-          .code(403)
-          .send({
-            error: { code: "FORBIDDEN", message: "Use uma sessão do Manager." },
-          });
+        return reply.code(403).send({
+          error: { code: "FORBIDDEN", message: "Use uma sessão do Manager." },
+        });
       return { version: 1, data: listStarterTemplates() };
     },
   );
@@ -74,33 +72,27 @@ export async function registerTemplateRoutes(
           TenantRole.OPERATOR,
         )
       )
-        return reply
-          .code(403)
-          .send({
-            error: {
-              code: "FORBIDDEN",
-              message: "Esta ação exige acesso de operação.",
-            },
-          });
+        return reply.code(403).send({
+          error: {
+            code: "FORBIDDEN",
+            message: "Esta ação exige acesso de operação.",
+          },
+        });
       const params = z
         .object({ templateId: z.string().min(2).max(80) })
         .safeParse(request.params);
       if (!params.success)
-        return reply
-          .code(400)
-          .send({
-            error: { code: "VALIDATION_ERROR", message: "Modelo inválido." },
-          });
+        return reply.code(400).send({
+          error: { code: "VALIDATION_ERROR", message: "Modelo inválido." },
+        });
       const template = getStarterTemplate(params.data.templateId);
       if (!template)
-        return reply
-          .code(404)
-          .send({
-            error: {
-              code: "TEMPLATE_NOT_FOUND",
-              message: "Modelo não encontrado.",
-            },
-          });
+        return reply.code(404).send({
+          error: {
+            code: "TEMPLATE_NOT_FOUND",
+            message: "Modelo não encontrado.",
+          },
+        });
       const parsed = createFromTemplateSchema.safeParse(request.body);
       if (!parsed.success)
         return reply.code(400).send({
