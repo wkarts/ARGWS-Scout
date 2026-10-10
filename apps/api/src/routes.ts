@@ -997,20 +997,23 @@ export async function registerRoutes(
         );
       const body = parsed(profileUpdateSchema, request.body, reply);
       if (!body) return;
+      const previous = await prisma.user.findUnique({
+        where: { id: request.principal.userId! },
+        select: { profile: true },
+      });
+      const previousProfile = previous?.profile && typeof previous.profile === "object" && !Array.isArray(previous.profile)
+        ? previous.profile as Record<string, unknown> : {};
+      // Avatar storage keys cannot be provided by the client.
+      const { avatarKey: _ignoredAvatarKey, avatarType: _ignoredAvatarType, ...metadata } = body.profile;
+      const profile = { ...previousProfile, ...metadata,
+        phone: typeof metadata.phone === "string" ? metadata.phone.slice(0, 30) : (previousProfile.phone ?? ""),
+        locale: "pt-BR",
+      } as Prisma.InputJsonValue;
       const user = await prisma.user.update({
         where: { id: request.principal.userId },
         data: {
           name: body.name,
-          profile: {
-            ...(((
-              await prisma.user.findUnique({
-                where: { id: request.principal.userId! },
-                select: { profile: true },
-              })
-            )?.profile as Record<string, unknown>) ?? {}),
-            phone: body.profile.phone ?? "",
-            locale: "pt-BR",
-          } as Prisma.InputJsonValue,
+          profile,
         },
         select: { id: true, email: true, name: true, profile: true },
       });
