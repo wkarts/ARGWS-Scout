@@ -209,7 +209,6 @@ services:
     command: [pnpm, --filter, "@argws/scout-api", start]
     env_file: [.env]
     environment: &app-environment
-      # Senha da conta inicial existe somente no bootstrap.
       SCOUT_BOOTSTRAP_ADMIN_PASSWORD: ""
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
