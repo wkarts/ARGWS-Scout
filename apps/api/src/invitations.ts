@@ -245,15 +245,13 @@ export async function registerInvitationRoutes(
         resourceId: invitation.id,
         metadata: { role: invitation.role },
       });
-      return reply
-        .code(201)
-        .send({
-          invitation: {
-            id: invitation.id,
-            email,
-            expiresAt: invitation.expiresAt,
-          },
-        });
+      return reply.code(201).send({
+        invitation: {
+          id: invitation.id,
+          email,
+          expiresAt: invitation.expiresAt,
+        },
+      });
     },
   );
 
