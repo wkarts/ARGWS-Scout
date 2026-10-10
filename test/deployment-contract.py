@@ -33,6 +33,14 @@ for target in targets:
   for i,line in enumerate(lines):
    if re.match(r"\s+image:",line): assert lines[i+1].strip()=="pull_policy: always", f"{d}: images must be pulled on deploy"
   assert "configs:" not in y and "content: |" not in y, f"{d}: avoid Compose configs.content for Portainer compatibility"
+  assert "  bootstrap:" in y, f"{d}: initial OWNER bootstrap is required"
+  bootstrap=y.split("  bootstrap:",1)[1].split("  api:",1)[0]
+  assert "    profiles: [maintenance]" not in bootstrap, f"{d}: OWNER bootstrap must run automatically"
+  api_block=y.split("  api:",1)[1].split("  manager:",1)[0]
+  assert "      bootstrap: { condition: service_completed_successfully }" in api_block, f"{d}: API must wait for initial OWNER bootstrap"
+  browser_block=y.split("  browser-worker:",1)[1].split("  scheduler:",1)[0]
+  assert "SCOUT_BROWSER_CHROMIUM_SANDBOX: ${SCOUT_BROWSER_CHROMIUM_SANDBOX:-false}" in browser_block, f"{d}: browser must have explicit sandbox policy"
+  assert env.get("SCOUT_BROWSER_CHROMIUM_SANDBOX")=="false", f"{d}: unsupported sandbox mode must be explicit in env template"
   assert "garage-config-init:" in y and "cat > /config/garage.toml" in y, f"{d}: Garage config must be generated from this Compose file"
   config_init=y.split("  garage-config-init:",1)[1].split("  garage-init:",1)[0]
   assert "    environment:\n      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}" in config_init, f"{d}: Garage init must validate the runtime RPC secret"

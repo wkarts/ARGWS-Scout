@@ -84,6 +84,16 @@ assert init_meta.get("read_only") is True, (
     f"{folder}/garage-init: node metadata must be mounted read-only"
 )
 
+bootstrap_service = model["services"]["bootstrap"]
+assert not bootstrap_service.get("profiles"), f"{folder}: initial OWNER bootstrap cannot be maintenance-only"
+assert model["services"]["api"]["depends_on"]["bootstrap"]["condition"] == "service_completed_successfully", (
+    f"{folder}: API must not start before OWNER provisioning is checked"
+)
+browser_environment = model["services"]["browser-worker"].get("environment", {})
+assert browser_environment.get("SCOUT_BROWSER_CHROMIUM_SANDBOX") == "false", (
+    f"{folder}: unsupported Chromium sandbox must be explicitly disabled only in isolated browser-worker"
+)
+
 app_images = {
     "garage-config-init": "garage-init",
     "garage-init": "garage-init",
