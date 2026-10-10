@@ -2665,6 +2665,52 @@ export async function registerRoutes(
     },
   );
 
+  // Histórico integral dos erros HTTP autenticados, em páginas pequenas e
+  // sempre limitado ao espaço de trabalho do usuário administrador.
+  app.get(
+    "/ops/diagnostics/events",
+    { preHandler: authenticated() },
+    async (request, reply) => {
+      if (!(await mayAdmin(request, reply))) return;
+      const query = parsed(
+        z.object({
+          cursor: z.string().uuid().optional(),
+          limit: z.coerce.number().int().min(1).max(200).default(100),
+          days: z.coerce.number().int().min(1).max(30).default(7),
+          status: z.coerce.number().int().min(400).max(599).optional(),
+        }),
+        request.query,
+        reply,
+      );
+      if (!query) return;
+      const lowerBound = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
+      const rows = await prisma.diagnosticLog.findMany({
+        where: {
+          tenantId: tenantId(request),
+          createdAt: { gte: lowerBound },
+          ...(query.status !== undefined ? { statusCode: query.status } : {}),
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        ...(query.cursor ? { skip: 1, cursor: { id: query.cursor } } : {}),
+        take: query.limit + 1,
+        select: {
+          id: true,
+          requestId: true,
+          method: true,
+          route: true,
+          statusCode: true,
+          createdAt: true,
+        },
+      });
+      const page = rows.slice(0, query.limit);
+      return {
+        data: page,
+        nextCursor: rows.length > query.limit ? page.at(-1)?.id : null,
+        checkedAt: new Date().toISOString(),
+      };
+    },
+  );
+
   app.get(
     "/ops/health",
     { preHandler: authenticated() },
