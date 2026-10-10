@@ -16,6 +16,12 @@ O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migraçã
 
 Comandos úteis na raiz para desenvolvimento: `docker compose ps`, `docker compose logs -f api dispatcher worker browser-worker scheduler webhook-worker` e `docker compose exec api pnpm db:seed`. Em Dockge/Portainer use o estado e os logs do stack. Os pacotes publicados não dependem de scripts hospedados no servidor.
 
+## Identidade do build no GHCR
+
+O Manager e a API exibem a versão SemVer do pacote e também o canal e o prefixo SHA da revisão de código usada no build. Os argumentos `SCOUT_GIT_SHA` e `SCOUT_CHANNEL` são injetados pelo workflow de publicação e não dependem de valores antigos do `.env`. Se o painel indicar versões ou SHAs diferentes entre Manager e API, atualize a stack usando **uma mesma revisão** para todos os serviços de aplicação.
+
+A tag móvel `develop` pode manter o mesmo SemVer durante o desenvolvimento, mas seu SHA muda a cada publicação. As tags estáveis `0.5.x` devem apontar para uma revisão imutável; `stable` e `latest` são aliases atualizados por release.
+
 ## Diagnóstico e retenção de eventos
 
 O Scout registra erros HTTP autenticados em uma tabela de diagnóstico separada por espaço de trabalho, com identificador de requisição, método, rota e status. O endpoint `GET /api/v1/ops/diagnostics` fornece visão resumida dos últimos sete dias; as listas de eventos individuais são limitadas para não sobrecarregar o painel, mas os contadores exibem os totais.
