@@ -38,6 +38,7 @@ import { renderInputTemplate } from "@argws/scout-core";
 import { audit } from "./audit.ts";
 import { prisma } from "./db.ts";
 import { buildVersion } from "./version.ts";
+import { isProtectedUser } from "./protected-user.ts";
 import {
   recoverySmtpSettings,
   sendRecoveryEmail,
@@ -1121,13 +1122,14 @@ export async function registerRoutes(
             name: true,
             mfaEnabled: true,
             disabledAt: true,
+            isPlatformMaster: true,
             createdAt: true,
           },
         },
       },
       orderBy: { createdAt: "asc" },
     });
-    return { data: rows.map(({ role, user }) => ({ ...user, role })) };
+    return { data: rows.filter(({ user }) => !isProtectedUser(user)).map(({ role, user }) => ({ id: user.id, name: user.name, email: user.email, role, mfaEnabled: user.mfaEnabled, disabledAt: user.disabledAt, createdAt: user.createdAt })) };
   });
 
   app.post(
@@ -1147,7 +1149,11 @@ export async function registerRoutes(
       );
       if (!body) return;
       const email = body.email.toLowerCase();
+      if (isProtectedUser({ email, isPlatformMaster: false }))
+        return fail(reply, 403, "ACCOUNT_PROTECTED", "Esta conta não pode ser administrada por este recurso.");
       let user = await prisma.user.findUnique({ where: { email } });
+      if (user && isProtectedUser(user))
+        return fail(reply, 403, "ACCOUNT_PROTECTED", "Esta conta não pode ser administrada por este recurso.");
       if (
         user &&
         (await prisma.membership.findUnique({
@@ -1208,7 +1214,10 @@ export async function registerRoutes(
       const { userId } = request.params as { userId: string };
       const membership = await prisma.membership.findUnique({
         where: { tenantId_userId: { tenantId: tenantId(request), userId } },
+        include: { user: { select: { email: true, isPlatformMaster: true } } },
       });
+      if (membership && isProtectedUser(membership.user))
+        return fail(reply, 403, "ACCOUNT_PROTECTED", "Não é permitido alterar a autenticação desta conta.");
       if (!membership)
         return fail(
           reply,
