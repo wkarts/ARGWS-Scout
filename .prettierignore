@@ -1,0 +1,10 @@
+# Testes Python geram arquivos de diagnóstico e cache fora do código-fonte.
+.pytest_cache/
+**/.pytest_cache/
+**/__pycache__/
+**/*.pyc
+.mypy_cache/
+.ruff_cache/
+
+# Diretórios transitórios de serviços opcionais e ferramentas locais.
+apps/content-engine/output/
