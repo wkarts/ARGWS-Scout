@@ -1,0 +1,34 @@
+name: Temporary PR40 code formatting
+on:
+  push:
+    branches: [service-off-refinamento-10102026]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format modified TypeScript, Vue, JSON, YAML and Markdown files
+        run: pnpm exec prettier --write .github/ghcr-bases.json .github/workflows/ci.yml .github/workflows/ghcr-publish-application.yml CHANGELOG-INTEGRACAO-CONTEUDO.md README.md RELATORIO-INTEGRACAO.md apps/api/src/content-routes.ts apps/api/src/routes.ts apps/api/src/whatsapp-extensions.ts apps/api/src/whatsapp-routes.ts apps/content-engine/README.md apps/content-engine/examples/exemplo_com_multiplas_imagens.json apps/content-engine/examples/exemplo_generico.json apps/content-engine/examples/kabum_entrada_reconstituida.json apps/content-engine/examples/requisicao_api.json apps/content-worker/package.json apps/content-worker/src/worker.ts apps/content-worker/tsconfig.json apps/dispatcher/src/dispatcher.ts apps/docs/index.html apps/manager/src/App.vue apps/manager/src/views/ContentConsole.vue apps/manager/src/views/WhatsAppActions.vue apps/manager/src/views/WhatsAppConsole.vue apps/worker/src/execute-job.ts compose.yaml deploy/cloudpanel/develop/compose.yaml deploy/cloudpanel/production/compose.yaml deploy/docker/develop/compose.yaml deploy/docker/production/compose.yaml deploy/dockge/develop/compose.yaml deploy/dockge/production/compose.yaml deploy/portainer/develop/compose.yaml deploy/portainer/production/compose.yaml docs/content-refinement.md docs/deployment.md docs/openapi.yaml ops/deployment/compose.yaml packages/core/src/content-settings.ts packages/core/src/index.ts packages/extraction/src/index.ts packages/shared/src/storage.ts test/channel-action.integration.test.ts test/content-refinement.test.ts
+      - name: Commit only formatting of modified PR files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add .github/ghcr-bases.json .github/workflows/ci.yml .github/workflows/ghcr-publish-application.yml CHANGELOG-INTEGRACAO-CONTEUDO.md README.md RELATORIO-INTEGRACAO.md apps/api/src/content-routes.ts apps/api/src/routes.ts apps/api/src/whatsapp-extensions.ts apps/api/src/whatsapp-routes.ts apps/content-engine/README.md apps/content-engine/examples/exemplo_com_multiplas_imagens.json apps/content-engine/examples/exemplo_generico.json apps/content-engine/examples/kabum_entrada_reconstituida.json apps/content-engine/examples/requisicao_api.json apps/content-worker/package.json apps/content-worker/src/worker.ts apps/content-worker/tsconfig.json apps/dispatcher/src/dispatcher.ts apps/docs/index.html apps/manager/src/App.vue apps/manager/src/views/ContentConsole.vue apps/manager/src/views/WhatsAppActions.vue apps/manager/src/views/WhatsAppConsole.vue apps/worker/src/execute-job.ts compose.yaml deploy/cloudpanel/develop/compose.yaml deploy/cloudpanel/production/compose.yaml deploy/docker/develop/compose.yaml deploy/docker/production/compose.yaml deploy/dockge/develop/compose.yaml deploy/dockge/production/compose.yaml deploy/portainer/develop/compose.yaml deploy/portainer/production/compose.yaml docs/content-refinement.md docs/deployment.md docs/openapi.yaml ops/deployment/compose.yaml packages/core/src/content-settings.ts packages/core/src/index.ts packages/extraction/src/index.ts packages/shared/src/storage.ts test/channel-action.integration.test.ts test/content-refinement.test.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: normalize PR40 source, deployment YAML and documentation"
+          git push origin HEAD:refs/heads/service-off-refinamento-10102026
