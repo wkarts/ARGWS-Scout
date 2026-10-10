@@ -449,6 +449,64 @@ export async function registerWhatsAppRoutes(
     },
   );
 
+  // Existing workspace records are intentionally NOT claimed by migration:
+  // before changing their target to the global server, revalidate each scoped token.
+  app.post(
+    "/whatsapp/instances/claim",
+    { preHandler: authenticated(), config: { rateLimit: { max: 6, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+      const body = z.object({ name: nameSchema }).safeParse(request.body);
+      if (!body.success) return fail(reply, 400, "VALIDATION_ERROR", "Selecione uma instância válida.");
+      const tenant = tenantId(request);
+      const record = await prisma.connectApiInstance.findFirst({
+        where: { tenantId: tenant, name: body.data.name, present: true },
+      });
+      if (!record?.tokenEncrypted)
+        return fail(reply, 404, "INSTANCE_NOT_FOUND", "Vínculo indisponível neste espaço.");
+      const auth = credentials();
+      if (!auth)
+        return fail(reply, 409, "CONNECT_API_NOT_CONFIGURED", "Configure a conexão global no .env.");
+      const token = decryptSecret(record.tokenEncrypted);
+      if (token === auth.apiKey)
+        return fail(reply, 403, "INSTANCE_TOKEN_REQUIRED", "Esta instância precisa de token particular.");
+      const previous = await prisma.connectInstanceClaim.findUnique({ where: { name: record.name } });
+      if (previous && previous.tenantId !== tenant)
+        return fail(reply, 409, "INSTANCE_NOT_AVAILABLE", "A instância não pode ser vinculada neste espaço.");
+      try {
+        const response = await connectApiRequest<unknown>({
+          baseUrl: auth.baseUrl, apiKey: token,
+          path: `instance/fetchInstances?instanceName=${encodeURIComponent(record.name)}`,
+        });
+        const remote = normalizeConnectInstances(response).find((item) => item.name === record.name);
+        if (!remote || !isWhatsAppIntegration(remote.integration))
+          return fail(reply, 404, "INSTANCE_NOT_FOUND", "Token e instância não puderam ser confirmados.");
+        const updated = await prisma.$transaction(async (tx) => {
+          if (!previous) {
+            await tx.connectInstanceClaim.create({ data: { name: record.name, tenantId: tenant } });
+          }
+          return tx.connectApiInstance.update({
+            where: { id: record.id }, data: {
+              connectionState: remote.connectionState ?? "unknown",
+              integration: remote.integration,
+              displayName: record.displayName ?? record.name,
+            },
+          });
+        });
+        await audit({
+          tenantId: tenant, actorUserId: request.principal?.userId,
+          action: "whatsapp.instance.claimed", resourceType: "whatsapp-instance", resourceId: record.id,
+        });
+        return { instance: publicInstance(updated, true) };
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+          return fail(reply, 409, "INSTANCE_NOT_AVAILABLE", "A instância já pertence a outro espaço.");
+        const info = connectError(error);
+        return fail(reply, info.status, info.code, info.message);
+      }
+    },
+  );
+
   app.put(
     "/whatsapp/default",
     { preHandler: authenticated() },
