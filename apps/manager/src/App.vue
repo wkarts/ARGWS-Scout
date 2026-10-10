@@ -39,6 +39,7 @@ import { api, ApiError } from "./api";
 import AccessConsole from "./views/AccessConsole.vue";
 import OperationsConsole from "./views/OperationsConsole.vue";
 import WhatsAppConsole from "./views/WhatsAppConsole.vue";
+import TemplateCatalog from "./views/TemplateCatalog.vue";
 
 type Me = {
   user: {
@@ -69,6 +70,9 @@ type Source = {
   allowedHosts: string[];
   enabled: boolean;
   respectRobots: boolean;
+  selector?: string | null;
+  captureScreenshot?: boolean;
+  requestIntervalMs?: number;
 };
 type Job = {
   id: string;
@@ -166,6 +170,7 @@ const searchTerm = ref("");
 const toast = ref("");
 const showInstanceForm = ref(false);
 const showSourceForm = ref(false);
+const editingSourceId = ref<string | null>(null);
 const showJobForm = ref(false);
 const showScheduleForm = ref(false);
 const showWebhookForm = ref(false);
@@ -291,6 +296,7 @@ const title = computed(
     ({
       overview: "Visão geral",
       instances: "Instâncias",
+      templates: "Modelos prontos",
       jobs: "Execuções",
       schedules: "Agendamentos",
       webhooks: "Webhooks",
@@ -879,6 +885,36 @@ async function createInstance() {
   }
 }
 
+function openSourceForm(source?: Source) {
+  if (source) {
+    editingSourceId.value = source.id;
+    sourceForm.value = {
+      name: source.name,
+      engine: source.engine,
+      url: source.urlTemplate,
+      allowedHosts: source.allowedHosts.join(", "),
+      selector: source.selector ?? "",
+      respectRobots: source.respectRobots,
+      captureScreenshot: source.captureScreenshot ?? false,
+      requestIntervalMs: source.requestIntervalMs ?? 5000,
+    };
+  } else {
+    editingSourceId.value = null;
+    sourceForm.value = {
+      name: "", engine: "HTTP", url: "", allowedHosts: "", selector: "",
+      respectRobots: true, captureScreenshot: false, requestIntervalMs: 5000,
+    };
+  }
+  showSourceForm.value = true;
+}
+
+async function onTemplateCreated(instance: { id: string; name: string; slug: string }) {
+  await loadData();
+  const created = instances.value.find((item) => item.id === instance.id);
+  if (created) openInstance(created);
+  else selectSection("instances");
+}
+
 async function createSource() {
   if (!selectedInstance.value) return;
   busy.value = true;
@@ -894,11 +930,16 @@ async function createSource() {
         host,
       ]),
     ];
-    await api(`/instances/${selectedInstance.value.id}/sources`, {
-      method: "POST",
+    const endpoint = editingSourceId.value
+      ? `/sources/${editingSourceId.value}`
+      : `/instances/${selectedInstance.value.id}/sources`;
+    const updatedExisting = Boolean(editingSourceId.value);
+    await api(endpoint, {
+      method: updatedExisting ? "PATCH" : "POST",
       body: JSON.stringify({ ...sourceForm.value, allowedHosts }),
     });
     showSourceForm.value = false;
+    editingSourceId.value = null;
     sourceForm.value = {
       name: "",
       engine: "HTTP",
@@ -911,7 +952,7 @@ async function createSource() {
     };
     await loadInstanceData();
     await loadData();
-    notify("Fonte adicionada.");
+    notify(updatedExisting ? "Fonte atualizada." : "Fonte adicionada.");
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao adicionar fonte.";
   } finally {
@@ -1241,6 +1282,7 @@ function closeDialogs() {
   mfaRecoveryCodes.value = [];
   showInstanceForm.value = false;
   showSourceForm.value = false;
+  editingSourceId.value = null;
   showJobForm.value = false;
   showScheduleForm.value = false;
   showWebhookForm.value = false;
@@ -1757,6 +1799,12 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <span class="nav-count">{{ instances.length }}</span>
         </button>
         <button
+          :class="{ active: activeSection === 'templates' }"
+          @click="selectSection('templates')"
+        >
+          <Sparkles :size="18" /> Modelos prontos
+        </button>
+        <button
           :class="{ active: activeSection === 'jobs' }"
           @click="selectSection('jobs')"
         >
@@ -2069,6 +2117,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             </div>
             <div v-else class="quiet-empty">
               Nenhuma instância criada ainda.
+              <button class="button outline" @click="selectSection('templates')">
+                <Sparkles :size="16" /> Criar com modelo pronto
+              </button>
               <button class="text-button" @click="showInstanceForm = true">
                 Criar agora <ArrowRight :size="14" />
               </button>
@@ -2081,13 +2132,18 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             <div class="panel-header">
               <div>
                 <h2>Instâncias</h2>
-                <p>Organize fontes por cliente, operação ou objetivo.</p>
+                <p>Crie do zero ou comece com um modelo pronto, que você poderá personalizar.</p>
               </div>
-              <div class="search-box">
-                <Search :size="16" /><input
-                  v-model="searchTerm"
-                  placeholder="Buscar instância"
-                />
+              <div class="template-heading-actions">
+                <button class="button outline" @click="selectSection('templates')">
+                  <Sparkles :size="16" /> Escolher modelo
+                </button>
+                <div class="search-box">
+                                <Search :size="16" /><input
+                                  v-model="searchTerm"
+                                  placeholder="Buscar instância"
+                                />
+                              </div>
               </div>
             </div>
             <div v-if="filteredInstances.length" class="table-wrap">
@@ -2161,7 +2217,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                   @click="showTokenDialog = true"
                 >
                   <KeyRound :size="16" /> Tokens de API</button
-                ><button class="button primary" @click="showSourceForm = true">
+                ><button class="button primary" @click="openSourceForm()">
                   <Plus :size="16" /> Adicionar fonte
                 </button>
               </div>
@@ -2203,7 +2259,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                 </div>
                 <button
                   class="button primary small-button"
-                  @click="showSourceForm = true"
+                  @click="openSourceForm()"
                 >
                   <Plus :size="15" /> Adicionar fonte
                 </button>
@@ -2235,6 +2291,12 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                     <Sparkles :size="14" /> Executar</button
                   ><button
                     class="button outline small-button"
+                    @click="openSourceForm(source)"
+                  >
+                    Editar fonte
+                  </button
+                  ><button
+                    class="button outline small-button"
                     @click="toggleSource(source)"
                   >
                     {{ source.enabled ? "Pausar" : "Ativar" }}
@@ -2248,7 +2310,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                   Use HTTP para páginas públicas simples ou Browser para páginas
                   renderizadas com JavaScript.
                 </p>
-                <button class="button primary" @click="showSourceForm = true">
+                <button class="button primary" @click="openSourceForm()">
                   <Plus :size="16" /> Configurar fonte
                 </button>
               </div>
@@ -2509,6 +2571,15 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           </template>
         </template>
 
+        <template v-else-if="activeSection === 'templates'">
+          <TemplateCatalog
+            :role="me.role"
+            @notify="notify"
+            @error="error = $event"
+            @created="onTemplateCreated"
+          />
+        </template>
+
         <template v-else-if="activeSection === 'jobs'"
           ><section class="panel">
             <div class="panel-header">
@@ -2703,6 +2774,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                     "
                   >
                     Criar instância
+                  </button>
+                  <button class="button outline" @click="selectSection('templates')">
+                    <Sparkles :size="15" /> Usar modelo pronto
                   </button>
                 </div>
               </article>
@@ -3053,6 +3127,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               placeholder="Para que será usada esta instância?"
             />
           </label>
+          <button class="button outline" @click="closeDialogs(); selectSection('templates')">
+            <Sparkles :size="16" /> Escolher modelo pronto
+          </button>
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Cancelar</button
             ><button
@@ -3066,7 +3143,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         >
         <template v-else-if="showSourceForm"
           ><p class="eyebrow">{{ selectedInstance?.name }}</p>
-          <h2>Adicionar fonte</h2>
+          <h2>{{ editingSourceId ? "Editar fonte" : "Adicionar fonte" }}</h2>
           <p class="muted">
             Somente o host informado fica permitido para a coleta.
           </p>
@@ -3117,7 +3194,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
               :disabled="busy || sourceForm.name.length < 2 || !sourceForm.url"
               @click="createSource"
             >
-              {{ busy ? "Salvando…" : "Salvar fonte" }}
+              {{ busy ? "Salvando…" : editingSourceId ? "Salvar alterações" : "Salvar fonte" }}
             </button>
           </div></template
         >
