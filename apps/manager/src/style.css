@@ -2076,3 +2076,49 @@ tbody tr:hover {
   line-height: 1.5;
   font-size: 12px;
 }
+
+/* Corrige a faixa vazia: coluna principal ocupa a largura disponível;
+   o rodapé pertence ao mesmo eixo vertical, nunca a um terceiro item flex. */
+html, body, #app { width: 100%; min-width: 0; min-height: 100%; }
+body { overflow-x: hidden; }
+.app-shell { width: 100%; max-width: 100%; min-width: 0; align-items: stretch; overflow: clip; }
+.main-column { flex: 1 1 0%; width: auto; max-width: calc(100% - 246px); min-width: 0; }
+.main-column > .page-content { flex: 1 0 auto; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.main-column > .app-footer { flex: 0 0 auto; min-width: 0; width: 100%; max-width: 100%; }
+.page-heading > div, .panel, .panel-header, .guide-panel, .guide-steps,
+.guide-steps article, .guide-steps article > div { min-width: 0; max-width: 100%; }
+.guide-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.guide-steps article { align-items: flex-start; overflow-wrap: anywhere; }
+.guide-steps article > div { flex: 1; }
+.guide-steps .button { max-width: 100%; height: auto; min-height: 40px; white-space: normal; text-align: center; }
+.page-heading .heading-actions { min-width: 0; flex-wrap: wrap; }
+.breadcrumbs { min-width: 0; overflow: hidden; }
+.breadcrumbs > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar { min-width: 0; max-width: 100%; }
+.topbar > .top-actions { flex: none; min-width: 0; }
+@media (max-width: 760px) {
+  .app-shell { overflow: clip; }
+  .main-column { width: 100%; max-width: 100%; margin-left: 0; flex-basis: 100%; }
+  .page-content { padding: clamp(12px, 3vw, 22px); }
+  .page-heading { width: 100%; }
+  .guide-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); padding: 14px; gap: 12px; }
+  .guide-steps article { padding: 15px; gap: 10px; }
+  .topbar { gap: 8px; padding-inline: 12px; }
+  .breadcrumbs { flex: 1 1 0%; margin: 0; gap: 7px; }
+  .top-actions { gap: 4px; }
+  .main-column > .app-footer { gap: 6px; align-items: flex-start; flex-wrap: wrap; padding: 9px 14px 16px; line-height: 1.45; }
+}
+@media (max-width: 500px) {
+  .breadcrumbs > span:first-child, .breadcrumbs > .crumb-sep { display: none; }
+  .breadcrumbs { font-size: 12px; }
+  .guide-steps { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .guide-steps article { width: 100%; }
+  .panel-header { align-items: flex-start; }
+  .panel-header > .button, .panel-header > a.button { max-width: 100%; }
+  .main-column > .app-footer { font-size: 11px; }
+}
+@media (max-width: 360px) {
+  .topbar { padding-inline: 8px; }
+  .page-content { padding-inline: 10px; }
+  .guide-steps { padding: 10px; }
+}
