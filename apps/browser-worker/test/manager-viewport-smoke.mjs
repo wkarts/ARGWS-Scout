@@ -44,7 +44,7 @@ try {
     await page.locator(".main-column").waitFor({ timeout: 15000 });
     if (width <= 760) await page.getByRole("button", { name: "Abrir menu" }).click();
     await page.getByRole("button", { name: "Primeiros passos", exact: true }).click();
-    if (width <= 760) await page.getByRole("button", { name: "Fechar menu" }).click();
+    // selectSection closes the mobile drawer itself; do not click a now-hidden close control.
     await page.getByText("Da primeira busca à publicação").waitFor({ timeout: 15000 });
     await page.screenshot({ path: dir + "/scout-" + width + ".png", fullPage: true });
     const g = await page.evaluate(() => {
