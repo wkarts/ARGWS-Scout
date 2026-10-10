@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sourceCreateSchema } from "@argws/scout-schemas";
+import { sourceCreateSchema } from "../packages/schemas/src/index.ts";
 import {
   STARTER_TEMPLATES,
   getStarterTemplate,
