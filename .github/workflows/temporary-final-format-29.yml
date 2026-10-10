@@ -1,0 +1,39 @@
+name: Temporary Scout PR formatter
+on:
+  push:
+    branches: [feat/scout-manager-account-security-onboarding-20261009]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format changed source files
+        shell: bash
+        run: |
+          pnpm exec prettier --write apps/api/src/invitations.ts apps/api/src/protected-user.ts apps/api/src/routes.ts apps/api/src/server.ts apps/api/src/version.ts apps/manager/src/App.vue apps/manager/src/style.css apps/manager/src/views/AccessConsole.vue apps/manager/src/views/OperationsConsole.vue apps/docs/index.html apps/docs/first-steps.html apps/docs/user-guide.html apps/scheduler/src/scheduler.ts packages/schemas/src/index.ts prisma/seed.ts test/protected-user.test.ts test/workspace-provision.test.ts docs/first-steps.md docs/user-manual.md docs/workspace-isolation.md docs/deployment.md docs/operations.md
+      - name: Commit normalized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add apps/api/src/invitations.ts apps/api/src/protected-user.ts apps/api/src/routes.ts apps/api/src/server.ts apps/api/src/version.ts apps/manager/src/App.vue apps/manager/src/style.css apps/manager/src/views/AccessConsole.vue apps/manager/src/views/OperationsConsole.vue apps/docs/index.html apps/docs/first-steps.html apps/docs/user-guide.html apps/scheduler/src/scheduler.ts packages/schemas/src/index.ts prisma/seed.ts test/protected-user.test.ts test/workspace-provision.test.ts docs/first-steps.md docs/user-manual.md docs/workspace-isolation.md docs/deployment.md docs/operations.md
+          if git diff --cached --quiet; then
+            echo "All changed files are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: apply canonical Prettier formatting before Scout PR review"
+          git push origin HEAD:refs/heads/feat/scout-manager-account-security-onboarding-20261009
