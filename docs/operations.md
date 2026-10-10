@@ -6,6 +6,17 @@ O Compose raiz é o ambiente de desenvolvimento local e mapeia Postgres, Redis, 
 
 Em produção, use domínio HTTPS, SCOUT_COOKIE_SECURE=true, SCOUT_ALLOW_HTTP=false, CORS restrito e SCOUT_TRUST_PROXY_HOPS compatível com o proxy. Só Manager publica porta e o bind é 127.0.0.1. CloudPanel termina TLS e encaminha para o gateway.
 
+## Connect|API global
+
+Configure **uma única** conexão no ambiente da API:
+
+```dotenv
+SCOUT_CONNECT_API_URL=https://connect.exemplo.com.br
+SCOUT_CONNECT_API_TOKEN=TOKEN_ADMINISTRATIVO
+```
+
+Somente o serviço `api` recebe as credenciais; workers e serviços temporários têm essas variáveis zeradas no Compose. Nenhum formulário permite configurar URL/token global no Manager. Cada espaço tem suas próprias instâncias WhatsApp, com tokens particulares cifrados e nomes remotos reservados globalmente. Ações e sincronizações consultam somente os registros reivindicados pelo espaço. Consulte [Connect|API](whatsapp-connect-api.md) para migração de vínculos antigos sem perder dados.
+
 ## E-mail
 
 Configure `SCOUT_RECOVERY_SMTP_HOST`, `PORT`, `SECURE`, `USERNAME`, `PASSWORD`, `FROM_EMAIL` e `FROM_NAME` no `.env` para redefinição de senha. Esse relay é global e usado apenas para recuperação; mantenha seu segredo no mesmo cofre do `.env`. Cada organização configura seu SMTP de envio em **Configurações** do Manager, separado do relay de recuperação. `SECURE=true` representa TLS implícito; com `false`, a API exige STARTTLS. A integração por organização é testável pelo painel e a senha fica cifrada com `SCOUT_ENCRYPTION_KEY_BASE64`.
