@@ -168,6 +168,8 @@ services:
     command: [sh, -lc, "pnpm db:generate && pnpm db:migrate"]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_BOOTSTRAP_ADMIN_PASSWORD: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
@@ -189,6 +191,8 @@ services:
     command: [pnpm, db:seed]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
@@ -278,6 +282,8 @@ services:
     command: [pnpm, --filter, "@argws/scout-dispatcher", start]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
@@ -299,6 +305,8 @@ services:
     command: [pnpm, --filter, "@argws/scout-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
@@ -329,6 +337,8 @@ services:
     command: [pnpm, --filter, "@argws/scout-browser-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
@@ -354,6 +364,8 @@ services:
     command: [pnpm, --filter, "@argws/scout-scheduler", start]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
@@ -374,6 +386,8 @@ services:
     command: [pnpm, --filter, "@argws/scout-webhook-worker", start]
     env_file: [.env]
     environment:
+      SCOUT_CONNECT_API_URL: ""
+      SCOUT_CONNECT_API_TOKEN: ""
       SCOUT_RECOVERY_SMTP_HOST: ""
       SCOUT_RECOVERY_SMTP_PORT: ""
       SCOUT_RECOVERY_SMTP_SECURE: ""
