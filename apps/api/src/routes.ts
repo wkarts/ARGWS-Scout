@@ -2330,11 +2330,29 @@ export async function registerRoutes(
     },
   );
 
+  async function excludedMasterIds(): Promise<string[]> {
+    const configured = process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+    const rows = await prisma.user.findMany({
+      where: {
+        OR: [{ isPlatformMaster: true }, ...(configured ? [{ email: configured }] : [])],
+      },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   app.get("/audit", { preHandler: authenticated() }, async (request, reply) => {
     if (!(await mayAdmin(request, reply))) return;
     const { cursor } = request.query as { cursor?: string };
+    const excluded = await excludedMasterIds();
     const data = await prisma.auditLog.findMany({
-      where: { tenantId: tenantId(request) },
+      where: {
+        tenantId: tenantId(request),
+        ...(excluded.length ? { NOT: [
+          { actorUserId: { in: excluded } },
+          { resourceId: { in: excluded } },
+        ] } : {}),
+      },
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       take: 100,
       orderBy: { createdAt: "desc" },
@@ -2346,6 +2364,7 @@ export async function registerRoutes(
     if (!(await mayAdmin(request, reply))) return;
     const owner = tenantId(request);
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const excluded = await excludedMasterIds();
     const [errors, failedJobs, recentAudit, failedDeliveries, counters] = await Promise.all([
       prisma.diagnosticLog.findMany({
         where: { tenantId: owner, createdAt: { gte: since } },
@@ -2358,7 +2377,7 @@ export async function registerRoutes(
         orderBy: { createdAt: "desc" }, take: 100,
         select: { id: true, status: true, errorCode: true, attempts: true, createdAt: true, finishedAt: true, source: { select: { name: true } } },
       }),
-      prisma.auditLog.findMany({ where: { tenantId: owner, createdAt: { gte: since } }, orderBy: { createdAt: "desc" }, take: 100,
+      prisma.auditLog.findMany({ where: { tenantId: owner, createdAt: { gte: since }, ...(excluded.length ? { NOT: [{ actorUserId: { in: excluded } }, { resourceId: { in: excluded } }] } : {}) }, orderBy: { createdAt: "desc" }, take: 100,
         select: { id: true, action: true, resourceType: true, resourceId: true, createdAt: true } }),
       prisma.webhookDelivery.findMany({ where: { webhook: { tenantId: owner }, status: "FAILED", createdAt: { gte: since } },
         orderBy: { createdAt: "desc" }, take: 100,
