@@ -9,6 +9,7 @@ import re
 import secrets
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 from urllib.parse import urlparse
 
 TOOL_VERSION = "1.0.2"
@@ -97,7 +98,23 @@ def validate_runtime_settings(
     smtp_password: str,
     smtp_from_email: str,
     smtp_from_name: str,
+    connect_api_url: str = "",
+    connect_api_token: str = "",
 ) -> None:
+    if bool(connect_api_url) != bool(connect_api_token):
+        raise ValueError("Connect|API exige URL HTTPS e token juntos, ou ambos vazios.")
+    if connect_api_url:
+        if any(char.isspace() for char in connect_api_url):
+            raise ValueError("A URL da Connect|API não pode conter espaços.")
+        endpoint = urlsplit(connect_api_url)
+        if (
+            endpoint.scheme != "https" or not endpoint.hostname
+            or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment
+            or endpoint.port not in (None, 443)
+        ):
+            raise ValueError("Connect|API exige URL HTTPS pública sem credenciais, consulta ou porta diferente de 443.")
+    if connect_api_token and len(connect_api_token) > 4096:
+        raise ValueError("O token Connect|API deve ter no máximo 4096 caracteres.")
     if not 40000 <= manager_port <= 49999:
         raise ValueError("A porta do Manager deve ter cinco dígitos e começar com 4 (40000 a 49999).")
     if not 1 <= browser_concurrency <= 16:
@@ -140,6 +157,8 @@ def render_env(
     smtp_password: str = "",
     smtp_from_email: str = "",
     smtp_from_name: str = "ARGWS Scout",
+    connect_api_url: str = "",
+    connect_api_token: str = "",
 ) -> str:
     replacements = {key: factory() for key, factory in SECRET_VALUES.items()}
     replacements.update(
@@ -149,6 +168,8 @@ def render_env(
             "SCOUT_PUBLIC_URL": public_url.rstrip("/"),
             "SCOUT_MANAGER_PORT": str(manager_port),
             "SCOUT_BROWSER_CONCURRENCY": str(browser_concurrency),
+            "SCOUT_CONNECT_API_URL": connect_api_url.rstrip("/"),
+            "SCOUT_CONNECT_API_TOKEN": connect_api_token,
             "SCOUT_RECOVERY_SMTP_HOST": smtp_host,
             "SCOUT_RECOVERY_SMTP_PORT": str(smtp_port),
             "SCOUT_RECOVERY_SMTP_SECURE": smtp_secure,
@@ -205,6 +226,7 @@ def generate(args: argparse.Namespace) -> int:
         recovery_smtp_password = (
             sys.stdin.readline().rstrip("\r\n") if args.recovery_smtp_password_stdin else ""
         )
+        connect_api_token = sys.stdin.readline().rstrip("\r\n") if args.connect_api_token_stdin else ""
         validate_runtime_settings(
             manager_port=manager_port,
             browser_concurrency=args.browser_concurrency,
@@ -215,6 +237,8 @@ def generate(args: argparse.Namespace) -> int:
             smtp_password=recovery_smtp_password,
             smtp_from_email=args.recovery_smtp_from_email.strip(),
             smtp_from_name=args.recovery_smtp_from_name.strip(),
+            connect_api_url=args.connect_api_url.strip(),
+            connect_api_token=connect_api_token,
         )
         root = project_root()
         template_dir = root / "deploy" / args.target / args.environment
@@ -254,6 +278,8 @@ def generate(args: argparse.Namespace) -> int:
                 smtp_password=recovery_smtp_password,
                 smtp_from_email=args.recovery_smtp_from_email.strip(),
                 smtp_from_name=args.recovery_smtp_from_name.strip(),
+                connect_api_url=args.connect_api_url.strip(),
+                connect_api_token=connect_api_token,
             )
         compose_path.write_text(compose_template.read_text(encoding="utf-8"), encoding="utf-8")
         if generated_env is not None:
@@ -330,6 +356,8 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
             smtp_password=env.get("SCOUT_RECOVERY_SMTP_PASSWORD", ""),
             smtp_from_email=env.get("SCOUT_RECOVERY_SMTP_FROM_EMAIL", ""),
             smtp_from_name=env.get("SCOUT_RECOVERY_SMTP_FROM_NAME", "ARGWS Scout"),
+            connect_api_url=env.get("SCOUT_CONNECT_API_URL", ""),
+            connect_api_token=env.get("SCOUT_CONNECT_API_TOKEN", ""),
         )
         for bind in (
             "./volumes/postgres:", "./volumes/redis:", "./volumes/rabbitmq:",
@@ -370,6 +398,8 @@ def build_parser() -> argparse.ArgumentParser:
     make.add_argument("--recovery-smtp-password-stdin", action="store_true", help="Lê a senha SMTP de stdin para não expor segredos na linha de comando")
     make.add_argument("--recovery-smtp-from-email", default="")
     make.add_argument("--recovery-smtp-from-name", default="ARGWS Scout")
+    make.add_argument("--connect-api-url", default="", help="URL HTTPS global do Connect|API")
+    make.add_argument("--connect-api-token-stdin", action="store_true", help="Lê o token administrativo Connect|API de stdin, sem expor o segredo na linha de comando")
     make.add_argument("--tenant-name", default="Minha organização")
     make.add_argument("--tenant-slug", default="minha-organizacao")
     make.add_argument("--admin-name", default="Administrador")
