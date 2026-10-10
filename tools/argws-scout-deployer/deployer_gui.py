@@ -78,6 +78,8 @@ class DeployerWindow(tk.Tk):
             "recovery_smtp_password": tk.StringVar(),
             "recovery_smtp_from_email": tk.StringVar(),
             "recovery_smtp_from_name": tk.StringVar(value="ARGWS Scout"),
+            "connect_api_url": tk.StringVar(),
+            "connect_api_token": tk.StringVar(),
             "tenant_name": tk.StringVar(value="Minha organização"),
             "tenant_slug": tk.StringVar(value="minha-organizacao"),
             "admin_name": tk.StringVar(value="Administrador"),
@@ -100,8 +102,10 @@ class DeployerWindow(tk.Tk):
         tabs.pack(fill="x")
         form = ttk.Frame(tabs, padding=16)
         smtp_form = ttk.Frame(tabs, padding=16)
+        connect_form = ttk.Frame(tabs, padding=16)
         tabs.add(form, text="Instalação")
         tabs.add(smtp_form, text="Recuperação de senha (SMTP)")
+        tabs.add(connect_form, text="Connect|API")
         self._combo(form, "Plataforma", "target", ("docker", "dockge", "cloudpanel", "portainer"), 0)
         self._combo(form, "Ambiente", "environment", ("develop", "production"), 1)
         self._entry(form, "URL pública", "public_url", 2)
@@ -129,6 +133,16 @@ class DeployerWindow(tk.Tk):
             wraplength=600,
             foreground="#667085",
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+        self._entry(connect_form, "URL HTTPS", "connect_api_url", 0)
+        self._entry(connect_form, "Token administrativo", "connect_api_token", 1, secret=True)
+        ttk.Label(
+            connect_form,
+            text="Uma conexão global para a plataforma. Cada espaço administra suas próprias instâncias e tokens de canal.\n"
+                 "Informe ambos os campos ou deixe ambos vazios para configurar depois. "
+                 "A chave não será enviada como argumento da linha de comando.",
+            wraplength=600, justify="left", foreground="#667085",
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.vars["target"].trace_add("write", self._update_port)
         self.vars["environment"].trace_add("write", self._update_port)
@@ -231,15 +245,24 @@ class DeployerWindow(tk.Tk):
             "--recovery-smtp-username", self.vars["recovery_smtp_username"].get().strip(),
             "--recovery-smtp-from-email", self.vars["recovery_smtp_from_email"].get().strip(),
             "--recovery-smtp-from-name", self.vars["recovery_smtp_from_name"].get().strip(),
+            "--connect-api-url", self.vars["connect_api_url"].get().strip(),
             "--tenant-name", self.vars["tenant_name"].get().strip(),
             "--tenant-slug", self.vars["tenant_slug"].get().strip(),
             "--admin-name", self.vars["admin_name"].get().strip(),
             "--admin-email", self.vars["admin_email"].get().strip(),
         ]
-        password = self.vars["recovery_smtp_password"].get()
-        if password:
+        smtp_password = self.vars["recovery_smtp_password"].get()
+        connect_token = self.vars["connect_api_token"].get()
+        connect_url = self.vars["connect_api_url"].get().strip()
+        if bool(connect_url) != bool(connect_token):
+            messagebox.showerror("Connect|API", "Informe a URL HTTPS e o token juntos.")
+            return
+        if smtp_password:
             args.append("--recovery-smtp-password-stdin")
-        self._run(args, stdin_data=password if password else None)
+        if connect_token:
+            args.append("--connect-api-token-stdin")
+        secret_lines = [value for value in (smtp_password, connect_token) if value]
+        self._run(args, stdin_data="\n".join(secret_lines) if secret_lines else None)
 
     def validate(self) -> None:
         self._run(["validate", "--directory", self.vars["output"].get()])
