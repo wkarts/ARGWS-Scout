@@ -10,6 +10,7 @@ const entries = [
   ["architecture", "Arquitetura"],
   ["manager", "Manager"],
   ["connectors", "Conectores"],
+  ["instance-templates", "Modelos prontos"],
   ["whatsapp-connect-api", "Connect|API"],
   ["security", "Segurança"],
   ["deployment", "Implantação"],
