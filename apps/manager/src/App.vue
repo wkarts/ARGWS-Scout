@@ -2470,7 +2470,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 
         <template v-else-if="activeSection === 'guide'">
           <section class="panel guide-panel">
-            <div class="panel-header"><div><h2>Da primeira busca à publicação</h2><p>Conheça o fluxo completo com orientações práticas.</p></div><a class="button subtle" href="/docs/guides/first-steps.md" target="_blank" rel="noopener noreferrer">Guia detalhado <ExternalLink :size="15" /></a></div>
+            <div class="panel-header"><div><h2>Da primeira busca à publicação</h2><p>Conheça o fluxo completo com orientações práticas.</p></div><a class="button subtle" href="/docs/first-steps.html" target="_blank" rel="noopener noreferrer">Guia detalhado <ExternalLink :size="15" /></a></div>
             <div class="guide-steps">
               <article><span>01</span><div><h3>Organize suas coletas</h3><p>Crie uma instância para agrupar fontes, execuções e automações.</p><button class="button primary" @click="selectSection('instances'); showInstanceForm = true">Criar instância</button></div></article>
               <article><span>02</span><div><h3>Cadastre um site público</h3><p>Informe uma URL HTTPS e os hosts permitidos. Respeite as regras de acesso do site.</p><button class="button outline" @click="selectSection('instances'); activeTab = 'sources'">Ir para fontes</button></div></article>
