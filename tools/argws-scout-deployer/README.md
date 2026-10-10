@@ -42,10 +42,10 @@ Para abrir a interface, execute `argws-scout-deployer-gui-win-x64.exe` depois de
 
 | Alvo       | Develop | Produção |
 | ---------- | ------: | -------: |
-| Docker     |    48080 |     48180 |
-| Dockge     |    48081 |     48181 |
-| CloudPanel |    48082 |     48182 |
-| Portainer  |    48083 |     48183 |
+| Docker     |   48080 |    48180 |
+| Dockge     |   48081 |    48181 |
+| CloudPanel |   48082 |    48182 |
+| Portainer  |   48083 |    48183 |
 
 ## Parâmetros de SMTP via CLI
 
