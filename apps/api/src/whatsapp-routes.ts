@@ -22,6 +22,7 @@ import {
   sendWhatsAppTextPayload,
 } from "./connect-api.ts";
 import { globalConnectSettings, remoteInstanceName } from "./global-connect.ts";
+import { deleteRemoteInstance } from "./connect-deletion.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
 const publisherRoles = [...adminRoles, TenantRole.OPERATOR];
@@ -820,62 +821,95 @@ export async function registerWhatsAppRoutes(
 
   app.delete(
     "/whatsapp/instances/:name",
-    { preHandler: authenticated() },
+    { preHandler: authenticated(), config: { rateLimit: { max: 12, timeWindow: "15 minutes" } } },
     async (request, reply) => {
       if (!(await requireAdmin(request, reply))) return;
       const { name } = request.params as { name: string };
-      const parsedName = nameSchema.safeParse(decodeURIComponent(name));
+      const parsedName = nameSchema.safeParse(name);
       if (!parsedName.success)
-        return fail(
-          reply,
-          400,
-          "INSTANCE_NAME_INVALID",
-          "Nome de instância inválido.",
-        );
+        return fail(reply, 400, "INSTANCE_NAME_INVALID", "Nome de instância inválido.");
       const tenant = tenantId(request);
-      const auth = credentials();
-      const instance = await loadRemoteInstance(tenant, parsedName.data);
-      if (!auth || !instance)
-        return fail(
-          reply,
-          404,
-          "INSTANCE_NOT_FOUND",
-          "Instância não encontrada nesta organização.",
-        );
+      const instance = await prisma.connectApiInstance.findFirst({
+        where: { tenantId: tenant, name: parsedName.data, present: true },
+      });
+      if (!instance)
+        return fail(reply, 404, "INSTANCE_NOT_FOUND", "Instância indisponível neste espaço.");
+
+      // Database claim, not the browser or the remote server, owns this decision.
+      const claim = await prisma.connectInstanceClaim.findUnique({
+        where: { name: instance.name },
+      });
+      if (claim && claim.tenantId !== tenant)
+        return fail(reply, 403, "INSTANCE_NOT_OWNED", "Esta instância pertence a outro espaço.");
+
+      const remotelyClaimed = claim?.tenantId === tenant && Boolean(instance.tokenEncrypted);
+      let remoteResult: "removed" | "already-missing" | "not-claimed" = "not-claimed";
+      if (remotelyClaimed) {
+        const connection = credentials();
+        if (!connection)
+          return fail(reply, 409, "CONNECT_API_NOT_CONFIGURED", "A conexão Connect|API está indisponível.");
+        const instanceToken = decryptSecret(instance.tokenEncrypted!);
+        try {
+          remoteResult = await deleteRemoteInstance(instanceToken, connection.apiKey, (apiKey) =>
+            connectApiRequest<unknown>({
+              baseUrl: connection.baseUrl,
+              apiKey,
+              method: "DELETE",
+              path: connectInstancePath(instance.name, "delete"),
+              timeoutMs: 20000,
+            }),
+          );
+        } catch (error) {
+          const info = connectError(error);
+          return fail(
+            reply,
+            info.status,
+            "REMOTE_DELETE_FAILED",
+            "A instância não foi excluída na Connect|API. O vínculo local foi preservado para uma nova tentativa.",
+          );
+        }
+      }
+
+      // The same transaction deactivates only this tenant's record and releases
+      // its remote name claim. Historical publication/audit rows remain intact.
       try {
-        await connectApiRequest({
-          baseUrl: auth.baseUrl,
-          apiKey: auth.apiKey,
-          method: "DELETE",
-          path: connectInstancePath(instance.name, "delete"),
-        });
-        await prisma.$transaction([
-          prisma.connectApiInstance.update({
-            where: { id: instance.id },
+        await prisma.$transaction(async (tx) => {
+          await tx.connectApiInstance.updateMany({
+            where: { id: instance.id, tenantId: tenant, present: true },
             data: {
               present: false,
               tokenEncrypted: null,
               connectionState: "deleted",
             },
-          }),
-          prisma.tenant.updateMany({
+          });
+          await tx.connectInstanceClaim.deleteMany({
+            where: { name: instance.name, tenantId: tenant },
+          });
+          await tx.tenant.updateMany({
             where: { id: tenant, connectDefaultInstanceName: instance.name },
             data: { connectDefaultInstanceName: null },
-          }),
-        ]);
-        await audit({
-          tenantId: tenant,
-          actorUserId: request.principal?.userId,
-          action: "whatsapp.instance.deleted",
-          resourceType: "whatsapp-instance",
-          resourceId: instance.id,
-          metadata: { name: instance.name },
+          });
         });
-        return reply.code(204).send();
-      } catch (error) {
-        const info = connectError(error);
-        return fail(reply, info.status, info.code, info.message);
+      } catch {
+        return fail(reply, 500, "LOCAL_DELETE_FAILED", "Não foi possível concluir a remoção local. Atualize e tente novamente.");
       }
+      await audit({
+        tenantId: tenant,
+        actorUserId: request.principal?.userId,
+        action: remotelyClaimed ? "whatsapp.instance.deleted" : "whatsapp.instance.unlinked",
+        resourceType: "whatsapp-instance",
+        resourceId: instance.id,
+        metadata: {
+          name: instance.name,
+          remoteResult,
+          // Tokens, numbers, payloads and full Connect configuration must not enter audit.
+        },
+      });
+      return {
+        deleted: true,
+        remoteDeleted: remoteResult === "removed" || remoteResult === "already-missing",
+        localOnly: remoteResult === "not-claimed",
+      };
     },
   );
 
