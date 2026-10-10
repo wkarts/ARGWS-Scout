@@ -12,7 +12,7 @@ Configure `SCOUT_RECOVERY_SMTP_HOST`, `PORT`, `SECURE`, `USERNAME`, `PASSWORD`, 
 
 ## Serviços e verificação
 
-O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migração, dispatcher, worker HTTP, browser worker, scheduler e webhook worker. As sondagens da API verificam Postgres e Redis para readiness; a área Saúde da plataforma verifica também RabbitMQ e Garage. Containers têm política de restart, healthchecks onde a imagem suporta e limites de log. Docker, Dockge e CloudPanel usam bind mounts relativos; Portainer usa volumes nomeados com prefixo do projeto.
+O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migração, dispatcher, worker HTTP, browser worker, scheduler e webhook worker. As sondagens da API verificam Postgres e Redis para readiness; a área Saúde da plataforma verifica também RabbitMQ e Garage. Containers têm política de restart, healthchecks onde a imagem suporta e limites de log. Todas as oito distribuições utilizam bind mounts locais `./volumes` para PostgreSQL, Redis, RabbitMQ e Garage (config/meta/data). Instalações anteriores com volumes nomeados precisam copiar os dados antes da troca; no Portainer confirme o diretório real do Compose no host.
 
 Comandos úteis na raiz para desenvolvimento: `docker compose ps`, `docker compose logs -f api dispatcher worker browser-worker scheduler webhook-worker` e `docker compose exec api pnpm db:seed`. Em Dockge/Portainer use o estado e os logs do stack. Os pacotes publicados não dependem de scripts hospedados no servidor.
 

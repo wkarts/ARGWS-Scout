@@ -173,7 +173,7 @@ services:
       dockerfile: Dockerfile.manager
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${SCOUT_MANAGER_PORT:-8081}:80"
+      - "127.0.0.1:${SCOUT_MANAGER_PORT:-48080}:80"
     depends_on:
       api: { condition: service_healthy }
       docs: { condition: service_started }
@@ -267,7 +267,7 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
       S3_REGION: ${S3_REGION:-us-east-1}
-      SCOUT_BROWSER_CONCURRENCY: 1
+      SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}
       SCOUT_BROWSER_CHROMIUM_SANDBOX: ${SCOUT_BROWSER_CHROMIUM_SANDBOX:-false}
     depends_on:
       api: { condition: service_healthy }

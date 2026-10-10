@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-scout}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ./volumes/postgres:/var/lib/postgresql/data
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -37,7 +37,7 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate REDIS_PASSWORD}
     volumes:
-      - redis-data:/data
+      - ./volumes/redis:/data
     healthcheck:
       test: [CMD-SHELL, 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 10s
@@ -54,7 +54,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-scout}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Generate RABBITMQ_PASSWORD}
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+      - ./volumes/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/5672"]
       interval: 60s
@@ -74,9 +74,9 @@ services:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Generate GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?Generate GARAGE_ADMIN_TOKEN}
     volumes:
-      - garage-meta-data:/var/lib/garage/meta
-      - garage-object-data:/var/lib/garage/data
-      - garage-config-data:/etc/garage-config:ro
+      - ./volumes/garage/meta:/var/lib/garage/meta
+      - ./volumes/garage/data:/var/lib/garage/data
+      - ./volumes/garage/config:/etc/garage-config:ro
     depends_on:
       garage-config-init: { condition: service_completed_successfully }
     healthcheck:
@@ -130,7 +130,7 @@ services:
         fi
         test -s /config/garage.toml
     volumes:
-      - garage-config-data:/config
+      - ./volumes/garage/config:/config
     logging: *default-logging
 
   garage-init:
@@ -157,8 +157,8 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Generate S3_SECRET_ACCESS_KEY}
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
     volumes:
-      - garage-config-data:/etc/garage-config:ro
-      - garage-meta-data:/var/lib/garage/meta:ro
+      - ./volumes/garage/config:/etc/garage-config:ro
+      - ./volumes/garage/meta:/var/lib/garage/meta:ro
     logging: *default-logging
 
   migrate:
@@ -210,7 +210,7 @@ services:
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.4}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.5}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -250,7 +250,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${SCOUT_MANAGER_PORT:-8080}:80"
+      - "127.0.0.1:${SCOUT_MANAGER_PORT:-48083}:80"
     depends_on:
       api: { condition: service_healthy }
       docs: { condition: service_started }
@@ -390,17 +390,3 @@ networks:
   scout:
     name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-network
     driver: bridge
-
-volumes:
-  garage-config-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-config
-  postgres-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-postgres
-  redis-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-redis
-  rabbitmq-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-rabbitmq
-  garage-meta-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-meta
-  garage-object-data:
-    name: ${COMPOSE_PROJECT_NAME:-argws-scout-portainer-develop}-garage-data

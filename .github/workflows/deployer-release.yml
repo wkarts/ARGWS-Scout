@@ -81,7 +81,7 @@ jobs:
               files[name] = hashlib.sha256((stage / name).read_bytes()).hexdigest()
           manifest = {
               "product": "ARGWS Scout Deployer",
-              "deployer_version": "1.0.1",
+              "deployer_version": "1.0.2",
               "scout_version": os.environ["SCOUT_VERSION"],
               "platform": "windows",
               "architecture": "x64",
