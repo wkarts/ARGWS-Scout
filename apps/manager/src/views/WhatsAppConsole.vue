@@ -442,25 +442,31 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
 }
 
 async function deleteInstance(instance: WhatsAppInstance) {
-  if (
-    !window.confirm(
-      `Excluir definitivamente a instância “${instance.name}” da Connect API?`,
-    )
-  )
-    return;
+  const label = instance.displayName || instance.name;
+  const localOnly = !instance.usable;
+  const question = localOnly
+    ? `Remover “${label}” deste espaço de trabalho? A instância remota não será excluída, pois seu vínculo não está validado.`
+    : `Excluir definitivamente “${label}” da Connect|API e remover seu vínculo neste espaço? Esta ação não pode ser desfeita.`;
+  if (!window.confirm(question)) return;
   busy.value = true;
   try {
-    await api(`/whatsapp/instances/${encodeURIComponent(instance.name)}`, {
-      method: "DELETE",
-    });
-    emit("notify", `Instância ${instance.name} excluída da Connect API.`);
+    const result = await api<{ deleted: boolean; remoteDeleted: boolean; localOnly: boolean }>(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}`,
+      { method: "DELETE" },
+    );
+    if (!result.deleted) throw new Error("A exclusão não foi confirmada.");
+    if (pairingInstance.value?.id === instance.id) closePairing();
+    emit(
+      "notify",
+      result.localOnly
+        ? `Vínculo antigo removido deste espaço: ${label}.`
+        : `Instância excluída da Connect|API: ${label}.`,
+    );
     await refresh();
   } catch (error) {
     emit(
       "error",
-      error instanceof Error
-        ? error.message
-        : "Não foi possível excluir a instância.",
+      error instanceof Error ? error.message : "Não foi possível excluir a instância.",
     );
   } finally {
     busy.value = false;
@@ -697,11 +703,11 @@ onUnmounted(() => {
           <button
             v-if="canManage"
             class="button danger small-button"
-            :disabled="busy || !instance.usable"
-            :aria-label="`Excluir ${instance.displayName || instance.name}`"
+            :disabled="busy"
+            :aria-label="`${instance.usable ? 'Excluir' : 'Remover vínculo de'} ${instance.displayName || instance.name}`"
             @click="deleteInstance(instance)"
           >
-            <Trash2 :size="14" />Excluir
+            <Trash2 :size="14" />{{ instance.usable ? "Excluir" : "Remover vínculo" }}
           </button>
           <form
             v-if="claimName === instance.name && !instance.usable"
