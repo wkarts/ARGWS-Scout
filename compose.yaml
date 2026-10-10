@@ -98,7 +98,7 @@ services:
     entrypoint: ["/bin/sh", "-ec"]
     command: >-
       if ! garage key info "$${S3_ACCESS_KEY_ID}" >/dev/null 2>&1; then
-        garage key import --yes -n argws-scout "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}";
+        garage key import --yes -n argws-scout -- "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}";
       fi;
       if ! garage bucket info "$${S3_BUCKET}" >/dev/null 2>&1; then
         garage bucket create "$${S3_BUCKET}";
