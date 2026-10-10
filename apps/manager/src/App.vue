@@ -1569,6 +1569,12 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <LayoutDashboard :size="18" /> Visão geral
         </button>
         <button
+          :class="{ active: activeSection === 'guide' }"
+          @click="selectSection('guide')"
+        >
+          <CircleHelp :size="18" /> Primeiros passos
+        </button>
+        <button
           :class="{ active: activeSection === 'instances' }"
           @click="selectSection('instances')"
         >

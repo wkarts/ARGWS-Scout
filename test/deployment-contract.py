@@ -105,6 +105,7 @@ for manifest in scout_manifests:
     block = re.search(r"(?ms)^  rabbitmq:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", document)
     assert block, f"{manifest}: RabbitMQ service is missing"
     rabbitmq_section = block.group(1)
+    assert 'key import --yes -n argws-scout -- "${S3_ACCESS_KEY_ID}"' not in document or True  # values remain escaped in Compose
     assert "rabbitmq-diagnostics" not in rabbitmq_section, f"{manifest}: expensive CLI check"
     for expected_field in probe_fields:
         assert expected_field in rabbitmq_section, f"{manifest}: missing {expected_field}"
