@@ -50,6 +50,7 @@ import {
 import { consumeRecoveryCode, replaceRecoveryCodes } from "./mfa.ts";
 import { registerWhatsAppRoutes } from "./whatsapp-routes.ts";
 import { registerInvitationRoutes } from "./invitations.ts";
+import { registerTemplateRoutes } from "./template-routes.ts";
 import {
   authenticated,
   clearSessionCookies,
@@ -183,6 +184,7 @@ export async function registerRoutes(
 ): Promise<void> {
   await registerWhatsAppRoutes(app);
   await registerInvitationRoutes(app);
+  await registerTemplateRoutes(app);
   app.post(
     "/integrations/smtp/test",
     {
@@ -1838,16 +1840,71 @@ export async function registerRoutes(
         z.object({
           name: z.string().trim().min(2).max(120).optional(),
           enabled: z.boolean().optional(),
-          selector: z.string().max(500).nullable().optional(),
+          url: z.string().url().max(2048).optional(),
+          allowedHosts: z
+            .array(z.string().trim().toLowerCase().min(1).max(253))
+            .min(1)
+            .max(20)
+            .optional(),
+          engine: z.enum(["HTTP", "PLAYWRIGHT"]).optional(),
+          selector: z.string().trim().max(500).nullable().optional(),
           respectRobots: z.boolean().optional(),
+          captureScreenshot: z.boolean().optional(),
+          requestIntervalMs: z.number().int().min(1000).max(300000).optional(),
         }),
         request.body,
         reply,
       );
       if (!body) return;
+      const candidate = sourceCreateSchema.safeParse({
+        name: body.name ?? source.name,
+        engine: body.engine ?? source.engine,
+        url: body.url ?? source.urlTemplate,
+        allowedHosts: body.allowedHosts ?? source.allowedHosts,
+        selector:
+          body.selector === null
+            ? undefined
+            : (body.selector ?? source.selector ?? undefined),
+        respectRobots: body.respectRobots ?? source.respectRobots,
+        captureScreenshot: body.captureScreenshot ?? source.captureScreenshot,
+        requestIntervalMs: body.requestIntervalMs ?? source.requestIntervalMs,
+      });
+      if (!candidate.success)
+        return fail(
+          reply,
+          400,
+          "VALIDATION_ERROR",
+          "Confira URL, hosts permitidos e configurações da fonte.",
+        );
+      if (body.url !== undefined || body.allowedHosts !== undefined) {
+        try {
+          await assertSafePublicUrl(
+            candidate.data.url.replace(/\{\{input\.[\w.-]+\}\}/g, "probe"),
+            candidate.data.allowedHosts,
+            process.env.SCOUT_ALLOW_HTTP === "true",
+          );
+        } catch (cause) {
+          return fail(
+            reply,
+            400,
+            "SOURCE_URL_BLOCKED",
+            cause instanceof Error ? cause.message : "URL não permitida.",
+          );
+        }
+      }
       const updated = await prisma.source.update({
         where: { id: sourceId },
-        data: body,
+        data: {
+          name: candidate.data.name,
+          engine: candidate.data.engine,
+          urlTemplate: candidate.data.url,
+          allowedHosts: candidate.data.allowedHosts,
+          selector: candidate.data.selector || null,
+          respectRobots: candidate.data.respectRobots,
+          captureScreenshot: candidate.data.captureScreenshot,
+          requestIntervalMs: candidate.data.requestIntervalMs,
+          ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        },
       });
       await audit({
         tenantId: tenantId(request),

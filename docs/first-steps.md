@@ -16,6 +16,10 @@ Entre com e-mail e senha. Se o autenticador for solicitado, registre-o e guarde 
 - **Connect|API:** integração com os canais de comunicação. O canal disponível nesta versão é WhatsApp.
 - **Publicação:** envio de um resultado concluído a um destinatário, mediante confirmação.
 
+## Modelos prontos de instância
+
+Você pode iniciar diretamente pelos [modelos prontos](instance-templates.md) de Mercado Livre, Shopee, Amazon Brasil, Magalu, AliExpress, KaBuM!, OLX, Buscapé, eBay ou site genérico. Abra **Modelos prontos**, escolha uma loja, ajuste termo de busca e clique em **Criar minha instância**. A fonte já será cadastrada, mas a primeira coleta só ocorrerá após sua confirmação. A configuração poderá ser editada depois.
+
 ## 3. Crie sua primeira instância
 
 Abra **Instâncias → Nova instância**. Informe o nome, por exemplo **Monitoramento de site**, e uma descrição. A instância agrupará suas fontes.

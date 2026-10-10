@@ -26,6 +26,42 @@ function mock(path) {
       stats: { instances: 0, sources: 0, jobsRecent: 0, completed: 0 },
       recentJobs: [],
     };
+  if (path === "/instance-templates")
+    return {
+      version: 1,
+      data: [
+        {
+          id: "amazon",
+          title: "Amazon Brasil",
+          provider: "Amazon",
+          category: "marketplaces",
+          description: "Resultados de busca pública",
+          sampleQuery: "monitor",
+          sampleUrl: "https://www.amazon.com.br/s?k=monitor",
+          sourceName: "Busca na Amazon",
+          selector: "[data-component-type='s-search-result']",
+          engine: "HTTP",
+          requestIntervalMs: 30000,
+          guidance: "Confira as regras da página antes de executar.",
+          templateVersion: 1,
+        },
+        {
+          id: "mercado-livre",
+          title: "Mercado Livre",
+          provider: "Mercado Livre",
+          category: "marketplaces",
+          description: "Anúncios públicos",
+          sampleQuery: "notebook",
+          sampleUrl: "https://lista.mercadolivre.com.br/notebook",
+          sourceName: "Resultados do Mercado Livre",
+          selector: ".ui-search-layout",
+          engine: "HTTP",
+          requestIntervalMs: 15000,
+          guidance: "Reveja seletores e políticas de acesso.",
+          templateVersion: 1,
+        },
+      ],
+    };
   if (path === "/whatsapp")
     return {
       configured: true,
@@ -124,6 +160,47 @@ try {
       problems.push("Compressed guide card");
     if (errors.length) problems.push("Browser errors: " + errors.join("; "));
     console.log(JSON.stringify({ width, geometry: g, problems }));
+    // Validate the new marketplace template gallery, including its customization panel.
+    if (width <= 760)
+      await page.getByRole("button", { name: "Abrir menu" }).click();
+    await page
+      .getByRole("button", { name: "Modelos prontos", exact: true })
+      .click();
+    await page.locator(".template-grid").waitFor({ timeout: 15000 });
+    await page.getByRole("button", { name: /Amazon Brasil/ }).click();
+    await page.getByText("Criar minha instância").waitFor({ timeout: 15000 });
+    const tg = await page.evaluate(() => ({
+      pageWidth: document.documentElement.scrollWidth,
+      galleryRight: document
+        .querySelector(".template-catalog")
+        ?.getBoundingClientRect().right,
+      cards: [...document.querySelectorAll(".template-card")].map(
+        (element) => element.getBoundingClientRect().right,
+      ),
+      editorRight: document
+        .querySelector(".template-editor")
+        ?.getBoundingClientRect().right,
+      inputs: [...document.querySelectorAll(".template-editor input")].map(
+        (element) => element.getBoundingClientRect().right,
+      ),
+    }));
+    if (tg.pageWidth > width + 2)
+      problems.push("Template catalog horizontal scroll");
+    if ((tg.galleryRight ?? width + 1) > width + 2)
+      problems.push("Template catalog overflow");
+    if (tg.cards.some((right) => right > width + 2))
+      problems.push("Template card overflow");
+    if ((tg.editorRight ?? width + 1) > width + 2)
+      problems.push("Template editor overflow");
+    if (tg.inputs.some((right) => right > width + 2))
+      problems.push("Template field overflow");
+    await page.screenshot({
+      path: dir + "/templates-" + width + ".png",
+      fullPage: true,
+    });
+    if (errors.length)
+      problems.push("Browser errors in template gallery: " + errors.join("; "));
+    console.log(JSON.stringify({ width, templates: tg, problems }));
     await context.close();
     if (problems.length)
       throw new Error("Viewport " + width + "px: " + problems.join("; "));
