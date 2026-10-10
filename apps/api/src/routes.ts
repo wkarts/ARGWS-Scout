@@ -1234,10 +1234,15 @@ export async function registerRoutes(
         !["image/png", "image/jpeg", "image/webp"].includes(contentType)
       )
         return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não configurada.");
+      // A foto pertence à identidade e acompanha a pessoa quando ela alterna
+      // entre espaços autorizados, sem aceitar keys arbitrárias do cliente.
+      const objectParts = key.split("/");
+      const expectedOwner = "profile-" + request.principal.userId!;
       if (
-        !key.startsWith(
-          tenantId(request) + "/profile-" + request.principal.userId! + "/",
-        )
+        objectParts.length !== 3 ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(objectParts[0] ?? "") ||
+        objectParts[1] !== expectedOwner ||
+        !objectParts[2]?.startsWith("avatar.")
       )
         return fail(reply, 403, "AVATAR_FORBIDDEN", "Foto indisponível.");
       try {

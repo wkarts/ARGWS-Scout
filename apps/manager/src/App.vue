@@ -715,6 +715,7 @@ async function verifyMfa() {
 async function continueAfterSavingRecoveryCodes() {
   mfaRecoveryCodes.value = [];
   await checkSession();
+  if (inviteToken.value) await acceptExistingInvitation();
   loginStage.value = "credentials";
 }
 
