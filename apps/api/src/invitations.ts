@@ -16,7 +16,7 @@ const inviteSchema = z.object({
   email: z.string().trim().email().max(254),
   role: z.enum(["ADMIN", "OPERATOR", "VIEWER"]).default("VIEWER"),
   independentWorkspace: z.boolean().default(true),
-  workspaceName: z.string().trim().min(2).max(120).optional(),
+  workspaceName: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().min(2).max(120).optional()),
 });
 const tokenSchema = z.object({ token: z.string().min(32).max(128) });
 const acceptSchema = tokenSchema.extend({
