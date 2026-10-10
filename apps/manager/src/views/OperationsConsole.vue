@@ -29,7 +29,11 @@ const managerBuildSha = import.meta.env.VITE_BUILD_SHA ?? "local";
 const managerChannel = import.meta.env.VITE_BUILD_CHANNEL ?? "local";
 const versionMismatch = computed(
   () =>
-    report.value !== null && (report.value.runtime.version !== managerVersion || (managerBuildSha !== "local" && report.value.runtime.buildSha !== undefined && report.value.runtime.buildSha !== managerBuildSha)),
+    report.value !== null &&
+    (report.value.runtime.version !== managerVersion ||
+      (managerBuildSha !== "local" &&
+        report.value.runtime.buildSha !== undefined &&
+        report.value.runtime.buildSha !== managerBuildSha)),
 );
 const busy = ref(false);
 const exporting = ref(false);
@@ -141,9 +145,14 @@ onMounted(() => {
     <div v-if="versionMismatch" class="version-mismatch" role="alert">
       <strong>Versões diferentes entre interface e API.</strong>
       <p>
-        Interface {{ managerVersion }} ({{ managerChannel }} · {{ managerBuildSha.slice(0, 8) }}) · API {{ report?.runtime.version }} ({{ report?.runtime.channel ?? "local" }} · {{ report?.runtime.buildSha?.slice(0, 8) ?? "local" }}).
-        Atualize as imagens da mesma versão no GHCR e recrie os serviços
-        correspondentes para evitar incompatibilidade.
+        Interface {{ managerVersion }} ({{ managerChannel }} ·
+        {{ managerBuildSha.slice(0, 8) }}) · API
+        {{ report?.runtime.version }} ({{
+          report?.runtime.channel ?? "local"
+        }}
+        · {{ report?.runtime.buildSha?.slice(0, 8) ?? "local" }}). Atualize as
+        imagens da mesma versão no GHCR e recrie os serviços correspondentes
+        para evitar incompatibilidade.
       </p>
     </div>
     <div v-if="report" class="operations-summary">
