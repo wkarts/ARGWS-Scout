@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { Prisma, TenantRole } from "@prisma/client";
 import { z } from "zod";
@@ -14,6 +15,8 @@ const inviteSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254),
   role: z.enum(["ADMIN", "OPERATOR", "VIEWER"]).default("VIEWER"),
+  independentWorkspace: z.boolean().default(true),
+  workspaceName: z.string().trim().min(2).max(120).optional(),
 });
 const tokenSchema = z.object({ token: z.string().min(32).max(128) });
 const acceptSchema = tokenSchema.extend({
@@ -69,6 +72,23 @@ function isUsable(invite: {
   );
 }
 
+async function provisionIndependentSpace(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  label: string,
+): Promise<string> {
+  const safeName = label.trim().slice(0, 120) || "Meu espaço";
+  const prefix = safeName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 38) || "espaco";
+  const space = await tx.tenant.create({
+    data: { name: safeName, slug: prefix + "-" + randomBytes(8).toString("hex") },
+  });
+  await tx.membership.create({
+    data: { tenantId: space.id, userId, role: TenantRole.OWNER },
+  });
+  return space.id;
+}
+
 export async function registerInvitationRoutes(
   app: FastifyInstance,
 ): Promise<void> {
@@ -88,6 +108,8 @@ export async function registerInvitationRoutes(
           email: true,
           name: true,
           role: true,
+          independentWorkspace: true,
+          workspaceName: true,
           expiresAt: true,
           createdAt: true,
         },
@@ -149,7 +171,7 @@ export async function registerInvitationRoutes(
             },
           })
         : null;
-      if (existingMembership)
+      if (!data.data.independentWorkspace && existingMembership)
         return error(
           reply,
           409,
@@ -192,7 +214,11 @@ export async function registerInvitationRoutes(
             invitedByUserId: request.principal!.userId!,
             name,
             email,
-            role: data.data.role as TenantRole,
+            role: data.data.independentWorkspace ? TenantRole.OWNER : data.data.role as TenantRole,
+            independentWorkspace: data.data.independentWorkspace,
+            workspaceName: data.data.independentWorkspace
+              ? (data.data.workspaceName ?? "Espaço de " + name).slice(0, 120)
+              : null,
             tokenHash: sha256(token),
             expiresAt: new Date(Date.now() + expiryMs),
           },
@@ -324,7 +350,8 @@ export async function registerInvitationRoutes(
       return {
         name: invitation.name,
         email: invitation.email,
-        organization: invitation.tenant.name,
+        organization: invitation.independentWorkspace ? invitation.workspaceName ?? "Meu espaço" : invitation.tenant.name,
+        independentWorkspace: invitation.independentWorkspace,
         hasAccount: Boolean(existing),
         expiresAt: invitation.expiresAt,
       };
@@ -395,6 +422,9 @@ export async function registerInvitationRoutes(
               }),
             },
           });
+          if (invitation.independentWorkspace) {
+            await provisionIndependentSpace(tx, created.id, invitation.workspaceName ?? "Meu espaço");
+          } else {
           await tx.membership.create({
             data: {
               tenantId: invitation.tenantId,
@@ -402,6 +432,7 @@ export async function registerInvitationRoutes(
               role: invitation.role,
             },
           });
+          }
           return created;
         });
         await audit({
@@ -467,11 +498,16 @@ export async function registerInvitationRoutes(
           "INVITATION_FORBIDDEN",
           "Este convite pertence a outra conta.",
         );
-      const membership = await prisma.membership.findUnique({
+      const membership = invitation.independentWorkspace ? null : await prisma.membership.findUnique({
         where: {
           tenantId_userId: { tenantId: invitation.tenantId, userId: user.id },
         },
       });
+      if (invitation.independentWorkspace && process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false") {
+        const security = await prisma.user.findUnique({ where: { id: user.id }, select: { mfaEnabled: true } });
+        if (!security?.mfaEnabled)
+          return error(reply, 409, "MFA_REQUIRED", "Ative a verificação em duas etapas no seu perfil antes de assumir um espaço próprio.");
+      }
       if (membership)
         return error(
           reply,
@@ -480,7 +516,7 @@ export async function registerInvitationRoutes(
           "Você já participa deste espaço.",
         );
       try {
-        await prisma.$transaction(async (tx) => {
+        const targetSpaceId = await prisma.$transaction(async (tx) => {
           const claim = await tx.userInvitation.updateMany({
             where: {
               id: invitation.id,
@@ -491,6 +527,9 @@ export async function registerInvitationRoutes(
             data: { acceptedAt: new Date() },
           });
           if (claim.count !== 1) throw new Error("expired");
+          if (invitation.independentWorkspace) {
+            await provisionIndependentSpace(tx, user.id, invitation.workspaceName ?? "Meu espaço");
+          } else {
           await tx.membership.create({
             data: {
               tenantId: invitation.tenantId,
@@ -498,8 +537,11 @@ export async function registerInvitationRoutes(
               role: invitation.role,
             },
           });
+          }
+          return invitation.independentWorkspace ?
+            (await tx.membership.findFirstOrThrow({ where: { userId: user.id, role: TenantRole.OWNER }, orderBy: { createdAt: "desc" }, select: { tenantId: true } })).tenantId : invitation.tenantId;
         });
-        await createSession(app, reply, user.id, invitation.tenantId);
+        await createSession(app, reply, user.id, targetSpaceId);
         await audit({
           tenantId: invitation.tenantId,
           actorUserId: user.id,
