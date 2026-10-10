@@ -1820,7 +1820,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         <button
           :class="{ active: activeSection === 'content' }"
           @click="selectSection('content')"
-        ><Images :size="18" /> Publicações</button>
+        >
+          <Images :size="18" /> Publicações
+        </button>
         <button
           :class="{ active: activeSection === 'jobs' }"
           @click="selectSection('jobs')"
@@ -2597,7 +2599,12 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         </template>
 
         <template v-else-if="activeSection === 'content'">
-          <ContentConsole :role="me.role" :instances="instances" @error="error=$event" @notify="notify" />
+          <ContentConsole
+            :role="me.role"
+            :instances="instances"
+            @error="error = $event"
+            @notify="notify"
+          />
         </template>
         <template v-else-if="activeSection === 'templates'">
           <TemplateCatalog

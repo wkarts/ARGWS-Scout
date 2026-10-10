@@ -141,8 +141,10 @@ export async function executeJob(
         const batch = await tx.contentBatch.upsert({
           where: { jobId: job.id },
           create: {
-            tenantId: job.tenantId, instanceId: job.instanceId,
-            jobId: job.id, options: content,
+            tenantId: job.tenantId,
+            instanceId: job.instanceId,
+            jobId: job.id,
+            options: content,
           },
           update: {},
         });

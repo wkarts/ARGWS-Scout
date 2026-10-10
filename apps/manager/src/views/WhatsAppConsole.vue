@@ -465,10 +465,18 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
 async function deleteInstance(instance: WhatsAppInstance) {
   const label = instance.displayName || instance.name;
   if (!instance.usable) {
-    emit("error", "O vínculo remoto precisa ser validado. Use Desvincular do espaço para remover somente o registro local.");
+    emit(
+      "error",
+      "O vínculo remoto precisa ser validado. Use Desvincular do espaço para remover somente o registro local.",
+    );
     return;
   }
-  if (!window.confirm(`Excluir definitivamente “${label}” da Connect|API e remover o vínculo? Esta ação não pode ser desfeita.`)) return;
+  if (
+    !window.confirm(
+      `Excluir definitivamente “${label}” da Connect|API e remover o vínculo? Esta ação não pode ser desfeita.`,
+    )
+  )
+    return;
   busy.value = true;
   try {
     const result = await api<{
@@ -500,17 +508,31 @@ async function deleteInstance(instance: WhatsAppInstance) {
 }
 
 async function unlinkInstance(instance: WhatsAppInstance) {
-  if (!window.confirm(
-    `Desvincular “${instance.displayName || instance.name}” apenas deste espaço? A instância remota e o WhatsApp permanecerão ativos na Connect|API.`,
-  )) return;
+  if (
+    !window.confirm(
+      `Desvincular “${instance.displayName || instance.name}” apenas deste espaço? A instância remota e o WhatsApp permanecerão ativos na Connect|API.`,
+    )
+  )
+    return;
   busy.value = true;
   try {
-    await api(`/whatsapp/instances/${encodeURIComponent(instance.name)}?mode=unlink`, { method: "DELETE" });
-    emit("notify", "A instância foi desvinculada deste espaço. Nenhuma sessão remota foi apagada.");
+    await api(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}?mode=unlink`,
+      { method: "DELETE" },
+    );
+    emit(
+      "notify",
+      "A instância foi desvinculada deste espaço. Nenhuma sessão remota foi apagada.",
+    );
     await refresh();
   } catch (error) {
-    emit("error", error instanceof Error ? error.message : "Não foi possível desvincular.");
-  } finally { busy.value = false; }
+    emit(
+      "error",
+      error instanceof Error ? error.message : "Não foi possível desvincular.",
+    );
+  } finally {
+    busy.value = false;
+  }
 }
 
 function statusClass(value: string) {
@@ -806,7 +828,13 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <WhatsAppActions v-if="configured" :instances="usableInstances" :role="props.role" @error="emit('error', $event)" @notify="emit('notify', $event)" />
+    <WhatsAppActions
+      v-if="configured"
+      :instances="usableInstances"
+      :role="props.role"
+      @error="emit('error', $event)"
+      @notify="emit('notify', $event)"
+    />
 
     <section v-if="configured" class="panel">
       <div class="panel-header">

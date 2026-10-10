@@ -28,19 +28,19 @@
 
 ## API autenticada do Scout (`/api/v1`, servidor OpenAPI `/v1`)
 
-| Método | Rota | Função |
-|---|---|---|
-| GET | `/content/status` | Estado do recurso/canais sem revelar a chave privada |
-| GET/PATCH | `/content/instances/{id}/settings` | Configurações por instância (alteração OWNER/ADMIN) |
-| GET | `/content/jobs?instanceId={uuid}` | Jobs concluídos disponíveis |
-| POST | `/content/jobs/{jobId}/refine` | Criar/enfileirar refinamento de coleta existente |
-| POST | `/content/import` | Importar JSON arbitrário em uma fonte/instância autorizadas |
-| GET | `/content/batches` | Lotes da organização/instância |
-| GET | `/content/batches/{id}` | Lote e registros refinados |
-| GET | `/content/identities/{id}/history` | Preços/observações históricas |
-| PATCH | `/content/items/{id}/review` | `DRAFT`, `APPROVED` ou `ARCHIVED` (divergências requerem ADMIN/OWNER) |
-| GET | `/content/items/{id}/export` | JSON com textos/links/status sem disparo |
-| GET | `/content/items/{id}/media/{kind}` | PNG privado `square`,`wide`,`story` ou EML `eml` |
+| Método    | Rota                               | Função                                                                |
+| --------- | ---------------------------------- | --------------------------------------------------------------------- |
+| GET       | `/content/status`                  | Estado do recurso/canais sem revelar a chave privada                  |
+| GET/PATCH | `/content/instances/{id}/settings` | Configurações por instância (alteração OWNER/ADMIN)                   |
+| GET       | `/content/jobs?instanceId={uuid}`  | Jobs concluídos disponíveis                                           |
+| POST      | `/content/jobs/{jobId}/refine`     | Criar/enfileirar refinamento de coleta existente                      |
+| POST      | `/content/import`                  | Importar JSON arbitrário em uma fonte/instância autorizadas           |
+| GET       | `/content/batches`                 | Lotes da organização/instância                                        |
+| GET       | `/content/batches/{id}`            | Lote e registros refinados                                            |
+| GET       | `/content/identities/{id}/history` | Preços/observações históricas                                         |
+| PATCH     | `/content/items/{id}/review`       | `DRAFT`, `APPROVED` ou `ARCHIVED` (divergências requerem ADMIN/OWNER) |
+| GET       | `/content/items/{id}/export`       | JSON com textos/links/status sem disparo                              |
+| GET       | `/content/items/{id}/media/{kind}` | PNG privado `square`,`wide`,`story` ou EML `eml`                      |
 
 Todas as rotas requerem sessão do Manager; as rotas de criação têm rate limiting; importação limita JSON a 2 MiB. A API Python interna tem autenticação de segredo independente, rede interna e limite de 5 MiB por entrada. Não publique a porta Python no proxy reverso.
 
@@ -50,15 +50,30 @@ Exemplo de corpo de `POST /api/v1/content/import`, usando IDs válidos de uma fo
 
 ```json
 {
-  "instanceId":"00000000-0000-4000-8000-000000000001",
-  "sourceId":"00000000-0000-4000-8000-000000000002",
+  "instanceId": "00000000-0000-4000-8000-000000000001",
+  "sourceId": "00000000-0000-4000-8000-000000000002",
   "payload": {
     "requestedUrl": "https://loja.exemplo.com/ofertas",
     "finalUrl": "https://loja.exemplo.com/ofertas",
     "capturedAt": "2026-10-10T20:21:02Z",
-    "data": {"items":[{"id":"SKU-001","title":"Item demonstrativo","price":"123.45","currency":"BRL","url":"https://loja.exemplo.com/produto/1"}]}
+    "data": {
+      "items": [
+        {
+          "id": "SKU-001",
+          "title": "Item demonstrativo",
+          "price": "123.45",
+          "currency": "BRL",
+          "url": "https://loja.exemplo.com/produto/1"
+        }
+      ]
+    }
   },
-  "options": {"maxItems":100,"createStory":true,"fetchImages":false,"enrichImages":false}
+  "options": {
+    "maxItems": 100,
+    "createStory": true,
+    "fetchImages": false,
+    "enrichImages": false
+  }
 }
 ```
 

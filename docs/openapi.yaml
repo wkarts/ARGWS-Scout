@@ -840,7 +840,8 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        "200": { description: Dados, textos, avisos, mídias e estado de aprovação. }
+        "200":
+          { description: Dados, textos, avisos, mídias e estado de aprovação. }
   /content/items/{id}/media/{kind}:
     get:
       summary: Recupera imagem ou arquivo EML de um item autenticado.

@@ -50,4 +50,8 @@ export function renderInputTemplate(
   );
 }
 
-export { contentSettings, DEFAULT_CONTENT_SETTINGS, type ContentSettings } from "./content-settings.ts";
+export {
+  contentSettings,
+  DEFAULT_CONTENT_SETTINGS,
+  type ContentSettings,
+} from "./content-settings.ts";

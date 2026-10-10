@@ -1,8 +1,13 @@
 {
   "payload": {
     "items": [
-      {"id":"api-01", "title":"Produto de demonstração", "price":"135.99", "url":"https://example.com/product/api-01"}
+      {
+        "id": "api-01",
+        "title": "Produto de demonstração",
+        "price": "135.99",
+        "url": "https://example.com/product/api-01"
+      }
     ]
   },
-  "options": {"max_items":10, "create_story": false}
+  "options": { "max_items": 10, "create_story": false }
 }

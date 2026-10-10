@@ -443,7 +443,13 @@ services:
       SCOUT_CONTENT_ENGINE_KEY: ${SCOUT_CONTENT_ENGINE_KEY:-}
       OUTPUT_ROOT: /app/output
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=5)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=5)",
+        ]
       interval: 30s
       timeout: 8s
       retries: 3
@@ -487,7 +493,6 @@ services:
       garage-init: { condition: service_completed_successfully }
     logging: *default-logging
     networks: [scout]
-
 
 networks:
   scout:

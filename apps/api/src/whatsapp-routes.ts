@@ -873,10 +873,16 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NAME_INVALID",
           "Nome de instância inválido.",
         );
-      const mode = z.object({ mode: z.enum(["remote", "unlink"]).default("remote") })
+      const mode = z
+        .object({ mode: z.enum(["remote", "unlink"]).default("remote") })
         .safeParse(request.query);
       if (!mode.success)
-        return fail(reply, 400, "INVALID_DELETE_MODE", "Modo de remoção inválido.");
+        return fail(
+          reply,
+          400,
+          "INVALID_DELETE_MODE",
+          "Modo de remoção inválido.",
+        );
       const tenant = tenantId(request);
       const instance = await prisma.connectApiInstance.findFirst({
         where: { tenantId: tenant, name: parsedName.data, present: true },
@@ -968,9 +974,10 @@ export async function registerWhatsAppRoutes(
         await audit({
           tenantId: tenant,
           actorUserId: request.principal?.userId,
-          action: remotelyClaimed && mode.data.mode === "remote"
-            ? "whatsapp.instance.deleted"
-            : "whatsapp.instance.unlinked",
+          action:
+            remotelyClaimed && mode.data.mode === "remote"
+              ? "whatsapp.instance.deleted"
+              : "whatsapp.instance.unlinked",
           resourceType: "whatsapp-instance",
           resourceId: instance.id,
           metadata: { name: instance.name, remoteResult },
