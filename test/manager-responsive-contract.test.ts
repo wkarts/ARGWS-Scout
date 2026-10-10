@@ -22,8 +22,8 @@ describe("Manager responsive layout contract", () => {
 
   it("supports 320px mobile and fluid content width without fixed third column", () => {
     const css = source("apps/manager/src/style.css");
-    expect(css).toMatch(/\\.main-column\\s*\\{\\s*flex:\\s*1\\s+1\\s+0%/);
-    expect(css).toMatch(/\\.main-column\\s*\\{\\s*width:\\s*100%;\\s*max-width:\\s*100%/);
+    expect(css).toMatch(/\.main-column\s*\{\s*flex:\s*1\s+1\s+0%/);
+    expect(css).toMatch(/\.main-column\s*\{\s*width:\s*100%;\s*max-width:\s*100%/);
     expect(css).toContain(".main-column > .app-footer");
     expect(css).toContain(".guide-steps article > div");
     expect(css).toContain("minmax(0, 1fr)");
