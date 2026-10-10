@@ -11,7 +11,7 @@ O Scout consulta fontes web autorizadas, coleta informações estruturadas, agen
 - **Operador:** executa coletas, publica resultados quando autorizado e acompanha rotinas.
 - **Leitor:** consulta informações permitidas, sem modificar configurações críticas.
 
-A conta principal configurada pelo servidor é protegida no banco e na API; não aparece na listagem de usuários da organização e não pode receber redefinição de MFA nem cadastro administrativo sobreposto. A própria conta ainda pode gerenciar seu perfil e alterar sua senha com confirmação da senha atual.
+A conta principal configurada pelo servidor é protegida no banco e na API; não aparece na listagem de usuários da organização e não pode receber redefinição de MFA nem cadastro administrativo sobreposto. A senha inicial do servidor não é transmitida à API nem aos trabalhadores permanentes; somente o serviço de provisionamento recebe a credencial. A própria conta ainda pode gerenciar seu perfil e alterar sua senha com confirmação da senha atual.
 
 ## Menu da plataforma
 
