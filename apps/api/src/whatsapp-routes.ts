@@ -128,7 +128,7 @@ async function syncInstances(tenant: string, baseUrl: string) {
   });
   const owned = claims.map((item) => item.name);
   const records = await prisma.connectApiInstance.findMany({
-    where: { tenantId: tenant, present: true, name: { in: owned } },
+    where: { tenantId: tenant, tokenEncrypted: { not: null }, name: { in: owned } },
     orderBy: { name: "asc" }, take: 100,
   });
   for (const row of records) {
@@ -143,7 +143,7 @@ async function syncInstances(tenant: string, baseUrl: string) {
         ? data.instance as Record<string, unknown> : data;
       const state = typeof nested.state === "string" ? nested.state : "unknown";
       await prisma.connectApiInstance.update({
-        where: { id: row.id }, data: { connectionState: state },
+        where: { id: row.id }, data: { connectionState: state, present: true },
       });
     } catch {
       // A remote failure never deletes or reveals an existing binding.
@@ -153,7 +153,7 @@ async function syncInstances(tenant: string, baseUrl: string) {
     }
   }
   return prisma.connectApiInstance.findMany({
-    where: { tenantId: tenant, present: true }, orderBy: { name: "asc" },
+    where: { tenantId: tenant, OR: [{ present: true }, { tokenEncrypted: { not: null } }] }, orderBy: { name: "asc" },
   });
 }
 
@@ -215,7 +215,7 @@ export async function registerWhatsAppRoutes(
         where: { id: tenant }, select: { connectDefaultInstanceName: true },
       }),
       prisma.connectApiInstance.findMany({
-        where: { tenantId: tenant, present: true }, orderBy: { name: "asc" },
+        where: { tenantId: tenant, OR: [{ present: true }, { tokenEncrypted: { not: null } }] }, orderBy: { name: "asc" },
       }),
       prisma.connectInstanceClaim.findMany({
         where: { tenantId: tenant }, select: { name: true },
@@ -456,18 +456,18 @@ export async function registerWhatsAppRoutes(
     { preHandler: authenticated(), config: { rateLimit: { max: 6, timeWindow: "15 minutes" } } },
     async (request, reply) => {
       if (!(await requireAdmin(request, reply))) return;
-      const body = z.object({ name: nameSchema }).safeParse(request.body);
+      const body = z.object({ name: nameSchema, token: z.string().trim().min(8).max(4096) }).safeParse(request.body);
       if (!body.success) return fail(reply, 400, "VALIDATION_ERROR", "Selecione uma instância válida.");
       const tenant = tenantId(request);
       const record = await prisma.connectApiInstance.findFirst({
-        where: { tenantId: tenant, name: body.data.name, present: true },
+        where: { tenantId: tenant, name: body.data.name },
       });
-      if (!record?.tokenEncrypted)
+      if (!record)
         return fail(reply, 404, "INSTANCE_NOT_FOUND", "Vínculo indisponível neste espaço.");
       const auth = credentials();
       if (!auth)
         return fail(reply, 409, "CONNECT_API_NOT_CONFIGURED", "Configure a conexão global no .env.");
-      const token = decryptSecret(record.tokenEncrypted);
+      const token = body.data.token;
       if (token === auth.apiKey)
         return fail(reply, 403, "INSTANCE_TOKEN_REQUIRED", "Esta instância precisa de token particular.");
       const previous = await prisma.connectInstanceClaim.findUnique({ where: { name: record.name } });
@@ -488,6 +488,7 @@ export async function registerWhatsAppRoutes(
           return tx.connectApiInstance.update({
             where: { id: record.id }, data: {
               connectionState: remote.connectionState ?? "unknown",
+              tokenEncrypted: encryptSecret(token), present: true,
               integration: remote.integration,
               displayName: record.displayName ?? record.name,
             },
