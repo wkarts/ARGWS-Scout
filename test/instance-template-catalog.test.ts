@@ -37,7 +37,7 @@ describe("catálogo de modelos de coleta", () => {
       selector: "h1",
       requestIntervalMs: 25000,
     });
-    expect(decodeURIComponent(source.url)).toContain("livro sobre Laravel");
+    expect(new URL(source.url).searchParams.get("k")).toBe("livro sobre Laravel");
     expect(source.engine).toBe("PLAYWRIGHT");
     expect(source.selector).toBe("h1");
     expect(source.requestIntervalMs).toBe(25000);
