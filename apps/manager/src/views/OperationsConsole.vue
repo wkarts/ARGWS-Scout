@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import managerPackage from "../../package.json";
 import { RefreshCw, Server, Download } from "@lucide/vue";
 import { api } from "../api";
 
@@ -21,6 +22,8 @@ type HealthReport = {
 };
 const emit = defineEmits<{ error: [message: string] }>();
 const report = ref<HealthReport | null>(null);
+const managerVersion = managerPackage.version;
+const versionMismatch = computed(() => report.value !== null && report.value.runtime.version !== managerVersion);
 const busy = ref(false);
 const exporting = ref(false);
 const diagnostics = ref<{
@@ -128,6 +131,10 @@ onMounted(() => {
         <RefreshCw :size="15" /> Verificar agora
       </button>
     </div>
+    <div v-if="versionMismatch" class="version-mismatch" role="alert">
+      <strong>Versões diferentes entre interface e API.</strong>
+      <p>Interface {{ managerVersion }} · API {{ report?.runtime.version }}. Atualize as imagens da mesma versão no GHCR e recrie os serviços correspondentes para evitar incompatibilidade.</p>
+    </div>
     <div v-if="report" class="operations-summary">
       <span
         class="status-pill"
@@ -166,6 +173,9 @@ onMounted(() => {
       </article>
       <article>
         <small>VERSÃO API</small><strong>{{ report.runtime.version }}</strong>
+      </article>
+      <article>
+        <small>VERSÃO DA INTERFACE</small><strong>{{ managerVersion }}</strong>
       </article>
       <article>
         <small>UPTIME API</small

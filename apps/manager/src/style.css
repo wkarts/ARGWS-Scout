@@ -2012,3 +2012,9 @@ tbody tr:hover {
   width: 18px;
   height: 18px;
 }
+
+/* Aviso para publicação parcial da interface e API. */
+.version-mismatch { margin: 0 22px 15px; padding: 14px 18px; background: #fff8e9; border: 1px solid #e4c777; border-radius: 10px; color: #694a0c; }
+.version-mismatch strong { display: block; font-size: 14px; }
+.version-mismatch p { margin: 6px 0 0; color: #735821; font-size: 13px; line-height: 1.5; }
+@media(max-width:560px) { .version-mismatch { margin: 0 10px 12px; } }
