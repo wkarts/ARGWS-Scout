@@ -17,6 +17,8 @@ type InvitationRow = {
   name: string;
   email: string;
   role: string;
+  independentWorkspace: boolean;
+  workspaceName: string | null;
   createdAt: string;
   expiresAt: string;
 };
@@ -38,7 +40,7 @@ const auditRows = ref<AuditRow[]>([]);
 const invitations = ref<InvitationRow[]>([]);
 const activeTab = ref<"users" | "audit">("users");
 const busy = ref(false);
-const userForm = ref({ name: "", email: "", role: "OPERATOR" });
+const userForm = ref({ name: "", email: "", role: "OPERATOR", independentWorkspace: true, workspaceName: "" });
 function prettyDate(value?: string | null) {
   return value
     ? new Intl.DateTimeFormat("pt-BR", {
@@ -87,7 +89,7 @@ async function createUser() {
       method: "POST",
       body: JSON.stringify(userForm.value),
     });
-    userForm.value = { name: "", email: "", role: "OPERATOR" };
+    userForm.value = { name: "", email: "", role: "OPERATOR", independentWorkspace: true, workspaceName: "" };
     await load();
     emit(
       "notify",
@@ -192,12 +194,15 @@ onMounted(() => void load());
             placeholder="pessoa@empresa.com"
         /></label>
         <label
+          v-if="!userForm.independentWorkspace"
           >Papel<select v-model="userForm.role">
             <option value="ADMIN">Administrador</option>
             <option value="OPERATOR">Operador</option>
             <option value="VIEWER">Leitor</option>
           </select></label
         >
+        <label class="access-mode-option"><input v-model="userForm.independentWorkspace" type="checkbox" /> Criar espaço independente para a pessoa convidada</label>
+        <label v-if="userForm.independentWorkspace">Nome do espaço<input v-model="userForm.workspaceName" maxlength="120" placeholder="Ex.: Atendimento da Beatriz" /></label>
         <button class="button primary" :disabled="busy">
           <Plus :size="15" /> Enviar convite
         </button>
@@ -220,7 +225,7 @@ onMounted(() => void load());
               <tr v-for="invitation in invitations" :key="invitation.id">
                 <td>{{ invitation.name }}</td>
                 <td>{{ invitation.email }}</td>
-                <td>{{ roleLabel(invitation.role) }}</td>
+                <td>{{ invitation.independentWorkspace ? "Espaço próprio" : roleLabel(invitation.role) }}</td>
                 <td>{{ prettyDate(invitation.expiresAt) }}</td>
                 <td>
                   <button
