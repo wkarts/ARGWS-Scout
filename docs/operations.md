@@ -16,6 +16,21 @@ O stack contém API, Manager, docs, Postgres, Redis, RabbitMQ, Garage, migraçã
 
 Comandos úteis na raiz para desenvolvimento: `docker compose ps`, `docker compose logs -f api dispatcher worker browser-worker scheduler webhook-worker` e `docker compose exec api pnpm db:seed`. Em Dockge/Portainer use o estado e os logs do stack. Os pacotes publicados não dependem de scripts hospedados no servidor.
 
+## Diagnóstico e retenção de eventos
+
+O Scout registra erros HTTP autenticados em uma tabela de diagnóstico separada por espaço de trabalho, com identificador de requisição, método, rota e status. O endpoint `GET /api/v1/ops/diagnostics` fornece visão resumida dos últimos sete dias; as listas de eventos individuais são limitadas para não sobrecarregar o painel, mas os contadores exibem os totais.
+
+A consulta `GET /api/v1/ops/diagnostics/events?days=7&limit=200` fornece eventos em ordem decrescente. Quando `nextCursor` não for `null`, repita a solicitação com `cursor=<nextCursor>` para percorrer todo o histórico retido. Os filtros aceitam até 30 dias, status HTTP 400–599 e até 200 eventos por página. Somente administradores autenticados podem consultar o próprio espaço.
+
+```dotenv
+SCOUT_DIAGNOSTIC_RETENTION_DAYS=30
+LOG_LEVEL=info
+```
+
+A retenção padrão de erros HTTP é de 30 dias e pode ser parametrizada de 7 a 365 dias. A limpeza é feita pelo scheduler, aproximadamente a cada 24 horas. Logs de containers são outra fonte: consulte API, Manager, dispatcher, workers e scheduler no Dockge/Portainer e preserve backups externos dos logs importantes. Os arquivos `json-file` têm rotação configurada no Compose, que não equivale à centralização de logs.
+
+**Limite da implementação atual:** os eventos persistidos não constituem um coletor centralizado e pesquisável de stdout/stderr de todos os contêineres. O pacote exportado pelo painel é uma visão sanitizada e limitada; para suporte completo são necessários logs de containers mais trilhas de jobs, auditoria e webhooks. Nunca anexe o `.env` nem senhas, tokens, dados privados ou segredos da Connect|API a relatórios compartilhados.
+
 ## Limites funcionais por serviço
 
 - API: limite global de 120 requests/minuto por chave/IP em Redis; login tem limite menor.
@@ -30,9 +45,9 @@ A validação SSRF bloqueia loopback, endereços privados conhecidos e redirects
 
 ## Backups e restauração
 
-Os scripts de deploy fazem dump PostgreSQL e snapshot Garage em diretório versionado por timestamp. Eles pausam API e consumidores durante a cópia. Replicar ./backups para armazenamento externo cifrado, definir retenção e ensaiar restore em ambiente isolado. Redis e RabbitMQ guardam estado operacional recuperável; a estratégia de backup deve seguir o SLA do ambiente.
+Os pacotes Compose não executam backups automáticos nem incluem scripts de restauração. Configure no host um processo de backup consistente do PostgreSQL e dos diretórios persistentes do Garage, com aplicações e consumidores coordenados quando necessário. Replicar ./backups para armazenamento externo cifrado, definir retenção e ensaiar restore em ambiente isolado. Redis e RabbitMQ guardam estado operacional recuperável; a estratégia de backup deve seguir o SLA do ambiente.
 
-Restauração substitui o banco corrente e requer flag explícita --confirm-replace-current-data. A pasta Garage anterior é mantida como recuperação local. Proteja o arquivo .env e backups com o mesmo cuidado que credenciais de aplicação.
+A restauração deve ser ensaiada em uma cópia isolada antes de substituir dados da produção. Preserve os volumes originais até verificar integridade dos backups, acessos e artefatos. Não execute `docker compose down -v`. Proteja o arquivo .env e backups com o mesmo cuidado que credenciais de aplicação.
 
 ### Migração das versões anteriores que usavam MinIO
 
