@@ -2,6 +2,26 @@
 
 Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}` contém apenas `compose.yaml` e `.env.example`. Os manifests não fazem build no host nem pedem scripts, arquivos de configuração ou serviços externos. Aplicação e dependências de infraestrutura são baixadas do GHCR.
 
+## S3/MinIO opcional via GHCR
+
+O armazenamento permanece **Garage** por padrão, para preservar as instalações existentes. Os dez Compose também incluem MinIO como opção de serviço, sem portas externas, com imagem espelhada em **`ghcr.io/wkarts/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z`** e volume local **`./volumes/minio/data:/data`**.
+
+O MinIO utiliza o mesmo protocolo S3 do SDK atual. Para testar com uma stack NOVA, use:
+
+```dotenv
+ARGWS_SCOUT_MINIO_IMAGE=ghcr.io/wkarts/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z
+COMPOSE_PROFILES=minio,content
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY_ID=scout-artifacts
+S3_SECRET_ACCESS_KEY=UMA_SENHA_FORTE_NOVA
+S3_BUCKET=scout-artifacts
+S3_REGION=us-east-1
+```
+
+Execute `docker compose --profile minio config --quiet` e `docker compose --profile minio up -d`. O Scout verifica a disponibilidade do bucket S3 e pode criá-lo quando permitido pelas credenciais. Não é publicada a interface administrativa do MinIO no host por padrão.
+
+**Atualizações:** ligar MinIO **não copia** automaticamente objetos antes gravados em Garage. Antes de trocar `S3_ENDPOINT` faça backup, copie objetos com utilitário S3 confiável, compare contagens/checksums e teste a leitura/restauração dos artefatos. Mantenha volumes originais até concluir o corte. Por retrocompatibilidade, Garage continua subindo nos Compose existentes, mesmo quando MinIO é habilitado para armazenamento; a remoção de dependências legadas deve ocorrer apenas em uma migração operacional separada e homologada, nunca durante este upgrade. Não use `docker compose down -v`.
+
 ## Perfil por plataforma
 
 | Plataforma           | Persistência                                                 | Ambiente               | Porta padrão (develop / production) |

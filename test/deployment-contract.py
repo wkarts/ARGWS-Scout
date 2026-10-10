@@ -57,6 +57,11 @@ for target in targets:
   assert y.count("    entrypoint: [/bin/sh, -ec]\n    command:\n      - |") == 2, f"{d}: Garage init scripts must each be passed as a single shell argument"
   assert "./volumes/garage/config:/etc/garage-config:ro" in y and "./volumes/garage/config:/config" in y, f"{d}: Garage config must be a local bind mount"
   assert "\nvolumes:" not in y, f"{d}: named Docker volumes must not be used"
+  assert "profiles: [minio]" in y, f"{d}: optional MinIO profile missing"
+  assert "./volumes/minio/data:/data" in y, f"{d}: MinIO files must be beside the stack"
+  assert "argws-scout-minio:RELEASE.2025-09-07T16-13-09Z" in y, f"{d}: GHCR MinIO must be pinned"
+  assert "S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}" in y, f"{d}: S3 backend must be selectable"
+  assert "ARGWS_SCOUT_MINIO_IMAGE=ghcr.io/wkarts/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z" in e, f"{d}: MinIO image not declared"
   assert "./volumes/garage/meta:/var/lib/garage/meta:ro" in y, f"{d}: Garage CLI requires the same local metadata directory"
   assert "./garage.toml" not in y
   refs=[line.split("=",1)[1] for line in e.splitlines() if line.startswith("ARGWS_SCOUT_") and "_IMAGE=" in line]

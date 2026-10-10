@@ -87,6 +87,7 @@ jobs:
               cp "$folder/.env.example" "$folder/.env"
               if [[ "$target" == portainer ]]; then cp "$folder/.env" "$folder/stack.env"; fi
               docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
+              docker compose --profile minio --env-file "$folder/.env" -f "$folder/compose.yaml" config --quiet
               docker compose --env-file "$folder/.env" -f "$folder/compose.yaml" config --format json > /tmp/scout-compose.json
               python3 scripts/validate-compose-model.py "$folder" /tmp/scout-compose.json
             done
