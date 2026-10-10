@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_IMAGE = re.compile(
-    r"(?:docker\.io|mcr\.microsoft\.com)/[a-z0-9._/-]+:[A-Za-z0-9_.-]+"
+    r"(?:docker\.io|mcr\.microsoft\.com|quay\.io)/[a-z0-9._/-]+:[A-Za-z0-9_.-]+"
 )
 PACKAGE_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 IMAGE_TAG = re.compile(r"[A-Za-z0-9_.-]+")
@@ -47,6 +47,8 @@ def load_catalog(owner):
             raise ValueError(f"floating or invalid GHCR tag: {tag!r}")
         if not SOURCE_IMAGE.fullmatch(source):
             raise ValueError(f"invalid pinned source image: {source!r}")
+        if package == "argws-scout-minio" and not source.startswith("quay.io/minio/minio:RELEASE."):
+            raise ValueError("MinIO must use a pinned official Quay release")
         target = (package, tag)
         if target in targets:
             raise ValueError(f"duplicate GHCR target: {package}:{tag}")
