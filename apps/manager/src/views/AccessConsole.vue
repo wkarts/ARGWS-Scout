@@ -12,6 +12,14 @@ type UserRow = {
   disabledAt: string | null;
   createdAt: string;
 };
+type InvitationRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt: string;
+};
 type AuditRow = {
   id: string;
   action: string;
@@ -27,9 +35,10 @@ const emit = defineEmits<{
 }>();
 const users = ref<UserRow[]>([]);
 const auditRows = ref<AuditRow[]>([]);
+const invitations = ref<InvitationRow[]>([]);
 const activeTab = ref<"users" | "audit">("users");
 const busy = ref(false);
-const userForm = ref({ name: "", email: "", password: "", role: "OPERATOR" });
+const userForm = ref({ name: "", email: "", role: "OPERATOR" });
 function prettyDate(value?: string | null) {
   return value
     ? new Intl.DateTimeFormat("pt-BR", {
@@ -52,12 +61,14 @@ async function load() {
   if (!["OWNER", "ADMIN"].includes(props.role)) return;
   busy.value = true;
   try {
-    const [userResponse, auditResponse] = await Promise.all([
+    const [userResponse, auditResponse, invitationResponse] = await Promise.all([
       api<{ data: UserRow[] }>("/users"),
       api<{ data: AuditRow[] }>("/audit"),
+      api<{ data: InvitationRow[] }>("/users/invitations"),
     ]);
     users.value = userResponse.data;
     auditRows.value = auditResponse.data;
+    invitations.value = invitationResponse.data;
   } catch (error) {
     emit(
       "error",
@@ -70,18 +81,31 @@ async function load() {
 async function createUser() {
   busy.value = true;
   try {
-    await api("/users", {
+    await api("/users/invitations", {
       method: "POST",
       body: JSON.stringify(userForm.value),
     });
-    userForm.value = { name: "", email: "", password: "", role: "OPERATOR" };
+    userForm.value = { name: "", email: "", role: "OPERATOR" };
     await load();
-    emit("notify", "Usuário adicionado à organização.");
+    emit("notify", "Convite enviado por e-mail. A pessoa definirá sua própria senha.");
   } catch (error) {
     emit(
       "error",
       error instanceof Error ? error.message : "Falha ao criar usuário.",
     );
+  } finally {
+    busy.value = false;
+  }
+}
+async function revokeInvitation(invitation: InvitationRow) {
+  if (!window.confirm("Cancelar o convite enviado para " + invitation.email + "?")) return;
+  busy.value = true;
+  try {
+    await api("/users/invitations/" + invitation.id + "/revoke", { method: "POST", body: "{}" });
+    await load();
+    emit("notify", "Convite cancelado.");
+  } catch (cause) {
+    emit("error", cause instanceof Error ? cause.message : "Não foi possível cancelar o convite.");
   } finally {
     busy.value = false;
   }
@@ -111,7 +135,7 @@ onMounted(() => void load());
     <div class="panel-header">
       <div>
         <h2>Governança da organização</h2>
-        <p>Identidades, papéis e trilha de ações administrativas.</p>
+        <p>Convites por e-mail, permissões e histórico de ações. Cada pessoa escolhe sua própria senha.</p>
       </div>
       <button class="button subtle" :disabled="busy" @click="load">
         <RefreshCw :size="15" /> Atualizar
@@ -149,14 +173,6 @@ onMounted(() => void load());
             placeholder="pessoa@empresa.com"
         /></label>
         <label
-          >Senha inicial<input
-            v-model="userForm.password"
-            required
-            type="password"
-            minlength="16"
-            placeholder="Mínimo de 16 caracteres"
-        /></label>
-        <label
           >Papel<select v-model="userForm.role">
             <option value="ADMIN">Administrador</option>
             <option value="OPERATOR">Operador</option>
@@ -164,9 +180,17 @@ onMounted(() => void load());
           </select></label
         >
         <button class="button primary" :disabled="busy">
-          <Plus :size="15" /> Adicionar
+          <Plus :size="15" /> Enviar convite
         </button>
       </form>
+      <div v-if="invitations.length" class="invitation-panel">
+        <h3>Convites aguardando ativação</h3>
+        <p>Convites duram 48 horas. A senha é definida pela própria pessoa.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>NOME</th><th>E-MAIL</th><th>ACESSO</th><th>VALIDADE</th><th></th></tr></thead>
+          <tbody><tr v-for="invitation in invitations" :key="invitation.id"><td>{{ invitation.name }}</td><td>{{ invitation.email }}</td><td>{{ roleLabel(invitation.role) }}</td><td>{{ prettyDate(invitation.expiresAt) }}</td><td><button class="button outline small-button" @click="revokeInvitation(invitation)" :disabled="busy">Cancelar convite</button></td></tr></tbody>
+        </table></div>
+      </div>
       <div v-if="users.length" class="table-wrap">
         <table>
           <thead>
@@ -207,8 +231,8 @@ onMounted(() => void load());
         </table>
       </div>
       <div v-else class="empty-state compact">
-        <h3>Nenhum usuário adicional</h3>
-        <p>Adicione pessoas com o menor papel necessário para suas tarefas.</p>
+        <h3>Nenhuma pessoa ativa adicional</h3>
+        <p>Envie um convite acima. A conta ficará disponível após a ativação por e-mail.</p>
       </div>
     </template>
     <div v-else-if="auditRows.length" class="table-wrap">
