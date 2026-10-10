@@ -2870,8 +2870,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             >Telefone<input
               v-model="profileForm.phone"
               placeholder="+55 75 9xxxx-xxxx" /></label
-          ><label
-            
+          >
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Cancelar</button
             ><button
