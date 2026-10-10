@@ -6,10 +6,30 @@ import {
   assertSafePublicUrl,
 } from "@argws/scout-shared/url-policy";
 
+export function chromiumSandboxEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const setting = (env.SCOUT_BROWSER_CHROMIUM_SANDBOX ?? "true")
+    .trim()
+    .toLowerCase();
+  if (setting !== "true" && setting !== "false") {
+    throw new Error(
+      "SCOUT_BROWSER_CHROMIUM_SANDBOX deve ser true ou false.",
+    );
+  }
+  return setting === "true";
+}
+
 export async function createBrowser(): Promise<Browser> {
+  const chromiumSandbox = chromiumSandboxEnabled();
+  if (!chromiumSandbox) {
+    process.stderr.write(
+      "Chromium sandbox desativado explicitamente: mantenha o browser-worker isolado, sem privilégios, com limites de recursos e bloqueio de redes internas.\\n",
+    );
+  }
   return chromium.launch({
     headless: true,
-    chromiumSandbox: true,
+    chromiumSandbox,
     args: ["--disable-dev-shm-usage"],
   });
 }
