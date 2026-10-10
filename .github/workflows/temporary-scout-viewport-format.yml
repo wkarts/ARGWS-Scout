@@ -1,0 +1,36 @@
+name: Temporary viewport formatter
+on:
+  push:
+    branches: [fix/scout-responsive-global-connect-20261010]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Normalize viewport tests and workflow
+        run: pnpm exec prettier --write .github/workflows/manager-viewport.yml apps/browser-worker/test/manager-viewport-smoke.mjs test/manager-responsive-contract.test.ts
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add .github/workflows/manager-viewport.yml apps/browser-worker/test/manager-viewport-smoke.mjs test/manager-responsive-contract.test.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: normalize responsive regression checks"
+          git push origin HEAD:refs/heads/fix/scout-responsive-global-connect-20261010
