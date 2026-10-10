@@ -1,6 +1,11 @@
 import "dotenv/config";
 import amqp from "amqplib";
-import { JobStatus, Prisma, PrismaClient } from "@prisma/client";
+import {
+  JobStatus,
+  Prisma,
+  PrismaClient,
+  ContentBatchStatus,
+} from "@prisma/client";
 import { QUEUES } from "@argws/scout-core";
 
 const prisma = new PrismaClient();
@@ -30,6 +35,52 @@ const maxJobAttempts = Math.max(
   1,
   Number(process.env.SCOUT_JOB_MAX_ATTEMPTS ?? 3),
 );
+
+// Recuperação isolada da camada opcional; não altera coletas nem os workers existentes.
+async function recoverStalledContentBatches(): Promise<void> {
+  if (process.env.SCOUT_CONTENT_ENABLED !== "true") return;
+  const now = new Date();
+  // Processamento de imagens/redes pode demorar, por isso o lease é conservador.
+  const staleBefore = new Date(now.getTime() - 45 * 60_000);
+  const stale = await prisma.contentBatch.findMany({
+    where: {
+      status: ContentBatchStatus.RUNNING,
+      updatedAt: { lt: staleBefore },
+    },
+    take: 20,
+    orderBy: { updatedAt: "asc" },
+  });
+  for (const batch of stale) {
+    await prisma.$transaction(async (tx) => {
+      const failed = batch.attempts >= 3;
+      const claimed = await tx.contentBatch.updateMany({
+        where: {
+          id: batch.id,
+          status: ContentBatchStatus.RUNNING,
+          updatedAt: batch.updatedAt,
+        },
+        data: {
+          status: failed
+            ? ContentBatchStatus.FAILED
+            : ContentBatchStatus.QUEUED,
+          errorCode: "CONTENT_WORKER_TIMEOUT",
+          startedAt: null,
+          ...(failed ? { finishedAt: now } : {}),
+        },
+      });
+      if (!claimed.count || failed) return;
+      await tx.outbox.create({
+        data: {
+          tenantId: batch.tenantId,
+          eventType: "content.refine",
+          routingKey: "content.refine",
+          aggregateId: batch.id,
+          payload: { batchId: batch.id, tenantId: batch.tenantId },
+        },
+      });
+    });
+  }
+}
 
 async function recoverStalledJobs(): Promise<void> {
   const now = new Date();
@@ -161,11 +212,13 @@ async function dispatchOutbox(): Promise<void> {
         }
       } else {
         const queue =
-          row.routingKey === "jobs.browser"
-            ? QUEUES.browser
-            : row.routingKey === "jobs.http"
-              ? QUEUES.http
-              : null;
+          row.routingKey === "content.refine"
+            ? QUEUES.content
+            : row.routingKey === "jobs.browser"
+              ? QUEUES.browser
+              : row.routingKey === "jobs.http"
+                ? QUEUES.http
+                : null;
         if (queue)
           channel.sendToQueue(queue, Buffer.from(JSON.stringify(row.payload)), {
             persistent: true,
@@ -240,9 +293,14 @@ async function dispatchWebhooks(): Promise<void> {
   }
 }
 
+let lastContentRecovery = 0;
 while (running) {
   try {
     await recoverStalledJobs();
+    if (Date.now() - lastContentRecovery >= 60_000) {
+      await recoverStalledContentBatches();
+      lastContentRecovery = Date.now();
+    }
     await dispatchOutbox();
     await dispatchWebhooks();
   } catch (error) {

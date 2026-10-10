@@ -518,6 +518,114 @@ paths:
           {
             description: Chave repetida com outro conteúdo ou instância indisponível.,
           }
+  /whatsapp/channel-actions:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Histórico de envios de status e compartilhamento de produtos do próprio espaço.
+      description: Nunca retorna token, mensagem ou número de destinatário.
+      responses:
+        "200": { description: Até 100 ações registradas, ordenadas por data. }
+  /whatsapp/instances/{name}/statuses:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Consulta status publicados exclusivamente pela instância vinculada ao espaço.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 1 },
+          }
+      responses:
+        "200": { description: Status da instância vinculada, sem credenciais. }
+        "404": { description: Instância de outro espaço ou não vinculada. }
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Publica status de texto ou foto após confirmação explícita.
+      description: Disponível apenas quando a implementação do provider suporta envio de status. Nunca repete automaticamente envios de resultado incerto.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 80 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, content, confirmed]
+              properties:
+                type: { type: string, enum: [text, image] }
+                content: { type: string, minLength: 1, maxLength: 4096 }
+                confirmed: { type: boolean, enum: [true] }
+                backgroundColor: { type: string, example: "#1d4ed8" }
+                font: { type: integer, minimum: 1, maximum: 5 }
+                caption: { type: string, maxLength: 1024 }
+                allContacts: { type: boolean, default: false }
+                statusJidList:
+                  type: array
+                  maxItems: 100
+                  items: { type: string, pattern: "^[1-9][0-9]{7,14}$" }
+      responses:
+        "201": { description: Status enviado. }
+        "200": { description: Requisição já registrada sem novo disparo. }
+        "202":
+          { description: Resposta remota incerta; nenhum reenvio automático. }
+        "400": { description: Destinatário ou payload inválido. }
+        "404": { description: Instância não vinculada ao espaço. }
+  /whatsapp/instances/{name}/catalog:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Consulta o catálogo WhatsApp Business em modo somente leitura.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 30, default: 10 },
+          }
+        - { in: query, name: cursor, schema: { type: string, maxLength: 1024 } }
+      responses:
+        "200":
+          { description: Produtos e paginação fornecidos pela Connect API. }
+        "404": { description: Instância de outro espaço. }
+        "502": { description: Catálogo não suportado/indisponível no provider. }
+  /whatsapp/instances/{name}/catalog/share:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Compartilha um produto selecionado por mensagem de texto com confirmação.
+      description: Não cria produtos nativamente no catálogo. Valida destinatário, link HTTPS e idempotência.
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 80 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [number, title, productUrl, confirmed]
+              properties:
+                number: { type: string, pattern: "^[1-9][0-9]{7,14}$" }
+                title: { type: string, minLength: 2, maxLength: 280 }
+                productUrl: { type: string, format: uri }
+                description: { type: string, maxLength: 1500 }
+                confirmed: { type: boolean, enum: [true] }
+      responses:
+        "201": { description: Compartilhamento confirmado. }
+        "200": { description: Idempotency-Key previamente registrada. }
+        "202":
+          {
+            description: Envio possivelmente efetuado,
+            sem repetição automática.,
+          }
+        "400": { description: Produto ou número inválido. }
+        "404": { description: Instância indisponível neste espaço. }
   /instances/{instanceId}/tokens:
     get:
       parameters:
@@ -691,6 +799,172 @@ paths:
                   activity:
                     { type: object, additionalProperties: { type: integer } }
                   runtime: { type: object, additionalProperties: true }
+  /content/status:
+    get:
+      summary: Estado e canais do refinamento de conteúdo.
+      responses:
+        "200": { description: Estado e formatos de publicação disponíveis. }
+        "403": { description: Requer usuário do Manager. }
+  /content/instances/{id}/settings:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Configurações do refinamento isoladas por instância.
+      responses:
+        "200": { description: Configurações atuais. }
+        "404": { description: Instância não encontrada. }
+    patch:
+      summary: Atualiza opções de refinamento da instância (OWNER/ADMIN).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                autoProcess: { type: boolean, default: false }
+                query: { type: string, maxLength: 150 }
+                onlyRelevant: { type: boolean }
+                maxItems: { type: integer, minimum: 1, maximum: 250 }
+                createStory: { type: boolean }
+                fetchImages: { type: boolean, default: false }
+                enrichImages: { type: boolean, default: false }
+      responses:
+        "200": { description: Configuração atualizada. }
+        "403": { description: Permissão de administrador necessária. }
+  /content/jobs:
+    get:
+      summary: Coletas concluídas para refinamento.
+      parameters:
+        - in: query
+          name: instanceId
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lista de coletas e lotes relacionados. }
+  /content/jobs/{jobId}/refine:
+    post:
+      summary: Enfileira refinamento de Job concluído, sem alterar a coleta.
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query: { type: string }
+                onlyRelevant: { type: boolean }
+                maxItems: { type: integer, minimum: 1, maximum: 250 }
+                createStory: { type: boolean }
+                fetchImages: { type: boolean }
+                enrichImages: { type: boolean }
+      responses:
+        "202": { description: Refinamento enfileirado. }
+        "200": { description: Lote pré-existente reutilizado. }
+        "503": { description: Módulo desativado no ambiente. }
+  /content/import:
+    post:
+      summary: Importa retorno JSON para fonte existente e gera refinamento assíncrono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [instanceId, sourceId, payload]
+              properties:
+                instanceId: { type: string, format: uuid }
+                sourceId: { type: string, format: uuid }
+                payload: { type: object, additionalProperties: true }
+                options: { type: object, additionalProperties: true }
+      responses:
+        "202": { description: Importação registrada e lote enfileirado. }
+        "404": { description: Fonte não pertence à instância autorizada. }
+  /content/batches:
+    get:
+      summary: Lotes refinados pertencentes à organização.
+      parameters:
+        - in: query
+          name: instanceId
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lotes e contadores. }
+  /content/batches/{id}:
+    get:
+      summary: Detalhamento de lote e publicações individuais.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lote autorizado e até 250 itens. }
+        "404": { description: Lote inexistente. }
+  /content/identities/{id}/history:
+    get:
+      summary: Histórico de preços e observações do mesmo conteúdo na instância.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Histórico de até 100 observações. }
+  /content/items/{id}/review:
+    patch:
+      summary: Aprova, retorna a rascunho ou arquiva uma publicação.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { type: string, enum: [DRAFT, APPROVED, ARCHIVED] }
+      responses:
+        "200": { description: Revisão registrada; não envia mensagem. }
+        "403": { description: Item divergente requer administrador. }
+  /content/items/{id}/export:
+    get:
+      summary: Exporta dados refinados e rascunhos multicanal, sem envio.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          { description: Dados, textos, avisos, mídias e estado de aprovação. }
+  /content/items/{id}/media/{kind}:
+    get:
+      summary: Recupera imagem ou arquivo EML de um item autenticado.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: kind
+          required: true
+          schema: { type: string, enum: [square, wide, story, eml] }
+      responses:
+        "200": { description: Arquivo privado do Garage/S3. }
+        "404": { description: Artefato não disponível. }
 components:
   securitySchemes:
     ScoutSession: { type: apiKey, in: cookie, name: scout_access }

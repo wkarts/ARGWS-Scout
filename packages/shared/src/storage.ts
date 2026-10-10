@@ -39,7 +39,11 @@ async function ensureBucket(): Promise<void> {
         }
       }
     })();
-  return bucketReady;
+  // A transient unavailable backend must be retried on next readiness check.
+  return bucketReady.catch((error) => {
+    bucketReady = null;
+    throw error;
+  });
 }
 
 export async function checkObjectStorage(): Promise<void> {
@@ -49,7 +53,7 @@ export async function checkObjectStorage(): Promise<void> {
     !process.env.S3_SECRET_ACCESS_KEY
   )
     throw new Error("Armazenamento de objetos não configurado.");
-  await client.send(new HeadBucketCommand({ Bucket: bucket }));
+  await ensureBucket();
 }
 
 export async function storeArtifact(input: {

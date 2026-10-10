@@ -27,6 +27,21 @@ Uma conexão **não** significa compartilhar as instâncias WhatsApp. Cada espa�
 
 **Excluir:** somente administradores do espaço podem excluir as próprias instâncias vinculadas. A publicação exige coleta concluída do mesmo espaço, instância vinculada, número válido e chave de idempotência para evitar duplicidade.
 
+## Status WhatsApp, catálogo e compartilhamento
+
+O Scout consulta a especificação OpenAPI atual da Connect|API, e todos esses recursos continuam restritos às instâncias vinculadas ao espaço de trabalho do usuário.
+
+- **Postar status:** no painel Connect|API, selecione sua instância e use **Publicar status**. O contrato do provider Baileys suporta texto e imagem; texto precisa de `backgroundColor` e `font`, e o envio deve definir destinatários por `statusJidList` ou autorizar explicitamente `allContacts`. A versão Zapo consultada ainda retorna recurso não suportado para publicar status; a interface não pode garantir paridade entre providers.
+- **Consultar status:** `GET /v1/whatsapp/instances/{name}/statuses` consulta somente as publicações da instância e nunca a lista global da plataforma.
+- **Consultar catálogo:** `GET /v1/whatsapp/instances/{name}/catalog` consulta a lista de produtos do WhatsApp Business via `business/getCatalog` com limite e paginação. O provider precisa suportar catálogo para funcionar.
+- **Compartilhar produto:** informe destinatário, título, descrição e URL HTTPS pública; o Scout envia mensagem de texto apenas após confirmação explícita. **Não há criação/edição nativa de produtos no catálogo** na especificação atualmente disponível, portanto compartilhar não insere o produto no catálogo comercial.
+- **Idempotência e incerteza:** `Idempotency-Key` obrigatória nos POST de envio. O registro de ação por espaço armazena hash do conteúdo, tipo e estado, sem salvar a mensagem integral ou token. Se a Connect|API não confirmar um envio, o estado fica **UNKNOWN** e não existe repetição automática. Confirme no celular antes de tentar novamente.
+- **Histórico por espaço:** `GET /v1/whatsapp/channel-actions` retorna os envios recentes do espaço sem destinatários completos nem segredos.
+
+### Exclusão e desvinculação
+
+O painel oferece operações distintas: **Excluir na Connect|API** chama a rota de exclusão remota usando o token particular, e só remove a propriedade local após confirmação; **Desvincular do espaço** remove apenas o vínculo local, preservando a sessão remota. Desvinculação é o caminho seguro para instâncias antigas ou credenciais inválidas. A exclusão remota não troca para o token global para contornar permissões.
+
 ## Migração sem perda de dados
 
 1. Faça backup consistente de PostgreSQL, Garage, `.env` e configurações existentes, incluindo a tabela legada `ConnectApiConfig`.

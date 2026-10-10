@@ -23,6 +23,7 @@ import {
 } from "./connect-api.ts";
 import { globalConnectSettings, remoteInstanceName } from "./global-connect.ts";
 import { deleteRemoteInstance } from "./connect-deletion.ts";
+import { registerWhatsAppExtensions } from "./whatsapp-extensions.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
 const publisherRoles = [...adminRoles, TenantRole.OPERATOR];
@@ -872,6 +873,16 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NAME_INVALID",
           "Nome de instância inválido.",
         );
+      const mode = z
+        .object({ mode: z.enum(["remote", "unlink"]).default("remote") })
+        .safeParse(request.query);
+      if (!mode.success)
+        return fail(
+          reply,
+          400,
+          "INVALID_DELETE_MODE",
+          "Modo de remoção inválido.",
+        );
       const tenant = tenantId(request);
       const instance = await prisma.connectApiInstance.findFirst({
         where: { tenantId: tenant, name: parsedName.data, present: true },
@@ -900,7 +911,7 @@ export async function registerWhatsAppRoutes(
         claim?.tenantId === tenant && Boolean(instance.tokenEncrypted);
       let remoteResult: "removed" | "already-missing" | "not-claimed" =
         "not-claimed";
-      if (remotelyClaimed) {
+      if (mode.data.mode === "remote" && remotelyClaimed) {
         const connection = credentials();
         if (!connection)
           return fail(
@@ -926,7 +937,7 @@ export async function registerWhatsAppRoutes(
             reply,
             info.status,
             "REMOTE_DELETE_FAILED",
-            "A instância não foi excluída na Connect|API. O vínculo local foi preservado para uma nova tentativa.",
+            "A Connect|API não confirmou a exclusão. O vínculo foi preservado. Você também pode optar por desvincular somente deste espaço.",
           );
         }
       }
@@ -963,9 +974,10 @@ export async function registerWhatsAppRoutes(
         await audit({
           tenantId: tenant,
           actorUserId: request.principal?.userId,
-          action: remotelyClaimed
-            ? "whatsapp.instance.deleted"
-            : "whatsapp.instance.unlinked",
+          action:
+            remotelyClaimed && mode.data.mode === "remote"
+              ? "whatsapp.instance.deleted"
+              : "whatsapp.instance.unlinked",
           resourceType: "whatsapp-instance",
           resourceId: instance.id,
           metadata: { name: instance.name, remoteResult },
@@ -983,6 +995,7 @@ export async function registerWhatsAppRoutes(
         remoteDeleted:
           remoteResult === "removed" || remoteResult === "already-missing",
         localOnly: remoteResult === "not-claimed",
+        mode: mode.data.mode,
       };
     },
   );
@@ -1222,4 +1235,5 @@ export async function registerWhatsAppRoutes(
       });
     },
   );
+  await registerWhatsAppExtensions(app);
 }

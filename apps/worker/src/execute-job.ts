@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { JobStatus, PrismaClient, SourceEngine } from "@prisma/client";
+import { contentSettings } from "@argws/scout-core";
 import type {
   ConnectorContext,
   ConnectorResult,
@@ -49,7 +50,7 @@ export async function executeJob(
 ): Promise<void> {
   const job = await prisma.job.findFirst({
     where: { id: envelope.jobId, tenantId: envelope.tenantId },
-    include: { source: true },
+    include: { source: true, instance: true },
   });
   if (
     !job ||
@@ -133,6 +134,30 @@ export async function executeJob(
         where: { id: attemptRow.id },
         data: { status: "SUCCEEDED", finishedAt: new Date() },
       });
+      // A coleta nunca depende do serviço de conteúdo. Apenas coloca um
+      // evento na outbox se o operador ativou o refinamento desta instância.
+      const content = contentSettings(job.instance.metadata);
+      if (process.env.SCOUT_CONTENT_ENABLED === "true" && content.autoProcess) {
+        const batch = await tx.contentBatch.upsert({
+          where: { jobId: job.id },
+          create: {
+            tenantId: job.tenantId,
+            instanceId: job.instanceId,
+            jobId: job.id,
+            options: content,
+          },
+          update: {},
+        });
+        await tx.outbox.create({
+          data: {
+            tenantId: job.tenantId,
+            eventType: "content.refine",
+            routingKey: "content.refine",
+            aggregateId: batch.id,
+            payload: { batchId: batch.id, tenantId: job.tenantId },
+          },
+        });
+      }
       if (artifact)
         await tx.artifact.create({
           data: {

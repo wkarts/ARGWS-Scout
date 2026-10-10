@@ -138,6 +138,31 @@ importers:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@5.9.3)
 
+  apps/content-worker:
+    dependencies:
+      "@argws/scout-core":
+        specifier: workspace:*
+        version: link:../../packages/core
+      "@argws/scout-shared":
+        specifier: workspace:*
+        version: link:../../packages/shared
+      "@prisma/client":
+        specifier: ^6.16.2
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      amqplib:
+        specifier: ^0.10.9
+        version: 0.10.9
+      argon2:
+        specifier: ^0.44.0
+        version: 0.44.0
+    devDependencies:
+      "@types/amqplib":
+        specifier: ^0.10.7
+        version: 0.10.8
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@5.9.3)
+
   apps/dispatcher:
     dependencies:
       "@argws/scout-core":
