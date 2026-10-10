@@ -74,6 +74,18 @@ docker compose logs --tail=100 api manager garage-config-init garage-init migrat
 
 Verifique por que a stack está indicada como encerrada, especialmente quando `api`, `manager` e as dependências persistentes não permanecem em execução. Tarefas `exited (0)` são esperadas; serviços persistentes parados ou `unhealthy` não são.
 
+**Problema conhecido do Dockge:** a interface pode mostrar a stack inteira como `encerrado` só porque uma tarefa temporária terminou normalmente, mesmo quando todos os serviços permanentes estão ativos ([issue #806](https://github.com/louislam/dockge/issues/806), também observado na [issue #11](https://github.com/louislam/dockge/issues/11)). Quando **todos os quatro inicializadores tiverem concluído com exit 0** e os serviços principais estiverem `Up/healthy`, é possível remover **somente os contêineres temporários já concluídos** para que deixem de influenciar a agregação do estado:
+
+```bash
+docker compose ps -a
+# Execute SOMENTE se os quatro serviços estiverem Exited (0).
+docker compose rm -f garage-config-init garage-init migrate bootstrap
+docker compose ls --all
+docker compose ps -a
+```
+
+Essa remoção é **somente dos contêineres temporários**, não dos volumes ou bind mounts; os dados persistentes permanecem. Ao executar `docker compose up -d` novamente, as tarefas temporárias podem ser recriadas e a indicação vermelha voltar. A correção definitiva da apresentação do status depende do Dockge, não de uma configuração de cor do Scout. **Não execute a limpeza se alguma tarefa terminou com erro**, pois isso ocultaria a falha que precisa ser diagnosticada.
+
 ## Instalação e atualização
 
 Para Docker Compose, Dockge e CloudPanel, coloque os dois arquivos na mesma pasta, copie `.env.example` para `.env`, gere e preencha cada segredo, ajuste `SCOUT_PUBLIC_URL` e mantenha `COMPOSE_PROJECT_NAME`. Para atualização pelo terminal, execute `docker compose pull` e `docker compose up -d`; isso aplica o novo `SCOUT_TAG` sem recriar os volumes. O serviço `bootstrap` executa automaticamente após as migrações e **antes da API**, criando o primeiro OWNER somente quando o banco estiver vazio. Instalações já povoadas não recebem novos usuários, alterações de senha ou elevação de permissões.
