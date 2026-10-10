@@ -23,6 +23,7 @@ import {
 } from "./connect-api.ts";
 import { globalConnectSettings, remoteInstanceName } from "./global-connect.ts";
 import { deleteRemoteInstance } from "./connect-deletion.ts";
+import { registerWhatsAppExtensions } from "./whatsapp-extensions.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
 const publisherRoles = [...adminRoles, TenantRole.OPERATOR];
@@ -1222,4 +1223,5 @@ export async function registerWhatsAppRoutes(
       });
     },
   );
+  await registerWhatsAppExtensions(app);
 }
