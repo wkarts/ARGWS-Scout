@@ -184,7 +184,6 @@ services:
   bootstrap:
     image: ghcr.io/${SCOUT_IMAGE_OWNER:-wkarts}/argws-scout-migrate:${SCOUT_TAG:-develop}
     pull_policy: always
-    profiles: [maintenance]
     restart: "no"
     command: [pnpm, db:seed]
     env_file: [.env]
@@ -211,7 +210,7 @@ services:
     environment: &app-environment
       NODE_ENV: production
       SCOUT_ENV: ${SCOUT_ENV:-develop}
-      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.3}
+      SCOUT_VERSION: ${SCOUT_VERSION:-0.5.4}
       DATABASE_URL: postgresql://${POSTGRES_USER:-scout}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scout}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-scout}:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -226,6 +225,7 @@ services:
       SCOUT_TRUST_PROXY_HOPS: ${SCOUT_TRUST_PROXY_HOPS:-1}
     depends_on:
       migrate: { condition: service_completed_successfully }
+      bootstrap: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -336,6 +336,7 @@ services:
       SCOUT_RECOVERY_SMTP_FROM_NAME: ""
       <<: *app-environment
       SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}
+      SCOUT_BROWSER_CHROMIUM_SANDBOX: ${SCOUT_BROWSER_CHROMIUM_SANDBOX:-false}
     depends_on:
       api: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

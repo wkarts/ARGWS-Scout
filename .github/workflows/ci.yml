@@ -45,6 +45,8 @@ jobs:
       - run: pnpm db:generate
       - name: Apply migrations and bootstrap test tenant
         run: pnpm db:migrate && pnpm db:seed
+      - name: Verify safe re-execution of bootstrap and diagnostics
+        run: pnpm db:seed && pnpm auth:diagnose
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

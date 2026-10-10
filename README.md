@@ -4,7 +4,7 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
-A versão estável **0.5.3** corrige a geração da chave RPC do Garage nos deploys e no Deployer Windows 1.0.1, evitando a falha `Invalid RPC secret key` em novas instalações. Inclui validação preventiva, testes de inicialização real e atualização dos pacotes Docker, Dockge, CloudPanel e Portainer, mantendo recursos, volumes e isolamento existentes. Para instalações afetadas, consulte [a recuperação do Garage](docs/deployment.md#garage-chave-rpc-válida-e-recuperação-sem-perda-de-dados); atualizar apenas as imagens não substitui uma chave inválida no `.env`.
+A versão **0.5.4** corrige o provisionamento inicial do OWNER nas oito distribuições, permite diagnosticar e recuperar uma senha existente sem alterar MFA automaticamente e resolve o ciclo de reinicialização do browser-worker em hosts Docker que restringem o sandbox do Chromium. Preserva as correções do Garage da 0.5.3, os volumes e as credenciais existentes. Consulte [login e bootstrap seguro](docs/deployment.md#login-401-e-bootstrap-seguro) e [recuperação do Garage](docs/deployment.md#garage-chave-rpc-válida-e-recuperação-sem-perda-de-dados).
 
 ## O que a Scout já entrega
 
@@ -69,7 +69,7 @@ Para instalar um alvo:
 2. Preserve `COMPOSE_PROJECT_NAME` em atualizações. Ele define nome da rede e volumes persistentes.
 3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou `stable` (recomendado) ou `latest` para produção. Essa única tag atualiza as dez imagens da Scout.
 4. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet` ou use a validação do stack no Portainer.
-5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. Crie o OWNER uma vez pelo perfil `maintenance` do Compose; no Portainer, use o console do container da API para executar `pnpm db:seed` uma vez.
+5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. O serviço `bootstrap` cria o primeiro OWNER automaticamente **apenas se o banco não possuir usuários**. Em upgrades não recria contas, não muda senhas, permissões ou MFA; confira `SCOUT_BOOTSTRAP_ADMIN_EMAIL` e `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` antes da primeira instalação.
 
 Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a porta de loopback indicada no `.env.example`. A variável `GARAGE_RPC_SECRET` exige exatamente 64 caracteres hexadecimais (32 bytes); gere-a com `openssl rand -hex 32` e preserve-a nas atualizações. O Deployer Windows 1.0.1 corrige a geração, que anteriormente usava Base64 URL-safe e impedia o Garage de iniciar. A recuperação de instalações afetadas está descrita em [docs/deployment.md](docs/deployment.md). A chave `SCOUT_ENCRYPTION_KEY_BASE64` precisa ser gerada como Base64 de 32 bytes; a API rejeita placeholders durante a inicialização. Os pulls sem credencial exigem que os pacotes GHCR tenham leitura pública; se forem privados, configure autenticação GHCR no host antes de executar o Compose.
 
@@ -85,6 +85,8 @@ Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a port
 Na primeira sincronização, configure as permissões dos pacotes GHCR. Para pulls de produção sem token, publique os pacotes como públicos no GitHub Packages. GHCR não permite que este workflow altere sozinho a visibilidade inicial do pacote sem credencial administrativa.
 
 ## Segurança e operação
+
+Para diagnosticar uma senha rejeitada, execute no container API `pnpm auth:diagnose`: o relatório confere a existência da conta e a correspondência entre senha do `.env` e hash persistido, sem revelar credenciais. Para recuperação sem SMTP, existe `pnpm auth:recover-owner` **somente em console interativo autorizado**, com confirmação explícita e preservação do MFA. Em hosts Docker que bloqueiam user namespaces do Chromium, o browser-worker usa `SCOUT_BROWSER_CHROMIUM_SANDBOX=false` com isolamento do contêiner; consulte os riscos e as exigências de egress em [docs/security.md](docs/security.md).
 
 Consulte docs/security.md, docs/architecture.md e docs/operations.md. Use política de egress no host para browser worker: a validação SSRF da aplicação não substitui firewall contra redes privadas e metadados de nuvem. Configure cópia externa dos backups e faça ensaio de restauração; os scripts não executam backup agendado por conta própria.
 

@@ -268,6 +268,7 @@ services:
       S3_BUCKET: ${S3_BUCKET:-scout-artifacts}
       S3_REGION: ${S3_REGION:-us-east-1}
       SCOUT_BROWSER_CONCURRENCY: 1
+      SCOUT_BROWSER_CHROMIUM_SANDBOX: ${SCOUT_BROWSER_CHROMIUM_SANDBOX:-false}
     depends_on:
       api: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
