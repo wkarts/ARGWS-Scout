@@ -2563,7 +2563,7 @@ export async function registerRoutes(
       const owner = tenantId(request);
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const excluded = await excludedMasterIds();
-      const [errors, failedJobs, recentAudit, failedDeliveries, counters] =
+      const [errors, failedJobs, recentAudit, failedDeliveries, counters, failedJobsTotal, failedDeliveriesTotal] =
         await Promise.all([
           prisma.diagnosticLog.findMany({
             where: { tenantId: owner, createdAt: { gte: since } },
@@ -2638,6 +2638,12 @@ export async function registerRoutes(
           prisma.diagnosticLog.count({
             where: { tenantId: owner, createdAt: { gte: since } },
           }),
+          prisma.job.count({
+            where: { tenantId: owner, status: JobStatus.FAILED, createdAt: { gte: since } },
+          }),
+          prisma.webhookDelivery.count({
+            where: { webhook: { tenantId: owner }, status: "FAILED", createdAt: { gte: since } },
+          }),
         ]);
       return {
         schemaVersion: 1,
@@ -2646,9 +2652,11 @@ export async function registerRoutes(
         version: buildVersion,
         summary: {
           requestFailures: counters,
-          failedJobs: failedJobs.length,
-          failedDeliveries: failedDeliveries.length,
+          failedJobs: failedJobsTotal,
+          failedDeliveries: failedDeliveriesTotal,
         },
+        resultLimits: { requestFailures: 200, jobs: 100, audit: 100, webhookFailures: 100 },
+        resultCounts: { requestFailures: counters, failedJobs: failedJobsTotal, webhookFailures: failedDeliveriesTotal },
         requestFailures: errors,
         jobs: failedJobs,
         audit: recentAudit,
