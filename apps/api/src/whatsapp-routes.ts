@@ -974,7 +974,8 @@ export async function registerWhatsAppRoutes(
         await audit({
           tenantId: tenant,
           actorUserId: request.principal?.userId,
-          action: remotelyClaimed && mode.data.mode === "remote"
+          action:
+            remotelyClaimed && mode.data.mode === "remote"
               ? "whatsapp.instance.deleted"
               : "whatsapp.instance.unlinked",
           resourceType: "whatsapp-instance",
