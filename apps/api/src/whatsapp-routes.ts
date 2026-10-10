@@ -12,6 +12,7 @@ import { authenticated, hasRole, isManagerUser } from "./auth.ts";
 import {
   connectApiRequest,
   connectInstancePath,
+  connectPairingPath,
   connectSendTextPath,
   ConnectApiError,
   createWhatsAppInstancePayload,
@@ -21,6 +22,7 @@ import {
   sendWhatsAppTextPayload,
 } from "./connect-api.ts";
 import { globalConnectSettings, remoteInstanceName } from "./global-connect.ts";
+import { deleteRemoteInstance } from "./connect-deletion.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
 const publisherRoles = [...adminRoles, TenantRole.OPERATOR];
@@ -33,7 +35,12 @@ const nameSchema = z
     /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u,
     "Use letras, números, espaço, ponto, hífen ou sublinhado no nome da instância.",
   );
-const createSchema = z.object({ name: nameSchema });
+const createSchema = z.object({
+  name: nameSchema,
+  provider: z
+    .enum(["WHATSAPP-BAILEYS", "WHATSAPP-ZAPO"])
+    .default("WHATSAPP-BAILEYS"),
+});
 const importSchema = z.object({
   name: nameSchema,
   token: z.string().trim().min(8).max(4096),
@@ -365,7 +372,7 @@ export async function registerWhatsAppRoutes(
             tenantId: tenant,
             name: remoteName,
             displayName: body.data.name,
-            integration: "WHATSAPP-BAILEYS",
+            integration: body.data.provider,
             tokenEncrypted: encryptSecret(token),
             connectionState: "connecting",
             present: false,
@@ -378,7 +385,11 @@ export async function registerWhatsAppRoutes(
           apiKey: auth.apiKey,
           path: "instance/create",
           method: "POST",
-          body: createWhatsAppInstancePayload(remoteName, token),
+          body: createWhatsAppInstancePayload(
+            remoteName,
+            token,
+            body.data.provider,
+          ),
         });
       } catch (error) {
         const mayHaveCreated = !(
@@ -721,13 +732,36 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NAME_INVALID",
           "Nome de instância inválido.",
         );
-      if (!["connect", "status", "restart", "logout"].includes(action))
+      if (
+        !["connect", "pairing", "status", "restart", "logout"].includes(action)
+      )
         return fail(
           reply,
           404,
           "ACTION_NOT_FOUND",
           "Ação de instância não encontrada.",
         );
+      let pairingNumber: string | null = null;
+      if (action === "pairing") {
+        const body = z
+          .object({ number: z.string().trim().min(8).max(24) })
+          .safeParse(request.body);
+        if (!body.success)
+          return fail(
+            reply,
+            400,
+            "PAIRING_NUMBER_REQUIRED",
+            "Informe o número com DDI e DDD.",
+          );
+        pairingNumber = normalizedNumber(body.data.number);
+        if (!pairingNumber)
+          return fail(
+            reply,
+            400,
+            "PAIRING_NUMBER_INVALID",
+            "Use telefone internacional com DDI, DDD e número.",
+          );
+      }
       const tenant = tenantId(request);
       const instance = await loadRemoteInstance(tenant, parsedName.data);
       if (!instance || !instance.tokenEncrypted)
@@ -753,14 +787,30 @@ export async function registerWhatsAppRoutes(
           ? "connectionState"
           : action === "logout"
             ? "logout"
-            : action;
+            : action === "pairing"
+              ? "connect"
+              : action;
       try {
         const result = await connectApiRequest<unknown>({
           baseUrl: auth.baseUrl,
           apiKey: token,
           method,
-          path: connectInstancePath(instance.name, apiAction),
+          path:
+            action === "pairing" && pairingNumber
+              ? connectPairingPath(instance.name, pairingNumber)
+              : connectInstancePath(instance.name, apiAction),
         });
+        if (
+          result &&
+          typeof result === "object" &&
+          (result as Record<string, unknown>).error === true
+        )
+          return fail(
+            reply,
+            502,
+            "CONNECT_PAIRING_FAILED",
+            "Não foi possível obter o QR Code ou código. Tente novamente.",
+          );
         if (action === "status") {
           const root =
             result && typeof result === "object"
@@ -771,7 +821,13 @@ export async function registerWhatsAppRoutes(
               ? (root.instance as Record<string, unknown>)
               : root;
           const state =
-            typeof detail.state === "string" ? detail.state : "unknown";
+            typeof detail.state === "string"
+              ? detail.state
+              : typeof detail.status === "string"
+                ? detail.status
+                : typeof detail.connectionStatus === "string"
+                  ? detail.connectionStatus
+                  : "unknown";
           const updated = await prisma.connectApiInstance.update({
             where: { id: instance.id },
             data: { connectionState: state },
@@ -801,11 +857,14 @@ export async function registerWhatsAppRoutes(
 
   app.delete(
     "/whatsapp/instances/:name",
-    { preHandler: authenticated() },
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 12, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       if (!(await requireAdmin(request, reply))) return;
       const { name } = request.params as { name: string };
-      const parsedName = nameSchema.safeParse(decodeURIComponent(name));
+      const parsedName = nameSchema.safeParse(name);
       if (!parsedName.success)
         return fail(
           reply,
@@ -814,49 +873,117 @@ export async function registerWhatsAppRoutes(
           "Nome de instância inválido.",
         );
       const tenant = tenantId(request);
-      const auth = credentials();
-      const instance = await loadRemoteInstance(tenant, parsedName.data);
-      if (!auth || !instance)
+      const instance = await prisma.connectApiInstance.findFirst({
+        where: { tenantId: tenant, name: parsedName.data, present: true },
+      });
+      if (!instance)
         return fail(
           reply,
           404,
           "INSTANCE_NOT_FOUND",
-          "Instância não encontrada nesta organização.",
+          "Instância indisponível neste espaço.",
         );
+
+      // Database claim, not the browser or the remote server, owns this decision.
+      const claim = await prisma.connectInstanceClaim.findUnique({
+        where: { name: instance.name },
+      });
+      if (claim && claim.tenantId !== tenant)
+        return fail(
+          reply,
+          403,
+          "INSTANCE_NOT_OWNED",
+          "Esta instância pertence a outro espaço.",
+        );
+
+      const remotelyClaimed =
+        claim?.tenantId === tenant && Boolean(instance.tokenEncrypted);
+      let remoteResult: "removed" | "already-missing" | "not-claimed" =
+        "not-claimed";
+      if (remotelyClaimed) {
+        const connection = credentials();
+        if (!connection)
+          return fail(
+            reply,
+            409,
+            "CONNECT_API_NOT_CONFIGURED",
+            "A conexão Connect|API está indisponível.",
+          );
+        const instanceToken = decryptSecret(instance.tokenEncrypted!);
+        try {
+          remoteResult = await deleteRemoteInstance(instanceToken, (apiKey) =>
+            connectApiRequest<unknown>({
+              baseUrl: connection.baseUrl,
+              apiKey,
+              method: "DELETE",
+              path: connectInstancePath(instance.name, "delete"),
+              timeoutMs: 20000,
+            }),
+          );
+        } catch (error) {
+          const info = connectError(error);
+          return fail(
+            reply,
+            info.status,
+            "REMOTE_DELETE_FAILED",
+            "A instância não foi excluída na Connect|API. O vínculo local foi preservado para uma nova tentativa.",
+          );
+        }
+      }
+
+      // The same transaction deactivates only this tenant's record and releases
+      // its remote name claim. Historical publication/audit rows remain intact.
       try {
-        await connectApiRequest({
-          baseUrl: auth.baseUrl,
-          apiKey: auth.apiKey,
-          method: "DELETE",
-          path: connectInstancePath(instance.name, "delete"),
-        });
-        await prisma.$transaction([
-          prisma.connectApiInstance.update({
-            where: { id: instance.id },
+        await prisma.$transaction(async (tx) => {
+          await tx.connectApiInstance.updateMany({
+            where: { id: instance.id, tenantId: tenant, present: true },
             data: {
               present: false,
               tokenEncrypted: null,
               connectionState: "deleted",
             },
-          }),
-          prisma.tenant.updateMany({
+          });
+          await tx.connectInstanceClaim.deleteMany({
+            where: { name: instance.name, tenantId: tenant },
+          });
+          await tx.tenant.updateMany({
             where: { id: tenant, connectDefaultInstanceName: instance.name },
             data: { connectDefaultInstanceName: null },
-          }),
-        ]);
+          });
+        });
+      } catch {
+        return fail(
+          reply,
+          500,
+          "LOCAL_DELETE_FAILED",
+          "Não foi possível concluir a remoção local. Atualize e tente novamente.",
+        );
+      }
+      try {
         await audit({
           tenantId: tenant,
           actorUserId: request.principal?.userId,
-          action: "whatsapp.instance.deleted",
+          action: remotelyClaimed
+            ? "whatsapp.instance.deleted"
+            : "whatsapp.instance.unlinked",
           resourceType: "whatsapp-instance",
           resourceId: instance.id,
-          metadata: { name: instance.name },
+          metadata: { name: instance.name, remoteResult },
         });
-        return reply.code(204).send();
-      } catch (error) {
-        const info = connectError(error);
-        return fail(reply, info.status, info.code, info.message);
+      } catch {
+        // The remote and local deletes have already been committed.
+        // Audit delivery problems must not turn success into a false HTTP 500.
+        request.log.warn(
+          { requestId: request.id },
+          "Falha ao registrar auditoria da remoção de instância.",
+        );
       }
+      return {
+        deleted: true,
+        remoteDeleted:
+          remoteResult === "removed" || remoteResult === "already-missing",
+        localOnly: remoteResult === "not-claimed",
+      };
     },
   );
 

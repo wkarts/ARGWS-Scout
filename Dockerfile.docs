@@ -7,6 +7,9 @@ COPY apps/docs/viewer.html /usr/share/nginx/html/viewer.html
 COPY apps/docs/viewer.js /usr/share/nginx/html/viewer.js
 COPY apps/docs/viewer-core.mjs /usr/share/nginx/html/viewer-core.mjs
 COPY apps/docs/viewer.css /usr/share/nginx/html/viewer.css
+COPY apps/docs/user-guide.css /usr/share/nginx/html/user-guide.css
+COPY apps/docs/first-steps.css /usr/share/nginx/html/first-steps.css
+COPY apps/docs/index.css /usr/share/nginx/html/index.css
 COPY apps/docs/nginx.conf /etc/nginx/conf.d/default.conf
 COPY VERSION /tmp/scout-version
 RUN version="$(cat /tmp/scout-version)" && sed -i "s/__SCOUT_VERSION__/$version/g" /usr/share/nginx/html/index.html

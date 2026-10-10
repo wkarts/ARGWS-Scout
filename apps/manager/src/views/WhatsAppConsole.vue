@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
   Link2,
   MessageCircle,
@@ -8,6 +8,9 @@ import {
   Server,
   Trash2,
   Unplug,
+  X,
+  QrCode,
+  Smartphone,
 } from "@lucide/vue";
 import { api } from "../api";
 
@@ -57,6 +60,9 @@ const defaultInstanceName = ref<string | null>(null);
 const instances = ref<WhatsAppInstance[]>([]);
 const publications = ref<Publication[]>([]);
 const createName = ref("");
+const createProvider = ref<"WHATSAPP-BAILEYS" | "WHATSAPP-ZAPO">(
+  "WHATSAPP-BAILEYS",
+);
 const importName = ref("");
 const importToken = ref("");
 const claimName = ref("");
@@ -65,6 +71,14 @@ const showCreate = ref(false);
 const showImport = ref(false);
 const connectionPayload = ref<unknown>(null);
 const connectionInstance = ref("");
+const pairingInstance = ref<WhatsAppInstance | null>(null);
+const pairingMode = ref<"qr" | "code">("qr");
+const pairingPhone = ref("");
+const pairingBusy = ref(false);
+const pairingError = ref("");
+const pairingState = ref("connecting");
+let pairingTimer: ReturnType<typeof setTimeout> | null = null;
+let pairingEpoch = 0;
 
 const canManage = computed(() => ["OWNER", "ADMIN"].includes(props.role));
 const usableInstances = computed(() =>
@@ -128,6 +142,136 @@ function formatState(state?: string | null) {
   );
 }
 
+function closePairing() {
+  pairingEpoch++;
+  if (pairingTimer !== null) clearTimeout(pairingTimer);
+  pairingTimer = null;
+  pairingInstance.value = null;
+  connectionPayload.value = null;
+  pairingPhone.value = "";
+  pairingError.value = "";
+  pairingBusy.value = false;
+  pairingState.value = "connecting";
+}
+
+function planConnectionCheck(epoch: number) {
+  if (epoch !== pairingEpoch || !pairingInstance.value || pairingTimer !== null)
+    return;
+  pairingTimer = setTimeout(() => {
+    pairingTimer = null;
+    void checkPairingState(epoch);
+  }, 4500);
+}
+
+async function checkPairingState(epoch: number) {
+  const instance = pairingInstance.value;
+  if (!instance || epoch !== pairingEpoch) return;
+  if (pairingBusy.value) {
+    planConnectionCheck(epoch);
+    return;
+  }
+  try {
+    const result = await api<{ state?: string }>(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}/status`,
+      { method: "POST", body: "{}" },
+    );
+    if (epoch !== pairingEpoch || pairingInstance.value?.id !== instance.id)
+      return;
+    const state = String(result.state || "unknown").toLowerCase();
+    pairingState.value = state;
+    if (state === "open") {
+      const name = instance.displayName || instance.name;
+      closePairing();
+      await refresh();
+      emit("notify", `WhatsApp conectado: ${name}.`);
+      return;
+    }
+  } catch {
+    // A failed status query does not mean a failed WhatsApp connection.
+    // Keep the modal open, without touching the QR/pairing code.
+  }
+  planConnectionCheck(epoch);
+}
+
+async function requestPairing() {
+  const instance = pairingInstance.value;
+  if (!instance || pairingBusy.value) return;
+  const epoch = pairingEpoch;
+  const isCode = pairingMode.value === "code";
+  const digits = pairingPhone.value.replace(/\D/g, "");
+  if (isCode && !/^[1-9]\d{7,14}$/.test(digits)) {
+    pairingError.value =
+      "Informe o telefone com país, DDD e número (ex.: 5575988881111).";
+    return;
+  }
+  pairingBusy.value = true;
+  pairingError.value = "";
+  connectionPayload.value = null;
+  if (pairingTimer !== null) clearTimeout(pairingTimer);
+  pairingTimer = null;
+  try {
+    const result = await api<{ result?: unknown }>(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}/${isCode ? "pairing" : "connect"}`,
+      {
+        method: "POST",
+        body: JSON.stringify(isCode ? { number: digits } : {}),
+      },
+    );
+    if (epoch !== pairingEpoch || pairingInstance.value?.id !== instance.id)
+      return;
+    connectionPayload.value = result.result ?? {};
+    if (isCode && !findString(result.result, ["pairingCode", "pairing_code"]))
+      pairingError.value =
+        "O provedor não retornou o código. Confira o número e tente novamente.";
+    else if (!isCode && !findQrImage(result.result))
+      pairingError.value =
+        "QR Code não disponível. Você pode tentar novamente ou usar o código de pareamento.";
+  } catch (error) {
+    if (epoch === pairingEpoch) {
+      pairingError.value =
+        error instanceof Error
+          ? error.message
+          : "Falha ao solicitar pareamento.";
+    }
+  } finally {
+    if (epoch === pairingEpoch) {
+      pairingBusy.value = false;
+      planConnectionCheck(epoch);
+    }
+  }
+}
+
+function openPairing(instance: WhatsAppInstance) {
+  closePairing();
+  pairingInstance.value = instance;
+  connectionInstance.value = instance.displayName || instance.name;
+  pairingMode.value = "qr";
+  pairingState.value = instance.connectionState ?? "connecting";
+  void requestPairing();
+}
+
+function choosePairingMode(mode: "qr" | "code") {
+  if (pairingMode.value === mode) return;
+  pairingMode.value = mode;
+  connectionPayload.value = null;
+  pairingError.value = "";
+  if (mode === "qr") void requestPairing();
+}
+
+function pairingEscape(event: KeyboardEvent) {
+  if (event.key === "Escape" && pairingInstance.value) closePairing();
+}
+
+async function copyPairingCode() {
+  if (!pairingCode.value) return;
+  try {
+    await navigator.clipboard.writeText(pairingCode.value);
+    emit("notify", "Código de pareamento copiado.");
+  } catch {
+    emit("error", "Não foi possível copiar o código. Selecione-o manualmente.");
+  }
+}
+
 async function refresh() {
   loading.value = true;
   try {
@@ -176,10 +320,16 @@ async function syncInstances() {
 async function createInstance() {
   busy.value = true;
   try {
-    await api("/whatsapp/instances", {
-      method: "POST",
-      body: JSON.stringify({ name: createName.value }),
-    });
+    const created = await api<{ instance: WhatsAppInstance }>(
+      "/whatsapp/instances",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: createName.value,
+          provider: createProvider.value,
+        }),
+      },
+    );
     createName.value = "";
     showCreate.value = false;
     emit(
@@ -187,6 +337,7 @@ async function createInstance() {
       "Instância WhatsApp criada. Abra o pareamento para conectar o telefone.",
     );
     await refresh();
+    if (created.instance) openPairing(created.instance);
   } catch (error) {
     emit(
       "error",
@@ -281,16 +432,12 @@ async function chooseDefault(name: string | null) {
 
 async function instanceAction(instance: WhatsAppInstance, action: string) {
   busy.value = true;
-  connectionPayload.value = null;
   try {
     const result = await api<{ result?: unknown; state?: string }>(
       `/whatsapp/instances/${encodeURIComponent(instance.name)}/${action}`,
       { method: "POST", body: "{}" },
     );
-    if (action === "connect") {
-      connectionInstance.value = instance.displayName || instance.name;
-      connectionPayload.value = result.result;
-    } else if (action === "status") {
+    if (action === "status") {
       emit("notify", `${instance.name}: ${formatState(result.state)}.`);
       await refresh();
     } else {
@@ -315,18 +462,29 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
 }
 
 async function deleteInstance(instance: WhatsAppInstance) {
-  if (
-    !window.confirm(
-      `Excluir definitivamente a instância “${instance.name}” da Connect API?`,
-    )
-  )
-    return;
+  const label = instance.displayName || instance.name;
+  const localOnly = !instance.usable;
+  const question = localOnly
+    ? `Remover “${label}” deste espaço de trabalho? A instância remota não será excluída, pois seu vínculo não está validado.`
+    : `Excluir definitivamente “${label}” da Connect|API e remover seu vínculo neste espaço? Esta ação não pode ser desfeita.`;
+  if (!window.confirm(question)) return;
   busy.value = true;
   try {
-    await api(`/whatsapp/instances/${encodeURIComponent(instance.name)}`, {
+    const result = await api<{
+      deleted: boolean;
+      remoteDeleted: boolean;
+      localOnly: boolean;
+    }>(`/whatsapp/instances/${encodeURIComponent(instance.name)}`, {
       method: "DELETE",
     });
-    emit("notify", `Instância ${instance.name} excluída da Connect API.`);
+    if (!result.deleted) throw new Error("A exclusão não foi confirmada.");
+    if (pairingInstance.value?.id === instance.id) closePairing();
+    emit(
+      "notify",
+      result.localOnly
+        ? `Vínculo antigo removido deste espaço: ${label}.`
+        : `Instância excluída da Connect|API: ${label}.`,
+    );
     await refresh();
   } catch (error) {
     emit(
@@ -350,7 +508,14 @@ function statusClass(value: string) {
         : "queued";
 }
 
-onMounted(() => void refresh());
+onMounted(() => {
+  window.addEventListener("keydown", pairingEscape);
+  void refresh();
+});
+onUnmounted(() => {
+  window.removeEventListener("keydown", pairingEscape);
+  closePairing();
+});
 </script>
 
 <template>
@@ -359,29 +524,17 @@ onMounted(() => void refresh());
       <div class="panel-header">
         <div>
           <h2>Connect|API</h2>
-          <p>
-            Uma conexão global; cada espaço administra seus próprios canais e
-            instâncias.
-          </p>
+          <p>Gerencie seus canais e publicações.</p>
         </div>
         <span class="status-pill" :class="configured ? 'succeeded' : 'running'"
           ><i></i>{{ configured ? "Configurada" : "Não configurada" }}</span
         >
       </div>
       <div class="wa-global-settings">
-        <Server :size="22" aria-hidden="true" />
-        <div>
-          <strong>Conexão global da plataforma</strong>
-          <p>
-            A URL e o token administrativos da Connect|API são definidos
-            exclusivamente no servidor (`SCOUT_CONNECT_API_URL` e
-            `SCOUT_CONNECT_API_TOKEN`). Cada espaço de trabalho administra
-            somente suas próprias instâncias e publicações.
-          </p>
-          <p v-if="!configured" class="wa-warning">
-            Conexão ainda não configurada pelo operador do servidor.
-          </p>
-        </div>
+        <Server :size="20" aria-hidden="true" />
+        <strong>{{
+          configured ? "Conexão disponível" : "Conexão indisponível"
+        }}</strong>
         <button
           v-if="configured && canManage"
           type="button"
@@ -389,7 +542,7 @@ onMounted(() => void refresh());
           :disabled="busy"
           @click="syncInstances"
         >
-          <RefreshCw :size="15" /> Atualizar minhas instâncias
+          <RefreshCw :size="15" /> Atualizar instâncias
         </button>
       </div>
     </section>
@@ -436,11 +589,18 @@ onMounted(() => void refresh());
             maxlength="120"
             placeholder="Ex.: Scout Vendas"
         /></label>
+        <label
+          >Provedor WhatsApp
+          <select v-model="createProvider" :disabled="busy" required>
+            <option value="WHATSAPP-BAILEYS">Baileys</option>
+            <option value="WHATSAPP-ZAPO">Zapo</option>
+          </select>
+        </label>
         <button
           class="button primary"
           :disabled="busy || createName.trim().length < 2"
         >
-          Criar instância WhatsApp
+          Criar e conectar
         </button>
         <button type="button" class="button subtle" @click="showCreate = false">
           Cancelar
@@ -543,9 +703,9 @@ onMounted(() => void refresh());
           <button
             class="button outline small-button"
             :disabled="busy || !canManage || !instance.usable"
-            @click="instanceAction(instance, 'connect')"
+            @click="openPairing(instance)"
           >
-            Conectar / QR
+            Conectar
           </button>
           <button
             class="button outline small-button"
@@ -571,11 +731,13 @@ onMounted(() => void refresh());
           <button
             v-if="canManage"
             class="button danger small-button"
-            :disabled="busy || !instance.usable"
-            :aria-label="`Excluir ${instance.displayName || instance.name}`"
+            :disabled="busy"
+            :aria-label="`${instance.usable ? 'Excluir' : 'Remover vínculo de'} ${instance.displayName || instance.name}`"
             @click="deleteInstance(instance)"
           >
-            <Trash2 :size="14" />Excluir
+            <Trash2 :size="14" />{{
+              instance.usable ? "Excluir" : "Remover vínculo"
+            }}
           </button>
           <form
             v-if="claimName === instance.name && !instance.usable"
@@ -618,33 +780,6 @@ onMounted(() => void refresh());
         <p>
           Crie sua primeira instância neste espaço. Para vínculos antigos,
           revalide o token particular.
-        </p>
-      </div>
-
-      <div v-if="connectionPayload" class="wa-pairing">
-        <button
-          class="icon-button wa-pairing-close"
-          aria-label="Fechar QR"
-          @click="connectionPayload = null"
-        >
-          ×
-        </button>
-        <p class="eyebrow">PAREAMENTO · {{ connectionInstance }}</p>
-        <h3>Conecte o WhatsApp ao telefone</h3>
-        <img
-          v-if="qrImage"
-          :src="qrImage"
-          alt="QR Code de pareamento da instância"
-        />
-        <p v-else class="muted">
-          A Connect API não retornou uma imagem QR. Atualize o estado ou tente
-          gerar o QR novamente.
-        </p>
-        <p v-if="pairingCode" class="wa-pairing-code">
-          Código: <strong>{{ pairingCode }}</strong>
-        </p>
-        <p class="muted">
-          No celular, abra Dispositivos conectados e escaneie este código.
         </p>
       </div>
     </section>
@@ -717,6 +852,150 @@ onMounted(() => void refresh());
         <p>Abra uma coleta concluída e escolha “Publicar pelo WhatsApp”.</p>
       </div>
     </section>
+    <Teleport to="body">
+      <div
+        v-if="pairingInstance"
+        class="wa-modal-backdrop"
+        @click.self="closePairing"
+      >
+        <section
+          class="wa-modal"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="'Conectar ' + connectionInstance"
+        >
+          <header class="wa-modal-header">
+            <div>
+              <span class="wa-modal-eyebrow">{{
+                pairingInstance.integration === "WHATSAPP-ZAPO"
+                  ? "Zapo"
+                  : "Baileys"
+              }}</span>
+              <h2>Conectar {{ connectionInstance }}</h2>
+              <p :class="pairingState === 'open' ? 'wa-connected' : 'muted'">
+                {{
+                  pairingState === "open" ? "Conectado" : "Aguardando conexão"
+                }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Fechar pareamento"
+              @click="closePairing"
+            >
+              <X :size="20" />
+            </button>
+          </header>
+          <div
+            class="wa-mode-switch"
+            role="group"
+            aria-label="Modo de pareamento"
+          >
+            <button
+              type="button"
+              :class="{ active: pairingMode === 'qr' }"
+              :disabled="pairingBusy"
+              @click="choosePairingMode('qr')"
+            >
+              <QrCode :size="17" /> QR Code
+            </button>
+            <button
+              type="button"
+              :class="{ active: pairingMode === 'code' }"
+              :disabled="pairingBusy"
+              @click="choosePairingMode('code')"
+            >
+              <Smartphone :size="17" /> Código de pareamento
+            </button>
+          </div>
+          <div class="wa-modal-body">
+            <div v-if="pairingMode === 'qr'" class="wa-qr-area">
+              <div v-if="pairingBusy" class="wa-pairing-progress" role="status">
+                Obtendo QR Code…
+              </div>
+              <img
+                v-else-if="qrImage"
+                :src="qrImage"
+                alt="QR Code para vincular o WhatsApp"
+                class="wa-qr-image"
+              />
+              <div v-else class="wa-qr-placeholder">
+                <QrCode :size="50" /><span>QR Code indisponível</span>
+              </div>
+              <p class="muted">
+                WhatsApp → Aparelhos conectados → Conectar um aparelho.
+              </p>
+              <button
+                type="button"
+                class="button outline"
+                :disabled="pairingBusy"
+                @click="requestPairing"
+              >
+                <RefreshCw :size="15" /> Atualizar QR Code
+              </button>
+            </div>
+            <div v-else class="wa-code-area">
+              <form class="wa-code-form" @submit.prevent="requestPairing">
+                <label
+                  >Telefone com DDI e DDD
+                  <input
+                    v-model="pairingPhone"
+                    type="tel"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    placeholder="5575988881111"
+                    maxlength="24"
+                    required
+                  />
+                </label>
+                <button
+                  type="submit"
+                  class="button primary"
+                  :disabled="
+                    pairingBusy || pairingPhone.replace(/\D/g, '').length < 8
+                  "
+                >
+                  {{ pairingBusy ? "Solicitando…" : "Gerar código" }}
+                </button>
+              </form>
+              <div
+                v-if="pairingCode"
+                class="wa-code-result"
+                role="status"
+                aria-live="polite"
+              >
+                <span>Código de pareamento</span>
+                <strong>{{ pairingCode }}</strong>
+                <button
+                  type="button"
+                  class="button outline"
+                  @click="copyPairingCode"
+                >
+                  Copiar código
+                </button>
+              </div>
+              <p class="muted">
+                No WhatsApp: Aparelhos conectados → Conectar com número de
+                telefone.
+              </p>
+            </div>
+            <p v-if="pairingError" class="wa-modal-error" role="alert">
+              {{ pairingError }}
+            </p>
+            <p class="wa-modal-status">
+              A conexão é verificada automaticamente. Esta janela fechará quando
+              o aparelho conectar.
+            </p>
+          </div>
+          <footer class="wa-modal-footer">
+            <button type="button" class="button subtle" @click="closePairing">
+              Fechar
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -952,6 +1231,225 @@ onMounted(() => void refresh());
 @media (max-width: 500px) {
   .wa-claim-form > button {
     flex: 1 1 110px;
+  }
+}
+
+/* QR / pairing-code dialog lives in <body> and is not constrained by the Manager columns. */
+.wa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: clamp(8px, 3vw, 24px);
+  background: rgba(14, 30, 52, 0.6);
+}
+.wa-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 20px);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 28px 95px #071b3948;
+  color: #21344e;
+}
+.wa-modal-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px 13px;
+  border-bottom: 1px solid #e5ebf4;
+}
+.wa-modal-header > div {
+  min-width: 0;
+}
+.wa-modal-header h2 {
+  font-size: 19px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  margin: 3px 0 2px;
+}
+.wa-modal-header p {
+  font-size: 12px;
+  margin: 0;
+}
+.wa-modal-eyebrow {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #5376b8;
+}
+.wa-connected {
+  color: #0b8554;
+}
+.wa-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 22px;
+}
+.wa-mode-switch button {
+  flex: 1 1 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #dce5f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #31455f;
+  font-weight: 650;
+  font-size: 13px;
+}
+.wa-mode-switch button.active {
+  background: #edf4ff;
+  border-color: #8eb1f0;
+  color: #1b5fce;
+}
+.wa-modal-body {
+  padding: 8px 22px 20px;
+  overflow: auto;
+  min-height: 0;
+}
+.wa-qr-area,
+.wa-code-area {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.wa-qr-image {
+  display: block;
+  width: min(100%, 268px);
+  max-height: 268px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+}
+.wa-qr-placeholder,
+.wa-pairing-progress {
+  width: min(100%, 268px);
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: #f3f7fc;
+  border: 1px dashed #c5d4e6;
+  border-radius: 12px;
+  color: #7185a2;
+}
+.wa-qr-area p,
+.wa-code-area p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+.wa-code-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  align-items: flex-end;
+}
+.wa-code-form label {
+  display: grid;
+  flex: 1 1 190px;
+  gap: 7px;
+  font-size: 13px;
+  color: #43556c;
+}
+.wa-code-form input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d3dfed;
+  border-radius: 9px;
+  font-size: 15px;
+}
+.wa-code-result {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  width: 100%;
+  border-radius: 12px;
+  background: #f0f6ff;
+  padding: 18px 12px;
+}
+.wa-code-result > span {
+  font-size: 12px;
+  color: #506d96;
+}
+.wa-code-result strong {
+  font:
+    750 clamp(21px, 5vw, 30px)/1.3 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  color: #164893;
+}
+.wa-modal-error {
+  color: #a22636;
+  background: #fff0f3;
+  font-size: 12px;
+  border-radius: 7px;
+  padding: 10px;
+  margin: 12px 0;
+}
+.wa-modal-status {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #73849b;
+  text-align: center;
+  margin: 16px 0 0;
+}
+.wa-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 13px 22px;
+  border-top: 1px solid #e5ebf4;
+}
+.wa-inline-form select {
+  width: 100%;
+  height: 42px;
+  padding: 0 11px;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  background: #fff;
+}
+@media (max-width: 480px) {
+  .wa-modal-backdrop {
+    padding: 8px;
+  }
+  .wa-modal {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 12px;
+  }
+  .wa-modal-header {
+    padding: 14px;
+  }
+  .wa-modal-body {
+    padding: 8px 14px 14px;
+  }
+  .wa-mode-switch {
+    padding: 10px 14px;
+  }
+  .wa-code-form > button {
+    flex: 1 1 100%;
+  }
+  .wa-modal-footer {
+    padding: 10px 14px;
   }
 }
 </style>
