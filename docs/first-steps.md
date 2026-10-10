@@ -54,7 +54,7 @@ Em **Agendamentos**, escolha uma fonte e configure a regra cron e o fuso horári
 
 ## 8. Convide alguém
 
-Acesse **Acesso e auditoria**, configure primeiro o SMTP de **envio da organização** em Configurações e preencha nome, e-mail e papel. O convidado receberá um link de ativação válido por 48 horas. Administradores não definem a senha do convidado. Um convite existente pode ser cancelado antes de ser usado.
+Acesse **Acesso e auditoria**, configure primeiro o SMTP de **envio da organização** em Configurações e preencha nome, e-mail e papel. O convidado receberá um link de ativação válido por 48 horas. Por padrão, o convite cria um **espaço de trabalho próprio** para essa pessoa, com suas instâncias, integrações e coletas separadas logicamente. Desmarque a opção de espaço independente somente quando a pessoa for colaboradora da equipe atual. Administradores não definem a senha do convidado. Um convite existente pode ser cancelado antes de ser usado.
 
 Uma conta com acesso a mais de um espaço pode alternar pelo seletor no alto do menu lateral.
 

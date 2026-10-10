@@ -30,7 +30,7 @@ A conta principal configurada pelo servidor é protegida no banco e na API; não
 
 ## Perfis e e-mails
 
-A recuperação de senha usa o SMTP global próprio, configurado no servidor. Convites para a organização e envio de resultados usam o SMTP configurado para aquela organização. O administrador não conhece a senha criada pelo convidado. Convites expiram em 48 horas e podem ser cancelados.
+A recuperação de senha usa o SMTP global próprio, configurado no servidor. Convites para a organização e envio de resultados usam o SMTP configurado para aquela organização. O administrador não conhece a senha criada pelo convidado. Por padrão, convites concedem um **espaço independente** para quem for convidado; o administrador pode escolher acesso de equipe ao espaço atual. Ambos ainda compartilham a infraestrutura de banco físico até a migração arquitetural. Convites expiram em 48 horas e podem ser cancelados.
 
 ## Segurança e privacidade
 
