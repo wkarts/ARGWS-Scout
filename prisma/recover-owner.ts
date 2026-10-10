@@ -17,6 +17,7 @@ async function readHidden(label: string): Promise<string> {
     const cleanup = () => {
       stdin.off("data", onData);
       stdin.setRawMode(previousRaw);
+      stdin.pause();
       stdout.write("\n");
     };
     const onData = (buffer: Buffer) => {
