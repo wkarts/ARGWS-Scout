@@ -3,49 +3,40 @@ import { ConnectApiError } from "../apps/api/src/connect-api.ts";
 import { deleteRemoteInstance } from "../apps/api/src/connect-deletion.ts";
 
 describe("WhatsApp instance remote removal", () => {
-  it("deletes using the scoped token, never requiring the platform key in the normal path", async () => {
+  it("deletes using only the scoped instance token", async () => {
     const remove = vi.fn(async () => ({ status: "SUCCESS", error: false }));
-    const result = await deleteRemoteInstance("scoped-token", "global-token", remove);
+    const result = await deleteRemoteInstance("scoped-token", remove);
     expect(result).toBe("removed");
-    expect(remove).toHaveBeenCalledExactlyOnceWith("scoped-token");
+    expect(remove).toHaveBeenCalledWith("scoped-token");
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it("retries with the administrative key only after a scoped token authorization failure", async () => {
-    const remove = vi.fn(async (key: string) => {
-      if (key === "scoped-token") throw new ConnectApiError("Unauthorized", 401);
-      return { status: "SUCCESS" };
-    });
-    await expect(deleteRemoteInstance("scoped-token", "global-token", remove)).resolves.toBe("removed");
-    expect(remove.mock.calls.map((call) => call[0])).toEqual(["scoped-token", "global-token"]);
+  it.each([401, 403])("does not substitute the global administrator for an invalid instance token (HTTP %i)", async (status) => {
+    const remove = vi.fn(async () => { throw new ConnectApiError("Unauthorized", status); });
+    await expect(deleteRemoteInstance("scoped-token", remove)).rejects.toMatchObject({ statusCode: status });
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it.each([404, 410])("accepts a remotely missing instance (HTTP %i) as already deleted", async (status) => {
+  it.each([404, 410])("is idempotent for remotely missing instances (HTTP %i)", async (status) => {
     const remove = vi.fn(async () => { throw new ConnectApiError("Not found", status); });
-    await expect(deleteRemoteInstance("scoped-token", "global-token", remove)).resolves.toBe("already-missing");
+    await expect(deleteRemoteInstance("scoped-token", remove)).resolves.toBe("already-missing");
     expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it("never considers a timeout or a remote server failure successful", async () => {
-    const remove = vi.fn(async () => { throw new ConnectApiError("Bad gateway", 502); });
-    await expect(deleteRemoteInstance("scoped-token", "global-token", remove)).rejects.toMatchObject({ statusCode: 502 });
-    expect(remove).toHaveBeenCalledTimes(1);
+  it("does not treat a timeout or server error as a successful removal", async () => {
+    const remove = vi.fn(async () => { throw new ConnectApiError("Gateway", 502); });
+    await expect(deleteRemoteInstance("scoped-token", remove)).rejects.toMatchObject({ statusCode: 502 });
   });
 
-  it("rejects a failed payload even when the remote server returns HTTP 200", async () => {
-    await expect(deleteRemoteInstance("scoped", "global", async () => ({ error: true, status: "ERROR" })))
+  it("rejects failed payloads even with HTTP 200", async () => {
+    await expect(deleteRemoteInstance("scoped", async () => ({ error: true, status: "ERROR" })))
       .rejects.toThrow(/não confirmou/i);
   });
 
-  it("never sends empty credentials to the remote server", async () => {
+  it("rejects missing instance tokens without any remote call", async () => {
     const remove = vi.fn();
-    await expect(deleteRemoteInstance("", "", remove)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(deleteRemoteInstance("", remove)).rejects.toMatchObject({ statusCode: 401 });
     expect(remove).not.toHaveBeenCalled();
-  });
-
-  it("does not perform duplicate remote calls when scoped and global tokens are equal", async () => {
-    const remove = vi.fn(async () => ({ status: "SUCCESS" }));
-    await deleteRemoteInstance("same", "same", remove);
-    expect(remove).toHaveBeenCalledTimes(1);
   });
 });
 
