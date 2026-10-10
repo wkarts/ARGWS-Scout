@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import {
-  Check,
   Link2,
   MessageCircle,
   Plus,
@@ -15,6 +14,7 @@ import { api } from "../api";
 type WhatsAppInstance = {
   id: string;
   name: string;
+  displayName: string;
   integration: string;
   connectionState: string | null;
   number: string | null;
@@ -25,7 +25,7 @@ type WhatsAppInstance = {
 };
 type WhatsAppOverview = {
   configured: boolean;
-  baseUrl: string;
+  mode: "global";
   defaultInstanceName: string | null;
   instances: WhatsAppInstance[];
   canManage: boolean;
@@ -53,14 +53,14 @@ const emit = defineEmits<{
 const busy = ref(false);
 const loading = ref(true);
 const configured = ref(false);
-const baseUrl = ref("");
-const apiKey = ref("");
 const defaultInstanceName = ref<string | null>(null);
 const instances = ref<WhatsAppInstance[]>([]);
 const publications = ref<Publication[]>([]);
 const createName = ref("");
 const importName = ref("");
 const importToken = ref("");
+const claimName = ref("");
+const claimToken = ref("");
 const showCreate = ref(false);
 const showImport = ref(false);
 const connectionPayload = ref<unknown>(null);
@@ -133,7 +133,6 @@ async function refresh() {
   try {
     const data = await api<WhatsAppOverview>("/whatsapp");
     configured.value = data.configured;
-    baseUrl.value = data.baseUrl;
     defaultInstanceName.value = data.defaultInstanceName;
     instances.value = data.instances;
     publications.value = data.configured
@@ -151,32 +150,6 @@ async function refresh() {
   }
 }
 
-async function saveConfig() {
-  busy.value = true;
-  try {
-    const data = await api<WhatsAppOverview>("/whatsapp/config", {
-      method: "PUT",
-      body: JSON.stringify({ baseUrl: baseUrl.value, apiKey: apiKey.value }),
-    });
-    configured.value = data.configured;
-    baseUrl.value = data.baseUrl;
-    defaultInstanceName.value = data.defaultInstanceName;
-    instances.value = data.instances;
-    apiKey.value = "";
-    emit("notify", "Conexão com a Connect API validada e salva.");
-    await refresh();
-  } catch (error) {
-    emit(
-      "error",
-      error instanceof Error
-        ? error.message
-        : "Não foi possível validar a Connect API.",
-    );
-  } finally {
-    busy.value = false;
-  }
-}
-
 async function syncInstances() {
   busy.value = true;
   try {
@@ -186,7 +159,7 @@ async function syncInstances() {
         body: "{}",
       })
     ).data;
-    emit("notify", "Instâncias sincronizadas.");
+    emit("notify", "Estados das instâncias deste espaço atualizados.");
     await refresh();
   } catch (error) {
     emit(
@@ -253,6 +226,30 @@ async function importInstance() {
   }
 }
 
+async function claimExistingInstance(instance: WhatsAppInstance) {
+  if (!claimToken.value.trim()) return;
+  busy.value = true;
+  try {
+    await api("/whatsapp/instances/claim", {
+      method: "POST",
+      body: JSON.stringify({ name: instance.name, token: claimToken.value }),
+    });
+    claimName.value = "";
+    emit("notify", "Vínculo da instância revalidado com seu token particular.");
+    await refresh();
+  } catch (error) {
+    emit(
+      "error",
+      error instanceof Error
+        ? error.message
+        : "Não foi possível revalidar esta instância.",
+    );
+  } finally {
+    claimToken.value = "";
+    busy.value = false;
+  }
+}
+
 async function chooseDefault(name: string | null) {
   busy.value = true;
   try {
@@ -291,7 +288,7 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
       { method: "POST", body: "{}" },
     );
     if (action === "connect") {
-      connectionInstance.value = instance.name;
+      connectionInstance.value = instance.displayName || instance.name;
       connectionPayload.value = result.result;
     } else if (action === "status") {
       emit("notify", `${instance.name}: ${formatState(result.state)}.`);
@@ -361,59 +358,40 @@ onMounted(() => void refresh());
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h2>Connect API</h2>
-          <p>Gerencie a conexão WhatsApp dedicada a esta organização.</p>
+          <h2>Connect|API</h2>
+          <p>
+            Uma conexão global; cada espaço administra seus próprios canais e
+            instâncias.
+          </p>
         </div>
         <span class="status-pill" :class="configured ? 'succeeded' : 'running'"
           ><i></i>{{ configured ? "Configurada" : "Não configurada" }}</span
         >
       </div>
-      <form class="wa-config-form" @submit.prevent="saveConfig">
-        <label
-          >URL base da Connect API<input
-            v-model="baseUrl"
-            type="url"
-            placeholder="https://connect.exemplo.com"
-            autocomplete="url"
-            required
-            :disabled="!canManage"
-        /></label>
-        <label
-          >Chave administrativa<input
-            v-model="apiKey"
-            type="password"
-            autocomplete="new-password"
-            :placeholder="
-              configured
-                ? 'Deixe vazio para manter a chave guardada'
-                : 'Informe a chave apikey da Connect API'
-            "
-            :required="!configured"
-            :disabled="!canManage"
-        /></label>
-        <p class="muted wa-security-note">
-          A chave fica cifrada no backend e nunca é enviada de volta ao Manager.
-          As ações de cada instância usam o token próprio dela.
-        </p>
-        <div class="wa-actions">
-          <button
-            v-if="canManage"
-            class="button primary"
-            :disabled="busy || !baseUrl || (!configured && !apiKey)"
-          >
-            <Check :size="15" />{{ busy ? "Validando…" : "Testar e salvar" }}
-          </button>
-          <button
-            v-if="configured && canManage"
-            type="button"
-            class="button outline"
-            :disabled="busy"
-            @click="syncInstances"
-          >
-            <RefreshCw :size="15" />Sincronizar
-          </button>
+      <div class="wa-global-settings">
+        <Server :size="22" aria-hidden="true" />
+        <div>
+          <strong>Conexão global da plataforma</strong>
+          <p>
+            A URL e o token administrativos da Connect|API são definidos
+            exclusivamente no servidor (`SCOUT_CONNECT_API_URL` e
+            `SCOUT_CONNECT_API_TOKEN`). Cada espaço de trabalho administra
+            somente suas próprias instâncias e publicações.
+          </p>
+          <p v-if="!configured" class="wa-warning">
+            Conexão ainda não configurada pelo operador do servidor.
+          </p>
         </div>
-      </form>
+        <button
+          v-if="configured && canManage"
+          type="button"
+          class="button outline"
+          :disabled="busy"
+          @click="syncInstances"
+        >
+          <RefreshCw :size="15" /> Atualizar minhas instâncias
+        </button>
+      </div>
     </section>
 
     <section v-if="configured" class="panel">
@@ -462,7 +440,7 @@ onMounted(() => void refresh());
           class="button primary"
           :disabled="busy || createName.trim().length < 2"
         >
-          Criar WhatsApp Baileys
+          Criar instância WhatsApp
         </button>
         <button type="button" class="button subtle" @click="showCreate = false">
           Cancelar
@@ -475,7 +453,7 @@ onMounted(() => void refresh());
         @submit.prevent="importInstance"
       >
         <label
-          >Nome exato no Connect API<input
+          >Nome remoto da instância existente<input
             v-model="importName"
             required
             minlength="2"
@@ -483,12 +461,12 @@ onMounted(() => void refresh());
             placeholder="Nome da instância"
         /></label>
         <label
-          >Token próprio da instância<input
+          >Token particular da instância<input
             v-model="importToken"
             type="password"
             required
             autocomplete="new-password"
-            placeholder="Token de /instance/fetchInstances"
+            placeholder="Token exclusivo desta instância"
         /></label>
         <button class="button primary" :disabled="busy || !importToken">
           Validar e vincular
@@ -513,7 +491,7 @@ onMounted(() => void refresh());
               :key="instance.id"
               :value="instance.name"
             >
-              {{ instance.name
+              {{ instance.displayName || instance.name
               }}{{ instance.connectionState === "open" ? " · conectada" : "" }}
             </option>
           </select></label
@@ -531,12 +509,13 @@ onMounted(() => void refresh());
         >
           <div class="wa-instance-icon"><MessageCircle :size="19" /></div>
           <div class="wa-instance-info">
-            <strong>{{ instance.name }}</strong
+            <strong>{{ instance.displayName || instance.name }}</strong
             ><small>{{
               instance.profileName || instance.number || instance.integration
             }}</small
             ><small v-if="!instance.usable" class="wa-warning"
-              >Token desta instância ausente; vincule um token próprio.</small
+              >Vínculo não validado neste servidor; revalide usando o token
+              particular.</small
             >
           </div>
           <span
@@ -550,6 +529,17 @@ onMounted(() => void refresh());
             "
             ><i></i>{{ formatState(instance.connectionState) }}</span
           >
+          <button
+            v-if="canManage && !instance.usable && configured"
+            class="button outline small-button"
+            :disabled="busy"
+            @click="
+              claimName = claimName === instance.name ? '' : instance.name;
+              claimToken = '';
+            "
+          >
+            <RefreshCw :size="14" /> Revalidar vínculo
+          </button>
           <button
             class="button outline small-button"
             :disabled="busy || !canManage || !instance.usable"
@@ -581,18 +571,54 @@ onMounted(() => void refresh());
           <button
             v-if="canManage"
             class="button danger small-button"
-            :disabled="busy"
-            :aria-label="`Excluir ${instance.name}`"
+            :disabled="busy || !instance.usable"
+            :aria-label="`Excluir ${instance.displayName || instance.name}`"
             @click="deleteInstance(instance)"
           >
             <Trash2 :size="14" />Excluir
           </button>
+          <form
+            v-if="claimName === instance.name && !instance.usable"
+            class="wa-claim-form"
+            @submit.prevent="claimExistingInstance(instance)"
+          >
+            <label>
+              Token particular para revalidar o vínculo
+              <input
+                v-model="claimToken"
+                type="password"
+                autocomplete="off"
+                minlength="8"
+                required
+                placeholder="Token exclusivo da instância"
+              />
+            </label>
+            <button
+              class="button primary"
+              :disabled="busy || claimToken.length < 8"
+            >
+              Revalidar
+            </button>
+            <button
+              type="button"
+              class="button subtle"
+              @click="
+                claimName = '';
+                claimToken = '';
+              "
+            >
+              Cancelar
+            </button>
+          </form>
         </article>
       </div>
       <div v-else class="empty-state compact">
         <span class="empty-icon"><Server :size="19" /></span>
         <h3>Nenhuma instância WhatsApp</h3>
-        <p>Crie uma instância na Connect API ou sincronize as existentes.</p>
+        <p>
+          Crie sua primeira instância neste espaço. Para vínculos antigos,
+          revalide o token particular.
+        </p>
       </div>
 
       <div v-if="connectionPayload" class="wa-pairing">
@@ -824,6 +850,108 @@ onMounted(() => void refresh());
   }
   .wa-instance-card button {
     flex: 1;
+  }
+}
+.wa-global-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px 22px;
+  color: #41516b;
+}
+.wa-global-settings > svg {
+  flex: 0 0 auto;
+  color: #2563eb;
+  margin-top: 3px;
+}
+.wa-global-settings > div {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.wa-global-settings strong {
+  color: #172e4a;
+  font-size: 14px;
+}
+.wa-global-settings p {
+  color: #62758b;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+.wa-global-settings > .button {
+  flex: 0 1 auto;
+  white-space: normal;
+}
+.wa-inline-form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+.wa-instance-list,
+.wa-instance-card,
+.wa-instance-info {
+  min-width: 0;
+  max-width: 100%;
+}
+.wa-instance-info {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .wa-global-settings {
+    padding: 14px;
+    gap: 10px;
+  }
+  .wa-global-settings > .button {
+    width: 100%;
+  }
+  .wa-inline-form {
+    margin: 10px;
+    grid-template-columns: 1fr;
+  }
+  .wa-instance-list {
+    padding: 0 10px 12px;
+  }
+  .wa-instance-card {
+    padding: 12px;
+  }
+  .wa-instance-info {
+    flex: 1 1 100%;
+  }
+  .wa-instance-card .button {
+    flex: 1 1 135px;
+  }
+}
+.wa-claim-form {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  border-top: 1px solid #e8edf4;
+  padding-top: 12px;
+  min-width: 0;
+}
+.wa-claim-form label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: 13px;
+  color: #42536a;
+}
+.wa-claim-form input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+.wa-claim-form > button {
+  flex: 0 1 auto;
+}
+@media (max-width: 500px) {
+  .wa-claim-form > button {
+    flex: 1 1 110px;
   }
 }
 </style>

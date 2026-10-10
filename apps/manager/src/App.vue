@@ -118,6 +118,7 @@ type DeliveryRow = {
 type WhatsAppInstanceOption = {
   id: string;
   name: string;
+  displayName?: string;
   integration: string;
   connectionState: string | null;
   present: boolean;
@@ -2992,6 +2993,16 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             </form></section
         ></template>
       </main>
+      <footer class="app-footer">
+        <span
+          >ARGWS Scout <i>·</i> {{ buildVersion }} · {{ buildChannel }} ·
+          {{ buildSha.slice(0, 8) }}</span
+        ><span
+          >Web Intelligence & Automation <i>·</i>
+          <a href="/docs/" target="_blank"
+            >Documentação <ExternalLink :size="12" /></a
+        ></span>
+      </footer>
     </section>
 
     <div
@@ -3583,7 +3594,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                   :key="instance.id"
                   :value="instance.name"
                 >
-                  {{ instance.name
+                  {{ instance.displayName || instance.name
                   }}{{
                     instance.connectionState === "open" ? " · conectada" : ""
                   }}
@@ -3755,15 +3766,5 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       </section>
     </div>
     <div v-if="toast" class="toast"><Check :size="16" /> {{ toast }}</div>
-    <footer class="app-footer">
-      <span
-        >ARGWS Scout <i>·</i> {{ buildVersion }} · {{ buildChannel }} ·
-        {{ buildSha.slice(0, 8) }}</span
-      ><span
-        >Web Intelligence & Automation <i>·</i>
-        <a href="/docs/" target="_blank"
-          >Documentação <ExternalLink :size="12" /></a
-      ></span>
-    </footer>
   </div>
 </template>

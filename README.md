@@ -4,6 +4,8 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
+A correção de responsividade e integração Connect|API em desenvolvimento remove a faixa vazia provocada pelo rodapé fora da coluna principal e prepara uma única conexão administrativa pelo `.env`, com instâncias WhatsApp separadas por espaço. Essa correção não altera a versão estável 0.6.0 até ser validada e promovida.
+
 A versão **0.6.0** evolui o Scout com convites por e-mail e ativação pelo próprio usuário, proteção da identidade principal, espaços de trabalho lógicos pessoais, perfil com foto e troca de senha, interface mais responsiva, menu Connect|API, tutoriais de primeiros passos e diagnósticos. Manager e API identificam a versão real e o commit do build no GHCR. Confira as [notas de lançamento](docs/release-v0.6.0.md). **Bancos PostgreSQL e domínios exclusivos por organização ainda não estão implementados**, conforme a [issue #30](https://github.com/wkarts/ARGWS-Scout/issues/30).
 
 A versão **0.5.5** consolida as correções de deploy em todos os ambientes: volumes locais relativos `./volumes/` para PostgreSQL, Redis, RabbitMQ e Garage, portas externas `4xxxx`, parametrização do SMTP global de recuperação de senha e concorrência do navegador no deployer Windows 1.0.2. Inclui orientação segura para migração de volumes preexistentes e diagnóstico do estado no Dockge. Consulte o [guia de implantação e migração](docs/deployment.md).

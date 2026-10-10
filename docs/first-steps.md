@@ -44,7 +44,7 @@ Caso não obtenha resultado: confira a URL, se o host está autorizado, o mecani
 
 ## 6. Configure Connect|API e publique
 
-No menu **Connect|API**, conecte a plataforma e associe a instância WhatsApp que enviará mensagens. Faça o pareamento necessário e confirme que o canal está disponível. Volte a **Execuções**, abra um resultado **Concluído** e escolha **Publicar pelo WhatsApp**. Selecione a instância conectada, informe o número com código do país e DDD, revise o texto e confirme.
+A conexão única com a Connect|API é configurada pelo operador no `.env` do servidor (URL e token administrativos). No menu **Connect|API**, crie sua própria instância WhatsApp ou vincule uma existente com o token particular. Outros espaços não conseguem enxergá-la. Faça o pareamento necessário e confirme que o canal está disponível. Volte a **Execuções**, abra um resultado **Concluído** e escolha **Publicar pelo WhatsApp**. Selecione a instância conectada, informe o número com código do país e DDD, revise o texto e confirme.
 
 **O envio é uma ação explícita.** Caso a confirmação falhe ou seja indeterminada, confira o histórico da Connect|API antes de tentar novamente para evitar mensagens duplicadas.
 

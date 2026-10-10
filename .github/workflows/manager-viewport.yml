@@ -1,0 +1,69 @@
+name: Manager viewport regression
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "apps/manager/**"
+      - "apps/api/src/whatsapp-routes.ts"
+      - "apps/api/src/global-connect.ts"
+      - "test/manager-responsive-contract.test.ts"
+      - ".github/workflows/manager-viewport.yml"
+  push:
+    branches: [develop, main]
+    paths:
+      - "apps/manager/**"
+      - "apps/api/src/whatsapp-routes.ts"
+      - "apps/api/src/global-connect.ts"
+      - ".github/workflows/manager-viewport.yml"
+permissions:
+  contents: read
+jobs:
+  responsive:
+    name: Chromium viewport smoke (320–1920px)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Use system Chrome or install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROME_BIN=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          elif command -v chromium >/dev/null 2>&1; then
+            echo "CHROME_BIN=$(command -v chromium)" >> "$GITHUB_ENV"
+          else
+            pnpm --filter @argws/scout-browser-worker exec playwright install --with-deps chromium
+          fi
+      - name: Build the real Manager
+        run: pnpm --filter @argws/scout-manager build
+      - name: Start Manager preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @argws/scout-manager exec vite preview --host 127.0.0.1 --port 4173 > /tmp/scout-manager-preview.log 2>&1 &
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/scout-manager-preview.log
+          exit 1
+      - name: Verify real Chrome layout at 8 widths
+        run: node apps/browser-worker/test/manager-viewport-smoke.mjs
+        env:
+          SCOUT_PREVIEW_URL: http://127.0.0.1:4173
+          SCOUT_SCREENSHOT_DIR: /tmp/scout-responsive
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manager-responsive-screenshots
+          path: /tmp/scout-responsive/*.png
+          if-no-files-found: ignore
+          retention-days: 7

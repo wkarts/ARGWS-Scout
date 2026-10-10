@@ -1,54 +1,57 @@
-# Manager WhatsApp com Connect API
+# Connect|API — conexão única e canais independentes por espaço
 
-A área **WhatsApp** do Manager administra uma instalação dedicada da Connect API por organização Scout. A Scout conversa com ela pelo backend: o navegador nunca recebe a chave administrativa.
+O Scout utiliza **uma única Connect|API** para a instalação inteira. A URL e o token administrativos são configurados exclusivamente no `.env` do servidor, carregado somente pela API. Nenhum administrador de espaço de trabalho consegue consultar, modificar ou receber o token global pelo Manager.
 
-## Configurar a conexão
+## Configuração do servidor
 
-1. Abra **WhatsApp** no Manager com perfil OWNER ou ADMIN.
-2. Informe a URL pública HTTPS da Connect API e a chave administrativa (`apikey`).
-3. Selecione **Testar e salvar**. A Scout valida a chave listando as instâncias existentes e guarda a chave cifrada no PostgreSQL.
-4. Use **Sincronizar** para atualizar instâncias, estado de conexão e tokens retornados pela Connect API.
+```dotenv
+SCOUT_CONNECT_API_URL=https://connect.exemplo.com.br
+SCOUT_CONNECT_API_TOKEN=INSIRA_UM_TOKEN_ADMINISTRATIVO_SEGURO
+```
 
-A URL precisa apontar para um host público HTTPS. A política de rede da Scout bloqueia HTTP, hosts privados/locais, portas fora de 443 e redirecionamentos para outros hosts. Endpoints com caminho de proxy, como `https://connect.exemplo.com/api`, são aceitos.
+A URL deve ser HTTPS, sem usuário/senha, query string ou fragmento. Não preencha essa chave em formulários web, dados da organização, cookies ou javascript do navegador. O backend utiliza `apikey` no header das requisições externas. Chaves são carregadas pelo contêiner `api` a partir de `.env`/ `stack.env`; os serviços de migração, bootstrap e workers recebem valores vazios em substituição à variável de ambiente.
 
-O segredo usa a chave já existente `SCOUT_ENCRYPTION_KEY_BASE64`. Preserve seu valor em todas as réplicas e faça backup seguro junto com o banco; trocar essa chave sem migrar os segredos torna a configuração e os tokens cifrados ilegíveis.
+Para aplicar alterações: na pasta da stack, faça backup do `.env`, configure os dois campos, valide o Compose e recrie o **api** após aplicar as migrations. No Dockge, a porta pública de produção continua `48181` e os dados continuam em `./volumes`. Não altere `COMPOSE_PROJECT_NAME`.
 
-O valor precisa ser Base64 de exatamente 32 bytes. A API valida isso ao iniciar; um placeholder de `.env.example` faz o container parar com erro claro, em vez de deixar o Manager abrir e falhar depois ao salvar a conexão.
+## O que cada pessoa administra
 
-## Instâncias
+Uma conexão **não** significa compartilhar as instâncias WhatsApp. Cada espaço só lista, conecta, reinicia, desconecta e publica pelas suas próprias instâncias, vinculadas em banco ao seu identificador. Outros espaços não enxergam seus números nem seus tokens. Operadores com permissões adequadas podem publicar nas instâncias do espaço, mas não alterar o token global.
 
-- **Nova instância** cria uma instância WhatsApp Baileys na Connect API e gera um token próprio aleatório. A Scout cifra esse token antes de persistir.
-- **Conectar / QR** pede à Connect API o QR ou código de pareamento. **Estado**, **Reiniciar** e **Desconectar** usam o token daquela instância.
-- **Vincular existente** valida um token próprio com `GET /instance/fetchInstances?instanceName=...` e o guarda cifrado. A chave administrativa não é usada como substituto do token da instância.
-- **Sincronizar** mantém o catálogo da organização alinhado ao endpoint configurado. Uma instância removida remotamente deixa de ser selecionável; o histórico de publicações é preservado.
-- O OWNER ou ADMIN pode definir uma instância padrão. Cada publicação ainda permite escolher explicitamente outra instância.
-- **Excluir** remove a instância remota permanentemente pela API administrativa e exige confirmação no Manager.
+**Criar nova instância:** abra **Connect|API → Nova instância**, informe um nome amigável e faça o pareamento. O Scout cria um nome remoto com prefixo exclusivo do espaço e sufixo aleatório para evitar colisões no servidor global. Um token particular aleatório é gerado e cifrado no banco do Scout. A URL e o token globais jamais chegam ao browser.
 
-Os nomes e estados são metadados visíveis à organização. A chave administrativa e tokens de instância nunca são retornados nas rotas Scout.
+**Atualizar minhas instâncias:** essa ação consulta o estado somente das instâncias previamente vinculadas ao espaço usando o token particular de cada uma. O Scout **não consulta nem importa em massa** a lista global de instâncias da Connect|API, impedindo que um espaço copie tokens ou informações de outros.
 
-## Publicar uma coleta
+**Vincular existente:** exige nome remoto e token particular válido. A API verifica o vínculo por token e reserva o nome remoto globalmente para um único espaço. Se já pertencer a outro espaço, a operação é bloqueada. Uma credencial administrativa global nunca pode ser usada como token particular.
 
-Uma coleta com estado `SUCCEEDED` pode ser aberta no Manager e enviada pelo WhatsApp. O editor preenche uma mensagem inicial com os dados coletados; o operador escolhe a instância, informa o número com DDI e revisa o texto antes de confirmar. O destino precisa ter de 8 a 15 dígitos depois de normalizar o formato internacional. A mensagem aceita até 4.096 caracteres.
+**Revalidar vínculo antigo:** após migrar de uma configuração por organização para o servidor global, registros existentes continuam salvos, mas ficam indisponíveis até que o responsável informe novamente o token particular. A revalidação evita interpretar dados de Connect APIs antigas como propriedade válida na nova conexão.
 
-OWNER, ADMIN e OPERATOR podem publicar. VIEWER pode consultar o catálogo e o histórico. O histórico guarda número e mensagem cifrados e exibe somente os quatro últimos dígitos do destino. Cada envio exige `Idempotency-Key` única por organização. Repetir a mesma chave retorna o resultado já salvo e não envia de novo.
+**Excluir:** somente administradores do espaço podem excluir as próprias instâncias vinculadas. A publicação exige coleta concluída do mesmo espaço, instância vinculada, número válido e chave de idempotência para evitar duplicidade.
 
-Os estados `SENT`, `FAILED` e `UNKNOWN` descrevem o retorno observado. Timeout, desconexão ou erro HTTP 5xx podem ocorrer depois que a Connect API aceitou a mensagem; por isso a Scout marca `UNKNOWN`, não repete o envio automaticamente e orienta conferir a conversa no WhatsApp antes de tentar novamente. Uma tentativa manual nova usa uma chave idempotente nova.
+## Migração sem perda de dados
 
-## Deploy, migração e rollback
+1. Faça backup consistente de PostgreSQL, Garage, `.env` e configurações existentes, incluindo a tabela legada `ConnectApiConfig`.
+2. Configure o `.env` global e aplique a migration `20261010020000_global_connect_workspace_claims`, que adiciona a tabela de propriedade, nome amigável e preferência de instância por espaço. Ela **não apaga os registros nem as credenciais antigas**.
+3. Recrie a API (e o Manager atualizado) sem apagar `./volumes`.
+4. Em cada espaço, use **Revalidar vínculo** ou **Vincular existente** com o token particular. Revalide antes de usar uma instância antiga ou efetuar publicações.
+5. Confirme o estado do WhatsApp, receba mensagens de teste e valide que outra organização não enxerga nem consegue operar a instância.
+6. Só após backup testado e migração confirmada planeje a limpeza controlada de dados legados sensíveis. **Não elimine automaticamente os dados antigos na migration.**
 
-Não há um container, script de deploy, variável de ambiente ou serviço adicional para a integração. Configure endpoint e chave no Manager após atualizar a versão. A migração PostgreSQL aditiva é aplicada pelo comando já presente nos Compose (`pnpm db:migrate`) antes da API. Ela cria configuração, catálogo de instâncias e histórico, sem alterar jobs existentes.
+As configurações antigas de URL e token por organização permanecem armazenadas **apenas para recuperação/rollback**, mas não são mais utilizadas para conectar, listar ou operar instâncias. A edição pelo Manager foi desativada; `PUT /v1/whatsapp/config` responde `410`.
 
-Para rollback de código, volte a imagem anterior e mantenha as tabelas adicionadas; elas não impedem a versão anterior de iniciar. Não remova as tabelas enquanto desejar preservar o histórico. Uma troca da chave de criptografia requer um plano de recifragem dos dados.
+## Contratos da integração
 
-## Contrato da Connect API usado
+| Operação                                      | Política                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET /v1/whatsapp`                            | Configuração global disponível (sim/não) e instâncias do espaço, sem token |
+| `POST /v1/whatsapp/instances`                 | Cria instância remota de nome exclusivo e token particular cifrado         |
+| `POST /v1/whatsapp/sync`                      | Atualiza apenas instâncias reivindicadas pelo espaço                       |
+| `POST /v1/whatsapp/instances/import`          | Vincula instância com token particular, se livre                           |
+| `POST /v1/whatsapp/instances/claim`           | Revalida nome remoto e token informado pelo responsável                    |
+| `PUT /v1/whatsapp/default`                    | Salva a preferência de envio somente para o espaço                         |
+| `POST /v1/whatsapp/instances/{name}/{action}` | Status, QR, reiniciar e desconectar somente de instância reivindicada      |
+| `DELETE /v1/whatsapp/instances/{name}`        | Exclui instância reivindicada sem afetar outros espaços                    |
+| `POST /v1/whatsapp/publications`              | Publicação idempotente de coleta concluída pelo próprio espaço             |
 
-| Ação na Scout               | Endpoint Connect API                                                                    | Credencial enviada         |
-| --------------------------- | --------------------------------------------------------------------------------------- | -------------------------- |
-| Testar/sincronizar catálogo | `GET /instance/fetchInstances`                                                          | chave administrativa       |
-| Criar instância             | `POST /instance/create`                                                                 | chave administrativa       |
-| Parear/consultar estado     | `GET /instance/connect/{instanceName}` e `GET /instance/connectionState/{instanceName}` | token próprio da instância |
-| Reiniciar/desconectar       | `POST /instance/restart/{instanceName}` e `DELETE /instance/logout/{instanceName}`      | token próprio da instância |
-| Excluir instância           | `DELETE /instance/delete/{instanceName}`                                                | chave administrativa       |
-| Publicar texto              | `POST /message/sendText/{instanceName}`                                                 | token próprio da instância |
+O mecanismo de propriedade é garantido por uma reserva única de nome remoto no PostgreSQL. O token particular é criptografado. Isso constitui isolamento **lógico** de canais: banco e domínio físicos exclusivos continuam pendentes na [issue #30](https://github.com/wkarts/ARGWS-Scout/issues/30).
 
-A autenticação nativa da Connect API usa o cabeçalho `apikey`. Todas as chamadas partem da API Scout; o Manager só chama rotas `/v1/whatsapp` protegidas pela sessão Scout.
+A plataforma Connect|API poderá atender outros canais futuramente, como Instagram, mas não é correto afirmar que esses canais já estão integrados ao Scout. O canal operante nesta etapa é WhatsApp.
