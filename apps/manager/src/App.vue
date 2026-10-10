@@ -131,6 +131,8 @@ const error = ref("");
 const me = ref<Me | null>(null);
 const activeSection = ref("overview");
 const mobileMenu = ref(false);
+const spaces = ref<{ id: string; name: string; role: string; current: boolean }[]>([]);
+const showSpaceMenu = ref(false);
 const instances = ref<Instance[]>([]);
 const sources = ref<Source[]>([]);
 const jobs = ref<Job[]>([]);
@@ -567,6 +569,31 @@ async function cancelJob(job: Job) {
   }
 }
 
+async function loadSpaces() {
+  if (!me.value) return;
+  try {
+    spaces.value = (await api<{ data: { id: string; name: string; role: string; current: boolean }[] }>("/profile/spaces")).data;
+  } catch {
+    spaces.value = [];
+  }
+}
+async function switchSpace(spaceId: string) {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/profile/spaces/switch", { method: "POST", body: JSON.stringify({ spaceId }) });
+    showSpaceMenu.value = false;
+    selectedInstance.value = null;
+    selectedJob.value = null;
+    activeSection.value = "overview";
+    await checkSession();
+    notify("Espaço de trabalho alterado.");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Falha ao mudar de espaço de trabalho.";
+  } finally {
+    busy.value = false;
+  }
+}
 async function checkSession() {
   try {
     const response = await api<Me>("/auth/me");
@@ -574,6 +601,7 @@ async function checkSession() {
     profileForm.value.name = response.user.name;
     profileForm.value.phone = String(response.user.profile.phone ?? "");
     avatarRevision.value = Date.now();
+    await loadSpaces();
     await loadData();
     if (["OWNER", "ADMIN", "OPERATOR"].includes(response.role))
       await loadSmtpSettings();
@@ -1112,6 +1140,7 @@ function openInstance(item: Instance) {
 function selectSection(section: string) {
   activeSection.value = section;
   mobileMenu.value = false;
+  showSpaceMenu.value = false;
   if (section === "settings" && !smtpSettingsLoaded.value)
     void loadSmtpSettings();
 }
@@ -1521,11 +1550,15 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <X :size="18" />
         </button>
       </div>
-      <div class="workspace-switcher">
-        <span class="workspace-mark"><Command :size="17" /></span
-        ><span
-          ><small>ORGANIZAÇÃO</small><strong>{{ me.tenant.name }}</strong></span
-        ><ChevronDown :size="15" class="switch-caret" />
+      <button class="workspace-switcher" :disabled="spaces.length <= 1" :aria-expanded="showSpaceMenu" aria-label="Selecionar espaço de trabalho" @click="showSpaceMenu = !showSpaceMenu">
+        <span class="workspace-mark"><Command :size="17" /></span>
+        <span><small>ESPAÇO DE TRABALHO</small><strong>{{ me.tenant.name }}</strong></span>
+        <ChevronDown v-if="spaces.length > 1" :size="15" class="switch-caret" />
+      </button>
+      <div v-if="showSpaceMenu && spaces.length > 1" class="space-menu">
+        <button v-for="space in spaces" :key="space.id" :disabled="busy || space.current" @click="switchSpace(space.id)">
+          <span>{{ space.name }}</span><small>{{ space.current ? "Atual" : "Alternar" }}</small>
+        </button>
       </div>
       <div class="nav-caption">PLATAFORMA</div>
       <nav class="side-nav">
