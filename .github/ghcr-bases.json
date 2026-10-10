@@ -22,6 +22,11 @@
       "tag": "v2.4.1"
     },
     {
+      "source": "docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
+      "package": "argws-scout-minio",
+      "tag": "RELEASE.2025-09-07T16-13-09Z"
+    },
+    {
       "source": "docker.io/library/node:24.21.0-bookworm-slim",
       "package": "argws-scout-node",
       "tag": "24.21.0-bookworm-slim"

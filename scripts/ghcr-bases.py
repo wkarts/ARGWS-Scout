@@ -58,6 +58,7 @@ def load_catalog(owner):
         "argws-scout-redis",
         "argws-scout-rabbitmq",
         "argws-scout-garage",
+        "argws-scout-minio",
         "argws-scout-node",
         "argws-scout-nginx",
         "argws-scout-alpine",

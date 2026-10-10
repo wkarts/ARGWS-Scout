@@ -127,6 +127,7 @@ jobs:
             "ghcr.io/$owner/argws-scout-redis:7.4.9-alpine"
             "ghcr.io/$owner/argws-scout-rabbitmq:4.3.6-management-alpine"
             "ghcr.io/$owner/argws-scout-garage:v2.4.1"
+            "ghcr.io/$owner/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z"
             "ghcr.io/$owner/argws-scout-node:24.21.0-bookworm-slim"
             "ghcr.io/$owner/argws-scout-nginx:1.30.5-alpine"
             "ghcr.io/$owner/argws-scout-playwright:v1.63.0-noble"
