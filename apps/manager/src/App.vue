@@ -2833,8 +2833,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             <div class="settings-row">
               <span class="settings-icon"><Globe2 :size="18" /></span>
               <div>
-                <strong>Organização</strong
-                ><small>{{ me.tenant.name }}</small>
+                <strong>Organização</strong><small>{{ me.tenant.name }}</small>
               </div>
             </div>
             <div class="settings-row">
@@ -3009,7 +3008,12 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       class="modal-backdrop"
       @click.self="closeDialogs"
     >
-      <section class="modal-card" role="dialog" aria-modal="true" :aria-label="showProfile ? 'Seu perfil' : 'Formulário da plataforma'">
+      <section
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="showProfile ? 'Seu perfil' : 'Formulário da plataforma'"
+      >
         <button
           class="icon-button modal-close"
           aria-label="Fechar"
@@ -3017,7 +3021,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         >
           <X :size="18" />
         </button>
-        <p v-if="error" class="inline-error modal-error" role="alert">{{ error }}</p>
+        <p v-if="error" class="inline-error modal-error" role="alert">
+          {{ error }}
+        </p>
         <template v-if="showInstanceForm"
           ><p class="eyebrow">ESPAÇO DE TRABALHO</p>
           <h2>Nova instância</h2>
@@ -3435,22 +3441,65 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <label
             >Nome do token<input
               v-model="tokenForm.name"
-              placeholder="Ex.: Integração do ERP" /></label
-          >
+              placeholder="Ex.: Integração do ERP"
+          /></label>
           <fieldset class="scope-choices">
             <legend>Permissões deste token</legend>
-            <label><input v-model="tokenForm.scopes" type="checkbox" value="instances:read" /> Consultar instâncias</label>
-            <label><input v-model="tokenForm.scopes" type="checkbox" value="sources:read" /> Consultar fontes</label>
-            <label><input v-model="tokenForm.scopes" type="checkbox" value="jobs:create" /> Iniciar execuções</label>
-            <label><input v-model="tokenForm.scopes" type="checkbox" value="jobs:read" /> Consultar execuções</label>
-            <label><input v-model="tokenForm.scopes" type="checkbox" value="results:read" /> Consultar resultados</label>
-            <small>Marque somente as permissões necessárias para esta integração.</small>
+            <label
+              ><input
+                v-model="tokenForm.scopes"
+                type="checkbox"
+                value="instances:read"
+              />
+              Consultar instâncias</label
+            >
+            <label
+              ><input
+                v-model="tokenForm.scopes"
+                type="checkbox"
+                value="sources:read"
+              />
+              Consultar fontes</label
+            >
+            <label
+              ><input
+                v-model="tokenForm.scopes"
+                type="checkbox"
+                value="jobs:create"
+              />
+              Iniciar execuções</label
+            >
+            <label
+              ><input
+                v-model="tokenForm.scopes"
+                type="checkbox"
+                value="jobs:read"
+              />
+              Consultar execuções</label
+            >
+            <label
+              ><input
+                v-model="tokenForm.scopes"
+                type="checkbox"
+                value="results:read"
+              />
+              Consultar resultados</label
+            >
+            <small
+              >Marque somente as permissões necessárias para esta
+              integração.</small
+            >
           </fieldset>
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Fechar</button
             ><button
               class="button primary"
-              :disabled="busy || !selectedInstance || tokenForm.name.length < 2 || !tokenForm.scopes.length"
+              :disabled="
+                busy ||
+                !selectedInstance ||
+                tokenForm.name.length < 2 ||
+                !tokenForm.scopes.length
+              "
               @click="createToken"
             >
               Gerar token
@@ -3465,13 +3514,20 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       class="modal-backdrop"
       @click.self="selectedJob = null"
     >
-      <section class="modal-card result-modal" role="dialog" aria-modal="true" aria-label="Resultado da execução">
+      <section
+        class="modal-card result-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Resultado da execução"
+      >
         <button class="icon-button modal-close" @click="selectedJob = null">
           <X :size="18" />
         </button>
         <p class="eyebrow">RESULTADO DA EXECUÇÃO</p>
         <h2>{{ selectedJob.source?.name ?? "Job" }}</h2>
-        <p v-if="error" class="inline-error modal-error" role="alert">{{ error }}</p>
+        <p v-if="error" class="inline-error modal-error" role="alert">
+          {{ error }}
+        </p>
         <div class="result-meta">
           <span class="status-pill" :class="selectedJob.status.toLowerCase()"
             ><i></i>{{ statusLabel(selectedJob.status) }}</span
@@ -3665,7 +3721,11 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
         }}</pre>
       </section>
     </div>
-    <div v-if="issuedToken || issuedWebhookSecret" class="modal-backdrop" @click.self="closeDialogs">
+    <div
+      v-if="issuedToken || issuedWebhookSecret"
+      class="modal-backdrop"
+      @click.self="closeDialogs"
+    >
       <section class="modal-card">
         <p class="eyebrow">MOSTRADO UMA ÚNICA VEZ</p>
         <h2>{{ issuedToken ? "Token criado" : "Segredo do webhook" }}</h2>

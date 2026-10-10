@@ -13,9 +13,9 @@ describe("provisionamento lógico de espaços pessoais", () => {
       instance: { create: createInstance },
     } as unknown as Prisma.TransactionClient;
 
-    expect(await provisionIndependentSpace(tx, "user-123", "Estúdio Beatriz")).toBe(
-      "space-123",
-    );
+    expect(
+      await provisionIndependentSpace(tx, "user-123", "Estúdio Beatriz"),
+    ).toBe("space-123");
     expect(createSpace).toHaveBeenCalledWith({
       data: expect.objectContaining({
         name: "Estúdio Beatriz",

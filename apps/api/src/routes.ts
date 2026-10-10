@@ -1240,7 +1240,9 @@ export async function registerRoutes(
       const expectedOwner = "profile-" + request.principal.userId!;
       if (
         objectParts.length !== 3 ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(objectParts[0] ?? "") ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          objectParts[0] ?? "",
+        ) ||
         objectParts[1] !== expectedOwner ||
         !objectParts[2]?.startsWith("avatar.")
       )
@@ -2563,88 +2565,103 @@ export async function registerRoutes(
       const owner = tenantId(request);
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const excluded = await excludedMasterIds();
-      const [errors, failedJobs, recentAudit, failedDeliveries, counters, failedJobsTotal, failedDeliveriesTotal] =
-        await Promise.all([
-          prisma.diagnosticLog.findMany({
-            where: { tenantId: owner, createdAt: { gte: since } },
-            orderBy: { createdAt: "desc" },
-            take: 200,
-            select: {
-              id: true,
-              requestId: true,
-              method: true,
-              route: true,
-              statusCode: true,
-              createdAt: true,
-            },
-          }),
-          prisma.job.findMany({
-            where: {
-              tenantId: owner,
-              status: JobStatus.FAILED,
-              createdAt: { gte: since },
-            },
-            orderBy: { createdAt: "desc" },
-            take: 100,
-            select: {
-              id: true,
-              status: true,
-              errorCode: true,
-              attempts: true,
-              createdAt: true,
-              finishedAt: true,
-              source: { select: { name: true } },
-            },
-          }),
-          prisma.auditLog.findMany({
-            where: {
-              tenantId: owner,
-              createdAt: { gte: since },
-              ...(excluded.length
-                ? {
-                    NOT: [
-                      { actorUserId: { in: excluded } },
-                      { resourceId: { in: excluded } },
-                    ],
-                  }
-                : {}),
-            },
-            orderBy: { createdAt: "desc" },
-            take: 100,
-            select: {
-              id: true,
-              action: true,
-              resourceType: true,
-              resourceId: true,
-              createdAt: true,
-            },
-          }),
-          prisma.webhookDelivery.findMany({
-            where: {
-              webhook: { tenantId: owner },
-              status: "FAILED",
-              createdAt: { gte: since },
-            },
-            orderBy: { createdAt: "desc" },
-            take: 100,
-            select: {
-              id: true,
-              status: true,
-              attempts: true,
-              lastStatusCode: true,
-              createdAt: true,
-            },
-          }),
-          prisma.diagnosticLog.count({
-            where: { tenantId: owner, createdAt: { gte: since } },
-          }),
-          prisma.job.count({
-            where: { tenantId: owner, status: JobStatus.FAILED, createdAt: { gte: since } },
-          }),
-          prisma.webhookDelivery.count({
-            where: { webhook: { tenantId: owner }, status: "FAILED", createdAt: { gte: since } },
-          }),
-        ]);
+      const [
+        errors,
+        failedJobs,
+        recentAudit,
+        failedDeliveries,
+        counters,
+        failedJobsTotal,
+        failedDeliveriesTotal,
+      ] = await Promise.all([
+        prisma.diagnosticLog.findMany({
+          where: { tenantId: owner, createdAt: { gte: since } },
+          orderBy: { createdAt: "desc" },
+          take: 200,
+          select: {
+            id: true,
+            requestId: true,
+            method: true,
+            route: true,
+            statusCode: true,
+            createdAt: true,
+          },
+        }),
+        prisma.job.findMany({
+          where: {
+            tenantId: owner,
+            status: JobStatus.FAILED,
+            createdAt: { gte: since },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          select: {
+            id: true,
+            status: true,
+            errorCode: true,
+            attempts: true,
+            createdAt: true,
+            finishedAt: true,
+            source: { select: { name: true } },
+          },
+        }),
+        prisma.auditLog.findMany({
+          where: {
+            tenantId: owner,
+            createdAt: { gte: since },
+            ...(excluded.length
+              ? {
+                  NOT: [
+                    { actorUserId: { in: excluded } },
+                    { resourceId: { in: excluded } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          select: {
+            id: true,
+            action: true,
+            resourceType: true,
+            resourceId: true,
+            createdAt: true,
+          },
+        }),
+        prisma.webhookDelivery.findMany({
+          where: {
+            webhook: { tenantId: owner },
+            status: "FAILED",
+            createdAt: { gte: since },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          select: {
+            id: true,
+            status: true,
+            attempts: true,
+            lastStatusCode: true,
+            createdAt: true,
+          },
+        }),
+        prisma.diagnosticLog.count({
+          where: { tenantId: owner, createdAt: { gte: since } },
+        }),
+        prisma.job.count({
+          where: {
+            tenantId: owner,
+            status: JobStatus.FAILED,
+            createdAt: { gte: since },
+          },
+        }),
+        prisma.webhookDelivery.count({
+          where: {
+            webhook: { tenantId: owner },
+            status: "FAILED",
+            createdAt: { gte: since },
+          },
+        }),
+      ]);
       return {
         schemaVersion: 1,
         generatedAt: new Date().toISOString(),
@@ -2655,8 +2672,17 @@ export async function registerRoutes(
           failedJobs: failedJobsTotal,
           failedDeliveries: failedDeliveriesTotal,
         },
-        resultLimits: { requestFailures: 200, jobs: 100, audit: 100, webhookFailures: 100 },
-        resultCounts: { requestFailures: counters, failedJobs: failedJobsTotal, webhookFailures: failedDeliveriesTotal },
+        resultLimits: {
+          requestFailures: 200,
+          jobs: 100,
+          audit: 100,
+          webhookFailures: 100,
+        },
+        resultCounts: {
+          requestFailures: counters,
+          failedJobs: failedJobsTotal,
+          webhookFailures: failedDeliveriesTotal,
+        },
         requestFailures: errors,
         jobs: failedJobs,
         audit: recentAudit,
@@ -2683,7 +2709,9 @@ export async function registerRoutes(
         reply,
       );
       if (!query) return;
-      const lowerBound = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
+      const lowerBound = new Date(
+        Date.now() - query.days * 24 * 60 * 60 * 1000,
+      );
       const rows = await prisma.diagnosticLog.findMany({
         where: {
           tenantId: tenantId(request),

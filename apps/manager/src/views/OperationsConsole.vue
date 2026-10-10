@@ -23,7 +23,10 @@ type HealthReport = {
 const emit = defineEmits<{ error: [message: string] }>();
 const report = ref<HealthReport | null>(null);
 const managerVersion = managerPackage.version;
-const versionMismatch = computed(() => report.value !== null && report.value.runtime.version !== managerVersion);
+const versionMismatch = computed(
+  () =>
+    report.value !== null && report.value.runtime.version !== managerVersion,
+);
 const busy = ref(false);
 const exporting = ref(false);
 const diagnostics = ref<{
@@ -133,7 +136,11 @@ onMounted(() => {
     </div>
     <div v-if="versionMismatch" class="version-mismatch" role="alert">
       <strong>Versões diferentes entre interface e API.</strong>
-      <p>Interface {{ managerVersion }} · API {{ report?.runtime.version }}. Atualize as imagens da mesma versão no GHCR e recrie os serviços correspondentes para evitar incompatibilidade.</p>
+      <p>
+        Interface {{ managerVersion }} · API {{ report?.runtime.version }}.
+        Atualize as imagens da mesma versão no GHCR e recrie os serviços
+        correspondentes para evitar incompatibilidade.
+      </p>
     </div>
     <div v-if="report" class="operations-summary">
       <span
