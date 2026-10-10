@@ -118,6 +118,7 @@ type DeliveryRow = {
 type WhatsAppInstanceOption = {
   id: string;
   name: string;
+  displayName?: string;
   integration: string;
   connectionState: string | null;
   present: boolean;
@@ -3593,7 +3594,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
                   :key="instance.id"
                   :value="instance.name"
                 >
-                  {{ instance.name
+                  {{ instance.displayName || instance.name
                   }}{{
                     instance.connectionState === "open" ? " · conectada" : ""
                   }}
