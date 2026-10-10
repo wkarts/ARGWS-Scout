@@ -1,28 +1,194 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Primeiros passos • Scout</title>
-<style>
-:root{font:16px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;color:#182b44;background:#f6f9fd}
-*{box-sizing:border-box}body{margin:0}main{max-width:940px;margin:auto;padding:clamp(22px,5vw,66px)}
-h1{font-size:clamp(29px,4vw,43px);line-height:1.2}h2{font-size:20px;margin-top:0}p,li{color:#425772}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-a{color:#1859c6}a:focus-visible{outline:2px solid #1859c6;outline-offset:3px}
-nav a{text-decoration:none;margin-right:14px}.eyebrow{font-size:12px;letter-spacing:.11em;font-weight:700;color:#2563eb}
-section{background:white;border:1px solid #dce5f1;border-radius:14px;padding:22px 26px;margin:14px 0;box-shadow:0 4px 17px #10213b06}
-code{background:#eef4fe;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}ol{padding-left:23px}
-.tip{border-left:4px solid #2563eb;padding:12px 17px;background:#edf5ff;border-radius:5px}footer{margin:38px 0;color:#64748b;font-size:13px}
-@media(max-width:560px){section{padding:16px}main{padding:16px}}
-</style></head><body><main>
-<header><strong>ARGWS Scout</strong><nav><a href="/docs/">Documentação</a><a href="/docs/user-guide.html">Manual do usuário</a></nav></header>
-<p class="eyebrow">ASSISTENTE DE UTILIZAÇÃO</p><h1>Sua primeira coleta e publicação</h1>
-<p>Aprenda em poucos passos a buscar dados de uma página pública, executar a coleta e publicar um resultado pelo WhatsApp usando a Connect|API.</p>
-<section><h2>1. Acesse e proteja sua conta</h2><p>Entre com seu e-mail e senha; quando solicitado, configure o aplicativo autenticador e guarde os códigos de recuperação. Quem foi convidado define a própria senha no link enviado por e-mail.</p></section>
-<section><h2>2. Crie uma instância</h2><p>No Manager, abra <strong>Instâncias → Nova instância</strong>. Nome de exemplo: <strong>Monitoramento de site</strong>. Agrupe suas fontes dentro dela.</p></section>
-<section><h2>3. Cadastre uma fonte</h2><p>Acesse a instância e selecione <strong>Fontes → Adicionar fonte</strong>. Preencha:</p>
-<ol><li>Nome: <strong>Página de exemplo</strong></li><li>URL: <code>https://example.org</code></li><li>Mecanismo: <strong>HTTP</strong></li><li>Hosts permitidos: <code>example.org</code></li><li>Seletor opcional: <code>h1</code></li><li>Respeitar robots.txt: <strong>Sim</strong></li></ol>
-<p class="tip">Use apenas páginas que você está autorizado a consultar. O Scout não deve copiar vídeos protegidos, contornar login, DRM, paywalls ou limites do site.</p></section>
-<section><h2>4. Inicie a coleta</h2><p>Abra <strong>Execuções → Nova execução</strong>, escolha a fonte e envie para a fila. Acompanhe o status e abra a execução concluída para ver os dados extraídos. Páginas dinâmicas podem exigir o mecanismo de navegador.</p></section>
-<section><h2>5. Configure Connect|API</h2><p>Abra <strong>Connect|API</strong>, forneça os dados de integração autorizados e associe uma instância WhatsApp conectada. Confirme o pareamento.</p></section>
-<section><h2>6. Publique o resultado</h2><p>Em <strong>Execuções</strong>, abra a coleta concluída e escolha <strong>Publicar pelo WhatsApp</strong>. Informe o número com país e DDD, revise a mensagem e confirme o envio. Não repita a publicação quando o resultado do envio for indeterminado sem antes consultar o histórico.</p></section>
-<section><h2>7. Automatize quando estiver funcionando</h2><p>Cadastre uma regra em <strong>Agendamentos</strong> para repetir a coleta. Configure um webhook apenas se precisar notificar outros sistemas.</p></section>
-<footer>Orientações atualizadas para o Scout. <a href="/docs/user-guide.html">Consultar manual completo</a></footer></main></body></html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Primeiros passos • Scout</title>
+    <style>
+      :root {
+        font:
+          16px/1.65 system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        color: #182b44;
+        background: #f6f9fd;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 940px;
+        margin: auto;
+        padding: clamp(22px, 5vw, 66px);
+      }
+      h1 {
+        font-size: clamp(29px, 4vw, 43px);
+        line-height: 1.2;
+      }
+      h2 {
+        font-size: 20px;
+        margin-top: 0;
+      }
+      p,
+      li {
+        color: #425772;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      a {
+        color: #1859c6;
+      }
+      a:focus-visible {
+        outline: 2px solid #1859c6;
+        outline-offset: 3px;
+      }
+      nav a {
+        text-decoration: none;
+        margin-right: 14px;
+      }
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.11em;
+        font-weight: 700;
+        color: #2563eb;
+      }
+      section {
+        background: white;
+        border: 1px solid #dce5f1;
+        border-radius: 14px;
+        padding: 22px 26px;
+        margin: 14px 0;
+        box-shadow: 0 4px 17px #10213b06;
+      }
+      code {
+        background: #eef4fe;
+        border-radius: 4px;
+        padding: 2px 5px;
+        overflow-wrap: anywhere;
+      }
+      ol {
+        padding-left: 23px;
+      }
+      .tip {
+        border-left: 4px solid #2563eb;
+        padding: 12px 17px;
+        background: #edf5ff;
+        border-radius: 5px;
+      }
+      footer {
+        margin: 38px 0;
+        color: #64748b;
+        font-size: 13px;
+      }
+      @media (max-width: 560px) {
+        section {
+          padding: 16px;
+        }
+        main {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>ARGWS Scout</strong>
+        <nav>
+          <a href="/docs/">Documentação</a
+          ><a href="/docs/user-guide.html">Manual do usuário</a>
+        </nav>
+      </header>
+      <p class="eyebrow">ASSISTENTE DE UTILIZAÇÃO</p>
+      <h1>Sua primeira coleta e publicação</h1>
+      <p>
+        Aprenda em poucos passos a buscar dados de uma página pública, executar
+        a coleta e publicar um resultado pelo WhatsApp usando a Connect|API.
+      </p>
+      <section>
+        <h2>1. Acesse e proteja sua conta</h2>
+        <p>
+          Entre com seu e-mail e senha; quando solicitado, configure o
+          aplicativo autenticador e guarde os códigos de recuperação. Quem foi
+          convidado define a própria senha no link enviado por e-mail.
+        </p>
+      </section>
+      <section>
+        <h2>2. Crie uma instância</h2>
+        <p>
+          No Manager, abra <strong>Instâncias → Nova instância</strong>. Nome de
+          exemplo: <strong>Monitoramento de site</strong>. Agrupe suas fontes
+          dentro dela.
+        </p>
+      </section>
+      <section>
+        <h2>3. Cadastre uma fonte</h2>
+        <p>
+          Acesse a instância e selecione
+          <strong>Fontes → Adicionar fonte</strong>. Preencha:
+        </p>
+        <ol>
+          <li>Nome: <strong>Página de exemplo</strong></li>
+          <li>URL: <code>https://example.org</code></li>
+          <li>Mecanismo: <strong>HTTP</strong></li>
+          <li>Hosts permitidos: <code>example.org</code></li>
+          <li>Seletor opcional: <code>h1</code></li>
+          <li>Respeitar robots.txt: <strong>Sim</strong></li>
+        </ol>
+        <p class="tip">
+          Use apenas páginas que você está autorizado a consultar. O Scout não
+          deve copiar vídeos protegidos, contornar login, DRM, paywalls ou
+          limites do site.
+        </p>
+      </section>
+      <section>
+        <h2>4. Inicie a coleta</h2>
+        <p>
+          Abra <strong>Execuções → Nova execução</strong>, escolha a fonte e
+          envie para a fila. Acompanhe o status e abra a execução concluída para
+          ver os dados extraídos. Páginas dinâmicas podem exigir o mecanismo de
+          navegador.
+        </p>
+      </section>
+      <section>
+        <h2>5. Configure Connect|API</h2>
+        <p>
+          Abra <strong>Connect|API</strong>, forneça os dados de integração
+          autorizados e associe uma instância WhatsApp conectada. Confirme o
+          pareamento.
+        </p>
+      </section>
+      <section>
+        <h2>6. Publique o resultado</h2>
+        <p>
+          Em <strong>Execuções</strong>, abra a coleta concluída e escolha
+          <strong>Publicar pelo WhatsApp</strong>. Informe o número com país e
+          DDD, revise a mensagem e confirme o envio. Não repita a publicação
+          quando o resultado do envio for indeterminado sem antes consultar o
+          histórico.
+        </p>
+      </section>
+      <section>
+        <h2>7. Automatize quando estiver funcionando</h2>
+        <p>
+          Cadastre uma regra em <strong>Agendamentos</strong> para repetir a
+          coleta. Configure um webhook apenas se precisar notificar outros
+          sistemas.
+        </p>
+      </section>
+      <footer>
+        Orientações atualizadas para o Scout.
+        <a href="/docs/user-guide.html">Consultar manual completo</a>
+      </footer>
+    </main>
+  </body>
+</html>

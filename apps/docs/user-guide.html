@@ -1,22 +1,210 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Manual de utilização • Scout</title><style>:root{font:16px/1.7 system-ui,Segoe UI,sans-serif;color:#182b44;background:#f6f9fd}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:clamp(20px,5vw,65px)}h1{font-size:clamp(27px,4vw,40px)}h2{font-size:21px;margin-top:30px}a{color:#1859c6}p,li{color:#52627a}header{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}article{background:white;border:1px solid #dbe4ef;border-radius:14px;padding:22px 28px;margin:12px 0}nav a{margin-right:12px}table{border-collapse:collapse;width:100%}td,th{padding:10px;border-bottom:1px solid #dae4f0;text-align:left}th{background:#eff5fc}code{overflow-wrap:anywhere}footer{margin:30px 0;font-size:13px}@media(max-width:550px){article{padding:14px}table{font-size:13px}}</style></head><body><main>
-<header><strong>ARGWS Scout</strong><nav><a href="/docs/">Documentação</a><a href="/docs/first-steps.html">Primeiros passos</a></nav></header>
-<h1>Manual de utilização</h1><p>O Scout coleta dados de páginas e endpoints web autorizados, armazena resultados e pode divulgá-los de forma controlada por canais integrados.</p>
-<article><h2>Como começar</h2><p>Crie uma instância, cadastre uma fonte com URL permitida, execute uma coleta, confira os dados e escolha um canal conectado para publicar. <a href="/docs/first-steps.html">Veja o passo a passo ilustrado por etapas</a>.</p>
-<h2>O menu</h2><table><thead><tr><th>Recurso</th><th>Quando usar</th></tr></thead><tbody>
-<tr><td>Visão geral</td><td>Indicadores e atividade recente</td></tr>
-<tr><td>Instâncias</td><td>Organizar fontes por finalidade</td></tr>
-<tr><td>Execuções</td><td>Iniciar tarefas, analisar dados e publicar</td></tr>
-<tr><td>Connect|API</td><td>Configurar canais; atualmente WhatsApp</td></tr>
-<tr><td>Agendamentos</td><td>Automatizar consultas por cron</td></tr>
-<tr><td>Webhooks</td><td>Entregar eventos a outros sistemas</td></tr>
-<tr><td>Configurações</td><td>Configurar SMTP de envio e outras opções</td></tr>
-<tr><td>Acesso e auditoria</td><td>Convidar pessoas e consultar histórico</td></tr>
-<tr><td>Saúde da plataforma</td><td>Diagnóstico de serviços e exportação</td></tr></tbody></table></article>
-<article><h2>Contas e convites</h2><p>Os administradores enviam convites por e-mail com validade de 48 horas usando o SMTP de envio configurado. O destinatário define sua própria senha. Por padrão, cada convidado ganha um espaço de trabalho próprio com seus recursos. É possível escolher compartilhamento com a equipe atual em vez de um espaço independente. A senha não é exibida aos administradores. Pessoas com acesso a mais de uma organização podem alternar seus espaços no seletor lateral.</p>
-<h2>Seu perfil</h2><p>Edite nome, telefone e foto; use <strong>Alterar senha</strong> para atualizar a credencial, confirmando sua senha atual. Outras sessões são encerradas após a alteração.</p>
-<h2>Permissões</h2><p>Proprietários administram a organização; administradores gerenciam configurações e convites; operadores executam e publicam; leitores visualizam o que for permitido. A identidade inicial da plataforma recebe proteção adicional.</p></article>
-<article><h2>Diagnósticos e histórico</h2><p>Em <strong>Saúde da plataforma</strong>, veja PostgreSQL, Redis, RabbitMQ, Garage, memória e uptime. A opção <strong>Exportar diagnóstico JSON</strong> reúne requisições com erro, falhas de tarefas, webhooks e auditoria de até sete dias sem incluir senhas, tokens ou conteúdo das mensagens. Logs detalhados dos contêineres ficam sob a administração da VPS.</p>
-<h2>Uso responsável</h2><p>Respeite as políticas de cada site, privacidade, robots.txt, direitos autorais, rate limits e permissões de acesso. Não use a ferramenta para extrair conteúdos protegidos de streaming, burlar autenticação ou fazer requisições não autorizadas.</p>
-<h2>Limitação de isolamento</h2><p>Os espaços atuais têm separação lógica de dados. Bancos PostgreSQL dedicados e domínios individuais por organização estão previstos para uma próxima evolução; não estão ativos nesta versão.</p></article>
-<footer><a href="/docs/">Voltar à documentação</a></footer></main></body></html>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Manual de utilização • Scout</title>
+    <style>
+      :root {
+        font:
+          16px/1.7 system-ui,
+          Segoe UI,
+          sans-serif;
+        color: #182b44;
+        background: #f6f9fd;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 960px;
+        margin: auto;
+        padding: clamp(20px, 5vw, 65px);
+      }
+      h1 {
+        font-size: clamp(27px, 4vw, 40px);
+      }
+      h2 {
+        font-size: 21px;
+        margin-top: 30px;
+      }
+      a {
+        color: #1859c6;
+      }
+      p,
+      li {
+        color: #52627a;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 15px;
+        flex-wrap: wrap;
+      }
+      article {
+        background: white;
+        border: 1px solid #dbe4ef;
+        border-radius: 14px;
+        padding: 22px 28px;
+        margin: 12px 0;
+      }
+      nav a {
+        margin-right: 12px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      td,
+      th {
+        padding: 10px;
+        border-bottom: 1px solid #dae4f0;
+        text-align: left;
+      }
+      th {
+        background: #eff5fc;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      footer {
+        margin: 30px 0;
+        font-size: 13px;
+      }
+      @media (max-width: 550px) {
+        article {
+          padding: 14px;
+        }
+        table {
+          font-size: 13px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>ARGWS Scout</strong>
+        <nav>
+          <a href="/docs/">Documentação</a
+          ><a href="/docs/first-steps.html">Primeiros passos</a>
+        </nav>
+      </header>
+      <h1>Manual de utilização</h1>
+      <p>
+        O Scout coleta dados de páginas e endpoints web autorizados, armazena
+        resultados e pode divulgá-los de forma controlada por canais integrados.
+      </p>
+      <article>
+        <h2>Como começar</h2>
+        <p>
+          Crie uma instância, cadastre uma fonte com URL permitida, execute uma
+          coleta, confira os dados e escolha um canal conectado para publicar.
+          <a href="/docs/first-steps.html"
+            >Veja o passo a passo ilustrado por etapas</a
+          >.
+        </p>
+        <h2>O menu</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Recurso</th>
+              <th>Quando usar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Visão geral</td>
+              <td>Indicadores e atividade recente</td>
+            </tr>
+            <tr>
+              <td>Instâncias</td>
+              <td>Organizar fontes por finalidade</td>
+            </tr>
+            <tr>
+              <td>Execuções</td>
+              <td>Iniciar tarefas, analisar dados e publicar</td>
+            </tr>
+            <tr>
+              <td>Connect|API</td>
+              <td>Configurar canais; atualmente WhatsApp</td>
+            </tr>
+            <tr>
+              <td>Agendamentos</td>
+              <td>Automatizar consultas por cron</td>
+            </tr>
+            <tr>
+              <td>Webhooks</td>
+              <td>Entregar eventos a outros sistemas</td>
+            </tr>
+            <tr>
+              <td>Configurações</td>
+              <td>Configurar SMTP de envio e outras opções</td>
+            </tr>
+            <tr>
+              <td>Acesso e auditoria</td>
+              <td>Convidar pessoas e consultar histórico</td>
+            </tr>
+            <tr>
+              <td>Saúde da plataforma</td>
+              <td>Diagnóstico de serviços e exportação</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+      <article>
+        <h2>Contas e convites</h2>
+        <p>
+          Os administradores enviam convites por e-mail com validade de 48 horas
+          usando o SMTP de envio configurado. O destinatário define sua própria
+          senha. Por padrão, cada convidado ganha um espaço de trabalho próprio
+          com seus recursos. É possível escolher compartilhamento com a equipe
+          atual em vez de um espaço independente. A senha não é exibida aos
+          administradores. Pessoas com acesso a mais de uma organização podem
+          alternar seus espaços no seletor lateral.
+        </p>
+        <h2>Seu perfil</h2>
+        <p>
+          Edite nome, telefone e foto; use <strong>Alterar senha</strong> para
+          atualizar a credencial, confirmando sua senha atual. Outras sessões
+          são encerradas após a alteração.
+        </p>
+        <h2>Permissões</h2>
+        <p>
+          Proprietários administram a organização; administradores gerenciam
+          configurações e convites; operadores executam e publicam; leitores
+          visualizam o que for permitido. A identidade inicial da plataforma
+          recebe proteção adicional.
+        </p>
+      </article>
+      <article>
+        <h2>Diagnósticos e histórico</h2>
+        <p>
+          Em <strong>Saúde da plataforma</strong>, veja PostgreSQL, Redis,
+          RabbitMQ, Garage, memória e uptime. A opção
+          <strong>Exportar diagnóstico JSON</strong> reúne requisições com erro,
+          falhas de tarefas, webhooks e auditoria de até sete dias sem incluir
+          senhas, tokens ou conteúdo das mensagens. Logs detalhados dos
+          contêineres ficam sob a administração da VPS.
+        </p>
+        <h2>Uso responsável</h2>
+        <p>
+          Respeite as políticas de cada site, privacidade, robots.txt, direitos
+          autorais, rate limits e permissões de acesso. Não use a ferramenta
+          para extrair conteúdos protegidos de streaming, burlar autenticação ou
+          fazer requisições não autorizadas.
+        </p>
+        <h2>Limitação de isolamento</h2>
+        <p>
+          Os espaços atuais têm separação lógica de dados. Bancos PostgreSQL
+          dedicados e domínios individuais por organização estão previstos para
+          uma próxima evolução; não estão ativos nesta versão.
+        </p>
+      </article>
+      <footer><a href="/docs/">Voltar à documentação</a></footer>
+    </main>
+  </body>
+</html>
