@@ -21,7 +21,7 @@ O bundle de Portainer é para endpoint **Docker Standalone**. Docker Swarm tem o
 
 ## Instalação e atualização
 
-Para Docker Compose, Dockge e CloudPanel, coloque os dois arquivos na mesma pasta, copie `.env.example` para `.env`, gere e preencha cada segredo, ajuste `SCOUT_PUBLIC_URL` e mantenha `COMPOSE_PROJECT_NAME`. Para atualização pelo terminal, execute `docker compose pull` e `docker compose up -d`; isso aplica o novo `SCOUT_TAG` sem recriar os volumes. O OWNER inicial é criado uma vez com `docker compose --profile maintenance run --rm bootstrap`.
+Para Docker Compose, Dockge e CloudPanel, coloque os dois arquivos na mesma pasta, copie `.env.example` para `.env`, gere e preencha cada segredo, ajuste `SCOUT_PUBLIC_URL` e mantenha `COMPOSE_PROJECT_NAME`. Para atualização pelo terminal, execute `docker compose pull` e `docker compose up -d`; isso aplica o novo `SCOUT_TAG` sem recriar os volumes. O serviço `bootstrap` executa automaticamente após as migrações e **antes da API**, criando o primeiro OWNER somente quando o banco estiver vazio. Instalações já povoadas não recebem novos usuários, alterações de senha ou elevação de permissões.
 
 Na CloudPanel, configure o domínio HTTPS para encaminhar ao `127.0.0.1` na porta indicada pelo `SCOUT_MANAGER_PORT`. Nenhum container de proxy adicional é necessário. O acesso público às imagens GHCR exige pacotes com leitura pública; se os pacotes forem privados, autentique o host no GHCR antes de baixar.
 
@@ -36,6 +36,39 @@ O workflow sincroniza bases PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, N
 O BuildKit mantém cache por componente. Após uma publicação validada, a política remove somente caches próprios sem acesso há duas horas; não remove tags ou imagens de release.
 
 Não execute `docker compose down --volumes` para atualizar ou reverter: isso remove os dados persistentes. Use `pull` e `up -d`; o nome `COMPOSE_PROJECT_NAME` identifica as redes e volumes que devem sobreviver à atualização.
+
+## Login 401 e bootstrap seguro
+
+Em uma instalação recém-criada, confira `SCOUT_BOOTSTRAP_ADMIN_EMAIL` e `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` (16 a 256 caracteres) antes de executar `docker compose up -d`. O serviço `bootstrap` roda automaticamente após `migrate` e a API aguarda sua conclusão. Se já existir **qualquer** usuário, o bootstrap é não destrutivo: não cria contas nem reatribui OWNER e não altera senha, MFA ou configuração do tenant. A senha que está no `.env` pode não ser a senha persistida se tiver sido trocada anteriormente.
+
+Para inspecionar sem revelar senhas, hashes ou segredos, na pasta da stack:
+
+```bash
+docker compose exec -T api pnpm auth:diagnose
+docker compose logs --tail=60 bootstrap
+```
+
+O relatório indica `bootstrapAccountFound`, `bootstrapPasswordMatchesStoredHash` e as organizações do OWNER. O `GET /auth/me` devolver 401 antes do login é esperado; `POST /auth/login` com 401 indica credenciais incorretas, usuário desativado ou inexistente.
+
+Se houver usuário existente e você tiver controle legítimo da VPS, prefira `Esqueci minha senha` com o SMTP de recuperação corretamente configurado. Sem SMTP, é possível recuperar **somente uma conta OWNER ativa** a partir do terminal interativo do contêiner:
+
+```bash
+docker compose exec api pnpm auth:recover-owner
+```
+
+O operador deve confirmar digitando `REDEFINIR` e fornecer uma nova senha duas vezes; a entrada fica oculta, nenhuma senha vai para argumentos de processo, variáveis de contêiner ou logs. O procedimento revoga sessões existentes, invalida tokens de redefinição e preserva MFA e permissões. Caso o OWNER tenha perdido o autenticador, a recuperação de senha não remove a exigência do MFA.
+
+Não execute `docker compose down -v`, não troque `COMPOSE_PROJECT_NAME`, não altere os volumes e não use `pnpm db:seed` para redefinir uma senha já existente. Se o e-mail de OWNER armazenado no banco for diferente do `.env`, o operador poderá selecionar explicitamente outro OWNER configurando somente `SCOUT_AUTH_RECOVERY_EMAIL` para **essa execução**, sem nenhuma senha nessa variável.
+
+## Chromium no browser-worker
+
+O Chromium, ao executar `chromiumSandbox: true`, exige suporte a namespaces e permissões que alguns hosts Ubuntu/Docker bloqueiam com AppArmor/seccomp. Nesses casos surge `No usable sandbox` e o processo reinicia continuamente. A configuração agora é explícita em `SCOUT_BROWSER_CHROMIUM_SANDBOX`: `true` habilita o sandbox nativo; `false` usa o isolamento do contêiner, necessário na configuração padrão das distribuições Docker restritivas.
+
+```dotenv
+SCOUT_BROWSER_CHROMIUM_SANDBOX=false
+```
+
+**Atenção:** desativar o sandbox interno do Chromium reduz a defesa em profundidade ao processar sites não confiáveis. Por isso, o browser-worker permanece como usuário não root, com `no-new-privileges`, `cap_drop: [ALL]`, limites de CPU/RAM e diretório temporário isolado. O administrador **deve aplicar política de egress no host** para impedir acesso a redes privadas, à API de metadados da nuvem e aos demais serviços internos. A validação SSRF da aplicação não é equivalente ao bloqueio de rede do host. Se o host suportar sandbox do Chromium, use `SCOUT_BROWSER_CHROMIUM_SANDBOX=true`.
 
 ## Garage: chave RPC válida e recuperação sem perda de dados
 

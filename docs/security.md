@@ -2,7 +2,7 @@
 
 ## Autenticação e autorização
 
-- Usuários usam e-mail e senha Argon2id; o seed exige senha inicial de pelo menos 16 caracteres.
+- Usuários usam e-mail e senha Argon2id; o bootstrap cria o primeiro OWNER apenas em banco sem usuários e exige senha inicial entre 16 e 256 caracteres. Reimplantações não alteram credenciais ou papéis; recuperação de OWNER exige acesso interativo explícito e mantém MFA.
 - Sessão usa cookie HTTP-only, access de 15 minutos e refresh rotativo de até 30 dias.
 - TOTP é exigido para a conta OWNER no primeiro login por padrão; os demais perfis podem ativar MFA no Manager. Uma conta com MFA habilitada exige o autenticador ou um código reserva de uso único. Os códigos reserva são guardados como hashes, mostrados apenas ao ativar ou regenerar e auditados quando usados.
 - Redefinições de senha usam token aleatório com hash SHA-256 no banco, expiração de 30 minutos, uso único e revogação das sessões existentes. O endpoint de solicitação responde de forma genérica para não revelar se o e-mail existe.
@@ -15,7 +15,7 @@
 - Produção aceita apenas HTTPS. HTTP existe para desenvolvimento local.
 - Cada fonte declara hostnames exatos. DNS, redirects e requests observados no browser são verificados; IPs privados, loopback, link-local e reservados são bloqueados.
 - Timeout e tamanho de resposta são limitados; redirects são revalidados; robots.txt é respeitado por padrão; conteúdo binário não executa no HTTP Engine.
-- Browser Worker fica separado da API, roda sem root, com capacidades e recursos reduzidos. A rede do host ainda precisa bloquear egress para ranges privados, metadata endpoints e redes internas.
+- Browser Worker fica separado da API, roda sem root, com capacidades e recursos reduzidos. `SCOUT_BROWSER_CHROMIUM_SANDBOX=false` permite a execução em Docker/AppArmor sem user namespaces, mas reduz o isolamento interno do Chromium; a configuração deve ficar restrita ao worker separado. A rede do host **precisa bloquear** egress para ranges privados, endpoints de metadados e redes internas. Em hosts com sandbox funcional, configure `SCOUT_BROWSER_CHROMIUM_SANDBOX=true`.
 - Colete apenas conteúdo para o qual você tenha autorização. Não contorne login, CAPTCHA, paywall, bloqueios, limites nem controles de acesso dos sites.
 
 ## Cookies e CORS

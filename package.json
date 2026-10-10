@@ -18,6 +18,8 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
+    "auth:diagnose": "tsx prisma/diagnose-auth.ts",
+    "auth:recover-owner": "tsx prisma/recover-owner.ts",
     "storage:migrate": "pnpm --filter @argws/scout-shared exec tsx src/migrate-s3.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
