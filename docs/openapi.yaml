@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ARGWS Scout API
-  version: 0.6.1
+  version: 0.7.0
   description: REST API para espaços de trabalho, coleta web e publicação via Connect|API, com canais e instâncias WhatsApp isolados logicamente.
 servers:
   - url: /v1
@@ -290,6 +290,57 @@ paths:
         $ref: "#/components/requestBodies/JobCreate"
       responses:
         "202": { description: Job aceito para execução. }
+  /instance-templates:
+    get:
+      security: [{ ScoutSession: [] }]
+      summary: Lista modelos prontos e editáveis de coleta.
+      description: Os modelos são exemplos de páginas públicas; não integram APIs comerciais privadas sem autenticação.
+      responses:
+        "200":
+          description: Dez modelos, com ID, metadados, URLs de exemplo e configuração inicial.
+        "403":
+          description: Requer sessão do Manager.
+  /instance-templates/{templateId}/create:
+    post:
+      security: [{ ScoutSession: [] }]
+      summary: Cria instância e fonte a partir de um modelo no espaço atual.
+      description: Requer OWNER, ADMIN ou OPERATOR. Não inicia a coleta automaticamente.
+      parameters:
+        - in: path
+          name: templateId
+          required: true
+          schema: { type: string }
+          example: amazon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, query]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                description: { type: string, maxLength: 500 }
+                query: { type: string, minLength: 2, maxLength: 100 }
+                source:
+                  type: object
+                  properties:
+                    name: { type: string, minLength: 2, maxLength: 120 }
+                    url: { type: string, format: uri }
+                    selector: { type: string, maxLength: 500 }
+                    engine: { type: string, enum: [HTTP, PLAYWRIGHT] }
+                    requestIntervalMs:
+                      { type: integer, minimum: 1000, maximum: 300000 }
+                    captureScreenshot: { type: boolean }
+      responses:
+        "201": { description: Instância e fonte criadas atomicamente. }
+        "400":
+          {
+            description: Configuração ou URL rejeitada pelas políticas de segurança.,
+          }
+        "403": { description: Perfil sem permissão. }
+        "404": { description: Modelo não encontrado. }
+        "409": { description: Identificador de instância indisponível. }
   /jobs:
     get:
       summary: Lista jobs recentes; results:read libera conteúdo para tokens.

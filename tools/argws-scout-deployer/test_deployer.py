@@ -141,6 +141,74 @@ class ScoutDeployerTests(unittest.TestCase):
             self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 0)
             self.assertIn("./volumes/garage/config:", (output / "compose.yaml").read_text())
 
+    def test_connect_api_fields_are_written_with_masked_stdin_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            secret = "connect#token$with'quotes"
+            args = self.command(
+                "dockge", "production", output,
+                "--connect-api-url", "https://connect.example.org",
+                "--connect-api-token-stdin",
+            )
+            previous_stdin = sys.stdin
+            output_log = io.StringIO()
+            try:
+                sys.stdin = io.StringIO(secret + "\n")
+                with contextlib.redirect_stdout(output_log):
+                    self.assertEqual(scout_deployer.main(args), 0)
+            finally:
+                sys.stdin = previous_stdin
+            env = scout_deployer.parse_env((output / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(env["SCOUT_CONNECT_API_URL"], "https://connect.example.org")
+            self.assertEqual(env["SCOUT_CONNECT_API_TOKEN"], secret)
+            self.assertNotIn(secret, output_log.getvalue())
+            self.assertEqual(scout_deployer.validate_directory(output, quiet=True), 0)
+
+    def test_connect_api_and_smtp_can_use_separate_stdin_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "deploy"
+            args = self.command(
+                "docker", "production", output,
+                "--recovery-smtp-host", "smtp.example.org",
+                "--recovery-smtp-from-email", "security@example.org",
+                "--recovery-smtp-password-stdin",
+                "--recovery-smtp-username", "mailer",
+                "--connect-api-url", "https://connect.example.org/api",
+                "--connect-api-token-stdin",
+            )
+            old_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO("smtp-password\nconnect-token\n")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(scout_deployer.main(args), 0)
+            finally:
+                sys.stdin = old_stdin
+            env = scout_deployer.parse_env((output / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(env["SCOUT_RECOVERY_SMTP_PASSWORD"], "smtp-password")
+            self.assertEqual(env["SCOUT_CONNECT_API_TOKEN"], "connect-token")
+            self.assertEqual(env["SCOUT_CONNECT_API_URL"], "https://connect.example.org/api")
+
+    def test_connect_api_rejects_partial_or_insecure_configuration(self) -> None:
+        for url, token in (
+            ("https://connect.example.org", ""),
+            ("", "only-token"),
+            ("http://connect.example.org", "token"),
+            ("https://user:pass@connect.example.org", "token"),
+            ("https://connect.example.org/path?token=secret", "token"),
+            ("https://connect.example.org:8443", "token"),
+        ):
+            with self.subTest(url=url, token=token):
+                with self.assertRaises(ValueError):
+                    scout_deployer.validate_runtime_settings(
+                        manager_port=48181,
+                        browser_concurrency=1,
+                        smtp_host="", smtp_port=587, smtp_secure="false",
+                        smtp_username="", smtp_password="", smtp_from_email="",
+                        smtp_from_name="ARGWS Scout",
+                        connect_api_url=url,
+                        connect_api_token=token,
+                    )
+
     def test_invalid_ports_concurrency_and_smtp_configurations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "deploy"
