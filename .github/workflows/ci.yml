@@ -50,6 +50,12 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Inspect Prettier changes without writing source
+        shell: bash
+        run: |
+          for source in prisma/seed.ts prisma/recover-owner.ts test/browser-sandbox.test.ts; do
+            diff -u "$source" <(pnpm exec prettier "$source") || true
+          done
       - run: pnpm format:check
       - name: Enforce SemVer and workspace version contract
         shell: bash
