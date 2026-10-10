@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { buildVersion } from "./version.ts";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -85,7 +86,9 @@ app.addHook("onRequest", async (request, reply) => {
 app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
-  version: process.env.SCOUT_VERSION ?? "0.4.0",
+  version: buildVersion,
+  buildSha: process.env.SCOUT_BUILD_SHA ?? "local",
+  channel: process.env.SCOUT_BUILD_CHANNEL ?? "local",
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([
@@ -104,6 +107,28 @@ app.get("/health/ready", async (_request, reply) => {
 });
 
 await app.register(registerRoutes, { prefix: "/v1", redis });
+// Registra falhas por organização de forma persistente, sem URL de consulta,
+// payloads, senhas, tokens, IPs ou cabeçalhos sensíveis.
+app.addHook("onResponse", async (request, reply) => {
+  const principal = request.principal;
+  if (reply.statusCode < 400 || !principal?.tenantId) return;
+  try {
+    await prisma.diagnosticLog.create({
+      data: {
+        tenantId: principal.tenantId,
+        requestId: String(request.id).slice(0, 100),
+        method: request.method.slice(0, 10),
+        route: String(request.routeOptions.url ?? "[unmatched]").slice(0, 200),
+        statusCode: reply.statusCode,
+      },
+    });
+  } catch {
+    request.log.warn(
+      { requestId: request.id },
+      "Falha ao persistir diagnóstico.",
+    );
+  }
+});
 app.setNotFoundHandler((_request, reply) =>
   reply
     .code(404)

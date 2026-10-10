@@ -2,11 +2,13 @@
 ARG NODE_BASE=ghcr.io/wkarts/argws-scout-node:24.21.0-bookworm-slim
 ARG NGINX_BASE=ghcr.io/wkarts/argws-scout-nginx:1.30.5-alpine
 FROM ${NODE_BASE} AS build
+ARG SCOUT_GIT_SHA=local
+ARG SCOUT_CHANNEL=local
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 WORKDIR /app
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm --filter @argws/scout-manager build
+RUN pnpm install --frozen-lockfile && VITE_BUILD_SHA="${SCOUT_GIT_SHA}" VITE_BUILD_CHANNEL="${SCOUT_CHANNEL}" pnpm --filter @argws/scout-manager build
 
 FROM ${NGINX_BASE}
 COPY --from=build /app/apps/manager/dist /usr/share/nginx/html

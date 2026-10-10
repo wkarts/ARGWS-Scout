@@ -161,6 +161,8 @@ jobs:
             PLAYWRIGHT_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-playwright:v1.63.0-noble
             GARAGE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-garage:v2.4.1
             TOOLS_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-alpine:3.23
+            SCOUT_GIT_SHA=${{ github.event.workflow_run.head_sha }}
+            SCOUT_CHANNEL=${{ github.event.workflow_run.head_branch }}
           cache-from: type=gha,scope=argws-scout-buildkit-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=argws-scout-buildkit-${{ matrix.component }}
 

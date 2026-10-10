@@ -14,6 +14,8 @@ async function main(): Promise<void> {
       ? await prisma.user.findUnique({
           where: { email },
           select: {
+            id: true,
+            isPlatformMaster: true,
             passwordHash: true,
             disabledAt: true,
             memberships: { select: { role: true } },
@@ -27,10 +29,25 @@ async function main(): Promise<void> {
             .verify(configuredUser.passwordHash, password)
             .catch(() => false)
         : null;
+    // Marca somente o OWNER identificado na configuração local da instalação.
+    // Não altera credenciais, MFA, perfis ou dados existentes.
+    if (
+      configuredUser &&
+      !configuredUser.isPlatformMaster &&
+      configuredUser.memberships.some(
+        (item) => item.role === TenantRole.OWNER,
+      ) &&
+      (await prisma.user.count({ where: { isPlatformMaster: true } })) === 0
+    ) {
+      await prisma.user.update({
+        where: { id: configuredUser.id },
+        data: { isPlatformMaster: true },
+      });
+    }
     process.stdout.write(
       [
         "Bootstrap preservado: banco de dados já contém usuários.",
-        "Nenhuma senha, conta, organização, permissão ou MFA foi alterada.",
+        "Nenhuma senha, organização, permissão ou MFA foi alterada. A identidade principal pode ter recebido a marca de proteção.",
         `Conta configurada no .env: ${configuredUser ? "encontrada" : "não encontrada"}.`,
         `Senha do .env corresponde ao hash da conta: ${matches === null ? "não verificada" : matches ? "sim" : "não"}.`,
         `Conta habilitada: ${configuredUser ? (configuredUser.disabledAt ? "não" : "sim") : "não verificada"}.`,
@@ -74,7 +91,7 @@ async function main(): Promise<void> {
       create: { name: tenantName, slug: tenantSlug },
     });
     const user = await tx.user.create({
-      data: { email, name, passwordHash },
+      data: { email, name, passwordHash, isPlatformMaster: true },
     });
     await tx.membership.create({
       data: { tenantId: tenant.id, userId: user.id, role: TenantRole.OWNER },
