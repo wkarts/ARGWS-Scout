@@ -16,11 +16,11 @@ import {
   ConnectApiError,
   createWhatsAppInstancePayload,
   isWhatsAppIntegration,
-  normalizeConnectBaseUrl,
   normalizeConnectInstances,
   sanitizeConnectApiResponse,
   sendWhatsAppTextPayload,
 } from "./connect-api.ts";
+import { globalConnectSettings, remoteInstanceName } from "./global-connect.ts";
 
 const adminRoles = [TenantRole.OWNER, TenantRole.ADMIN];
 const publisherRoles = [...adminRoles, TenantRole.OPERATOR];
@@ -33,10 +33,6 @@ const nameSchema = z
     /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u,
     "Use letras, números, espaço, ponto, hífen ou sublinhado no nome da instância.",
   );
-const configSchema = z.object({
-  baseUrl: z.string().trim().min(8).max(2048),
-  apiKey: z.string().trim().max(4096).optional().default(""),
-});
 const createSchema = z.object({ name: nameSchema });
 const importSchema = z.object({
   name: nameSchema,
@@ -106,15 +102,10 @@ function connectError(error: unknown): {
   };
 }
 
-async function credentials(tenant: string) {
-  const config = await prisma.connectApiConfig.findUnique({
-    where: { tenantId: tenant },
-  });
-  if (!config) return null;
-  return {
-    config,
-    apiKey: decryptSecret(config.apiKeyEncrypted),
-  };
+function credentials() {
+  // One Connect|API integration for the entire Scout installation.
+  // Tenant administrators do not receive, read or change this secret.
+  return globalConnectSettings();
 }
 
 function wireStatus(status: WhatsAppPublicationStatus) {
@@ -127,81 +118,49 @@ function wireStatus(status: WhatsAppPublicationStatus) {
   }[status];
 }
 
-async function storeRemoteInstances(tenant: string, payload: unknown) {
-  const remote = normalizeConnectInstances(payload).filter((instance) =>
-    isWhatsAppIntegration(instance.integration),
-  );
-  const seen = new Set(remote.map((instance) => instance.name));
-  if (seen.size) {
-    await prisma.connectApiInstance.updateMany({
-      where: { tenantId: tenant, present: true, name: { notIn: [...seen] } },
-      data: { present: false },
-    });
-  } else {
-    await prisma.connectApiInstance.updateMany({
-      where: { tenantId: tenant, present: true },
-      data: { present: false },
-    });
-  }
-  for (const instance of remote) {
-    const tokenEncrypted = instance.token
-      ? encryptSecret(instance.token)
-      : undefined;
-    await prisma.connectApiInstance.upsert({
-      where: {
-        tenantId_name: { tenantId: tenant, name: instance.name },
-      },
-      create: {
-        tenantId: tenant,
-        name: instance.name,
-        integration: instance.integration,
-        ...(tokenEncrypted ? { tokenEncrypted } : {}),
-        connectionState: instance.connectionState,
-        number: instance.number,
-        profileName: instance.profileName,
-        present: true,
-      },
-      update: {
-        integration: instance.integration,
-        ...(tokenEncrypted ? { tokenEncrypted } : {}),
-        ...(instance.connectionState !== undefined
-          ? { connectionState: instance.connectionState }
-          : {}),
-        ...(instance.number !== undefined ? { number: instance.number } : {}),
-        ...(instance.profileName !== undefined
-          ? { profileName: instance.profileName }
-          : {}),
-        present: true,
-      },
-    });
-  }
-  const config = await prisma.connectApiConfig.findUnique({
-    where: { tenantId: tenant },
-    select: { defaultInstanceName: true },
+/** Refresh only instances already claimed by this workspace.
+ * NEVER enumerate the server's administrative /instance/fetchInstances list:
+ * that list contains the instances of all workspaces using the same Connect|API.
+ */
+async function syncInstances(tenant: string, baseUrl: string) {
+  const claims = await prisma.connectInstanceClaim.findMany({
+    where: { tenantId: tenant }, select: { name: true },
   });
-  if (config?.defaultInstanceName && !seen.has(config.defaultInstanceName))
-    await prisma.connectApiConfig.update({
-      where: { tenantId: tenant },
-      data: { defaultInstanceName: null },
-    });
+  const owned = claims.map((item) => item.name);
+  const records = await prisma.connectApiInstance.findMany({
+    where: { tenantId: tenant, present: true, name: { in: owned } },
+    orderBy: { name: "asc" }, take: 100,
+  });
+  for (const row of records) {
+    if (!row.tokenEncrypted) continue;
+    try {
+      const result = await connectApiRequest<unknown>({
+        baseUrl, apiKey: decryptSecret(row.tokenEncrypted),
+        path: connectInstancePath(row.name, "connectionState"), timeoutMs: 8000,
+      });
+      const data = result && typeof result === "object" ? result as Record<string, unknown> : {};
+      const nested = data.instance && typeof data.instance === "object"
+        ? data.instance as Record<string, unknown> : data;
+      const state = typeof nested.state === "string" ? nested.state : "unknown";
+      await prisma.connectApiInstance.update({
+        where: { id: row.id }, data: { connectionState: state },
+      });
+    } catch {
+      // A remote failure never deletes or reveals an existing binding.
+      await prisma.connectApiInstance.update({
+        where: { id: row.id }, data: { connectionState: "unknown" },
+      });
+    }
+  }
   return prisma.connectApiInstance.findMany({
-    where: { tenantId: tenant, present: true },
-    orderBy: { name: "asc" },
+    where: { tenantId: tenant, present: true }, orderBy: { name: "asc" },
   });
-}
-
-async function syncInstances(tenant: string, baseUrl: string, apiKey: string) {
-  const payload = await connectApiRequest<unknown>({
-    baseUrl,
-    apiKey,
-    path: "instance/fetchInstances",
-  });
-  return storeRemoteInstances(tenant, payload);
 }
 
 function publicInstance(instance: {
   id: string;
   name: string;
+  displayName: string | null;
   integration: string;
   connectionState: string | null;
   number: string | null;
@@ -209,21 +168,24 @@ function publicInstance(instance: {
   present: boolean;
   tokenEncrypted: string | null;
   updatedAt: Date;
-}) {
+}, claimed = false) {
   return {
     id: instance.id,
     name: instance.name,
+    displayName: instance.displayName ?? instance.name,
     integration: instance.integration,
     connectionState: instance.connectionState,
     number: instance.number,
     profileName: instance.profileName,
     present: instance.present,
-    usable: Boolean(instance.tokenEncrypted && instance.present),
+    usable: Boolean(claimed && instance.tokenEncrypted && instance.present),
     updatedAt: instance.updatedAt,
   };
 }
 
 async function loadRemoteInstance(tenant: string, name: string) {
+  const claim = await prisma.connectInstanceClaim.findUnique({ where: { name } });
+  if (!claim || claim.tenantId !== tenant) return null;
   return prisma.connectApiInstance.findFirst({
     where: { tenantId: tenant, name, present: true },
   });
@@ -244,114 +206,45 @@ function idempotencyKey(request: FastifyRequest): string | null {
 export async function registerWhatsAppRoutes(
   app: FastifyInstance,
 ): Promise<void> {
-  app.get(
-    "/whatsapp",
-    { preHandler: authenticated() },
-    async (request, reply) => {
-      if (!isManagerUser(request))
-        return fail(reply, 403, "FORBIDDEN", "Use uma sessão do Manager.");
-      const tenant = tenantId(request);
-      const [config, instances] = await Promise.all([
-        prisma.connectApiConfig.findUnique({ where: { tenantId: tenant } }),
-        prisma.connectApiInstance.findMany({
-          where: { tenantId: tenant, present: true },
-          orderBy: { name: "asc" },
-        }),
-      ]);
-      return {
-        configured: Boolean(config),
-        baseUrl: config?.baseUrl ?? "",
-        defaultInstanceName: config?.defaultInstanceName ?? null,
-        instances: instances.map(publicInstance),
-        canManage: hasRole(request, ...adminRoles),
-        canPublish: hasRole(request, ...publisherRoles),
-      };
-    },
-  );
+  app.get("/whatsapp", { preHandler: authenticated() }, async (request, reply) => {
+    if (!isManagerUser(request))
+      return fail(reply, 403, "FORBIDDEN", "Use uma sessão do Manager.");
+    const tenant = tenantId(request);
+    const [workspace, instances, claims] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: tenant }, select: { connectDefaultInstanceName: true },
+      }),
+      prisma.connectApiInstance.findMany({
+        where: { tenantId: tenant, present: true }, orderBy: { name: "asc" },
+      }),
+      prisma.connectInstanceClaim.findMany({
+        where: { tenantId: tenant }, select: { name: true },
+      }),
+    ]);
+    const owned = new Set(claims.map((claim) => claim.name));
+    return {
+      configured: Boolean(credentials()),
+      mode: "global",
+      defaultInstanceName: workspace?.connectDefaultInstanceName ?? null,
+      instances: instances.map((instance) => publicInstance(instance, owned.has(instance.name))),
+      canManage: hasRole(request, ...adminRoles),
+      canPublish: hasRole(request, ...publisherRoles),
+    };
+  });
 
-  app.put(
-    "/whatsapp/config",
-    { preHandler: authenticated() },
-    async (request, reply) => {
-      if (!(await requireAdmin(request, reply))) return;
-      const body = configSchema.safeParse(request.body);
-      if (!body.success)
-        return fail(
-          reply,
-          400,
-          "VALIDATION_ERROR",
-          "Revise a URL e a chave informadas.",
-        );
-      let baseUrl: string;
-      try {
-        baseUrl = normalizeConnectBaseUrl(body.data.baseUrl);
-      } catch (error) {
-        const info = connectError(error);
-        return fail(reply, info.status, info.code, info.message);
-      }
-      const tenant = tenantId(request);
-      const current = await prisma.connectApiConfig.findUnique({
-        where: { tenantId: tenant },
-      });
-      const apiKey =
-        body.data.apiKey ||
-        (current ? decryptSecret(current.apiKeyEncrypted) : "");
-      if (!apiKey)
-        return fail(
-          reply,
-          400,
-          "API_KEY_REQUIRED",
-          "Informe a chave administrativa da Connect API.",
-        );
-      try {
-        const payload = await connectApiRequest<unknown>({
-          baseUrl,
-          apiKey,
-          path: "instance/fetchInstances",
-        });
-        const updated = await prisma.connectApiConfig.upsert({
-          where: { tenantId: tenant },
-          create: {
-            tenantId: tenant,
-            baseUrl,
-            apiKeyEncrypted: encryptSecret(apiKey),
-          },
-          update: {
-            baseUrl,
-            apiKeyEncrypted: encryptSecret(apiKey),
-            ...(baseUrl !== current?.baseUrl
-              ? { defaultInstanceName: null }
-              : {}),
-          },
-        });
-        const instances = await storeRemoteInstances(tenant, payload);
-        await audit({
-          tenantId: tenant,
-          actorUserId: request.principal?.userId,
-          action: "whatsapp.connect_api.configured",
-          resourceType: "connect-api",
-          resourceId: tenant,
-          metadata: { host: new URL(updated.baseUrl).host },
-        });
-        return {
-          configured: true,
-          baseUrl: updated.baseUrl,
-          defaultInstanceName: updated.defaultInstanceName,
-          instances: instances.map(publicInstance),
-        };
-      } catch (error) {
-        const info = connectError(error);
-        return fail(reply, info.status, info.code, info.message);
-      }
-    },
-  );
+  // The administrative URL and token are server-owned, never accepted from a workspace.
+  app.put("/whatsapp/config", { preHandler: authenticated() }, async (request, reply) => {
+    if (!isManagerUser(request))
+      return fail(reply, 403, "FORBIDDEN", "Use uma sessão do Manager.");
+    return fail(reply, 410, "GLOBAL_CONNECT_SETTINGS", "Configure URL e token somente no .env do servidor.");
+  });
 
   app.post(
     "/whatsapp/sync",
     { preHandler: authenticated() },
     async (request, reply) => {
       if (!(await requireAdmin(request, reply))) return;
-      const auth = await credentials(tenantId(request));
+      const auth = credentials();
       if (!auth)
         return fail(
           reply,
@@ -360,12 +253,13 @@ export async function registerWhatsAppRoutes(
           "Configure primeiro a Connect API.",
         );
       try {
-        const instances = await syncInstances(
-          tenantId(request),
-          auth.config.baseUrl,
-          auth.apiKey,
-        );
-        return { data: instances.map(publicInstance) };
+        const tenant = tenantId(request);
+        const instances = await syncInstances(tenant, auth.baseUrl);
+        const claims = await prisma.connectInstanceClaim.findMany({
+          where: { tenantId: tenant }, select: { name: true },
+        });
+        const owned = new Set(claims.map((claim) => claim.name));
+        return { data: instances.map((instance) => publicInstance(instance, owned.has(instance.name))) };
       } catch (error) {
         const info = connectError(error);
         return fail(reply, info.status, info.code, info.message);
@@ -387,7 +281,7 @@ export async function registerWhatsAppRoutes(
           "Informe um nome válido para a instância.",
         );
       const tenant = tenantId(request);
-      const auth = await credentials(tenant);
+      const auth = credentials();
       if (!auth)
         return fail(
           reply,
@@ -430,7 +324,7 @@ export async function registerWhatsAppRoutes(
           });
       try {
         await connectApiRequest({
-          baseUrl: auth.config.baseUrl,
+          baseUrl: auth.baseUrl,
           apiKey: auth.apiKey,
           path: "instance/create",
           method: "POST",
@@ -491,7 +385,7 @@ export async function registerWhatsAppRoutes(
           "Informe o nome e o token da instância.",
         );
       const tenant = tenantId(request);
-      const auth = await credentials(tenant);
+      const auth = credentials();
       if (!auth)
         return fail(
           reply,
@@ -501,7 +395,7 @@ export async function registerWhatsAppRoutes(
         );
       try {
         const payload = await connectApiRequest<unknown>({
-          baseUrl: auth.config.baseUrl,
+          baseUrl: auth.baseUrl,
           apiKey: body.data.token,
           path: `instance/fetchInstances?instanceName=${encodeURIComponent(body.data.name)}`,
         });
@@ -645,7 +539,7 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NOT_USABLE",
           "A instância não está vinculada à Scout.",
         );
-      const auth = await credentials(tenant);
+      const auth = credentials();
       if (!auth)
         return fail(
           reply,
@@ -664,7 +558,7 @@ export async function registerWhatsAppRoutes(
             : action;
       try {
         const result = await connectApiRequest<unknown>({
-          baseUrl: auth.config.baseUrl,
+          baseUrl: auth.baseUrl,
           apiKey: token,
           method,
           path: connectInstancePath(instance.name, apiAction),
@@ -722,7 +616,7 @@ export async function registerWhatsAppRoutes(
           "Nome de instância inválido.",
         );
       const tenant = tenantId(request);
-      const auth = await credentials(tenant);
+      const auth = credentials();
       const instance = await loadRemoteInstance(tenant, parsedName.data);
       if (!auth || !instance)
         return fail(
@@ -733,7 +627,7 @@ export async function registerWhatsAppRoutes(
         );
       try {
         await connectApiRequest({
-          baseUrl: auth.config.baseUrl,
+          baseUrl: auth.baseUrl,
           apiKey: auth.apiKey,
           method: "DELETE",
           path: connectInstancePath(instance.name, "delete"),
@@ -869,7 +763,7 @@ export async function registerWhatsAppRoutes(
           "INSTANCE_NOT_USABLE",
           "Selecione uma instância WhatsApp vinculada à Connect API.",
         );
-      const auth = await credentials(tenant);
+      const auth = credentials();
       if (!auth)
         return fail(
           reply,
@@ -937,7 +831,7 @@ export async function registerWhatsAppRoutes(
       let errorCode: string | undefined;
       try {
         await connectApiRequest({
-          baseUrl: auth.config.baseUrl,
+          baseUrl: auth.baseUrl,
           apiKey: decryptSecret(instance.tokenEncrypted),
           method: "POST",
           path: connectSendTextPath(instance.name),
