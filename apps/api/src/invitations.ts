@@ -27,7 +27,7 @@ function error(reply: FastifyReply, status: number, code: string, message: strin
 }
 function requiredAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
   if (request.principal?.kind !== "user" || !request.principal.role ||
-      ![TenantRole.OWNER, TenantRole.ADMIN].includes(request.principal.role)) {
+      (request.principal.role !== TenantRole.OWNER && request.principal.role !== TenantRole.ADMIN)) {
     error(reply, 403, "FORBIDDEN", "Somente administradores podem convidar pessoas.");
     return false;
   }
