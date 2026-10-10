@@ -1,5 +1,8 @@
 ARG NODE_BASE=ghcr.io/wkarts/argws-scout-node:24.21.0-bookworm-slim
 FROM ${NODE_BASE}
+ARG SCOUT_GIT_SHA=local
+ARG SCOUT_CHANNEL=local
+ENV SCOUT_BUILD_SHA=${SCOUT_GIT_SHA} SCOUT_BUILD_CHANNEL=${SCOUT_CHANNEL}
 
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" NODE_ENV=production
 # Ensure Prisma can discover system OpenSSL/libssl in the Debian slim runtime.

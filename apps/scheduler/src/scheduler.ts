@@ -8,6 +8,7 @@ const pollMs = Math.max(
   Number(process.env.SCOUT_SCHEDULER_POLL_MS ?? 15000),
 );
 let running = true;
+let nextDiagnosticRetention = 0;
 
 async function shutdown(): Promise<void> {
   running = false;
@@ -19,6 +20,19 @@ process.once("SIGTERM", shutdown);
 
 async function tick(): Promise<void> {
   const now = new Date();
+  if (Date.now() >= nextDiagnosticRetention) {
+    nextDiagnosticRetention = Date.now() + 24 * 60 * 60 * 1000;
+    const days = Math.max(
+      7,
+      Math.min(
+        365,
+        Number(process.env.SCOUT_DIAGNOSTIC_RETENTION_DAYS ?? 30) || 30,
+      ),
+    );
+    await prisma.diagnosticLog.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - days * 86400000) } },
+    });
+  }
   const due = await prisma.schedule.findMany({
     where: {
       enabled: true,
