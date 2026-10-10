@@ -43,7 +43,8 @@ async function main(): Promise<void> {
 
   const email = process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SCOUT_BOOTSTRAP_ADMIN_PASSWORD;
-  const name = process.env.SCOUT_BOOTSTRAP_ADMIN_NAME?.trim() || "Administrador";
+  const name =
+    process.env.SCOUT_BOOTSTRAP_ADMIN_NAME?.trim() || "Administrador";
   const tenantName =
     process.env.SCOUT_BOOTSTRAP_TENANT_NAME?.trim() || "Minha organização";
   const tenantSlug =

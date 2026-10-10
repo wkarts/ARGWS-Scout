@@ -46,7 +46,9 @@ async function readHidden(label: string): Promise<string> {
 
 async function main(): Promise<void> {
   if (!stdin.isTTY || !stdout.isTTY)
-    throw new Error("Execute este comando apenas via console interativo da VPS.");
+    throw new Error(
+      "Execute este comando apenas via console interativo da VPS.",
+    );
   const email = (
     process.env.SCOUT_AUTH_RECOVERY_EMAIL ??
     process.env.SCOUT_BOOTSTRAP_ADMIN_EMAIL ??
@@ -55,7 +57,9 @@ async function main(): Promise<void> {
     .trim()
     .toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    throw new Error("Informe SCOUT_BOOTSTRAP_ADMIN_EMAIL ou SCOUT_AUTH_RECOVERY_EMAIL.");
+    throw new Error(
+      "Informe SCOUT_BOOTSTRAP_ADMIN_EMAIL ou SCOUT_AUTH_RECOVERY_EMAIL.",
+    );
   const user = await prisma.user.findUnique({
     where: { email },
     select: {
@@ -83,20 +87,27 @@ async function main(): Promise<void> {
   if (confirmation.trim() !== "REDEFINIR")
     throw new Error("Recuperação cancelada. Nenhuma alteração realizada.");
 
-  const password = await readHidden("Nova senha (16 a 256 caracteres, oculta): ");
+  const password = await readHidden(
+    "Nova senha (16 a 256 caracteres, oculta): ",
+  );
   if (
     password.length < 16 ||
     password.length > 256 ||
     /^(replace|change)/i.test(password)
   )
-    throw new Error("A senha deve conter de 16 a 256 caracteres e não pode ser um placeholder.");
+    throw new Error(
+      "A senha deve conter de 16 a 256 caracteres e não pode ser um placeholder.",
+    );
   const again = await readHidden("Confirme a nova senha (oculta): ");
   if (password !== again)
     throw new Error("Senhas diferentes. Nenhuma alteração realizada.");
 
   const hash = await argon2.hash(password, { type: argon2.argon2id });
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash: hash } });
+    await tx.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hash },
+    });
     await tx.authSession.updateMany({
       where: { userId: user.id, revokedAt: null },
       data: { revokedAt: new Date() },
