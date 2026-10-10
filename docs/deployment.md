@@ -4,12 +4,12 @@ Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}
 
 ## Perfil por plataforma
 
-| Plataforma | Persistência | Ambiente | Porta padrão (develop / production) |
-| --- | --- | --- | --- |
-| Docker Compose | `./volumes` ao lado do Compose | `.env` | `48080 / 48180` |
-| Dockge | `./volumes` dentro da pasta da stack | `.env` | `48081 / 48181` |
-| CloudPanel | `./volumes` na pasta da stack | `.env` e proxy reverso | `48082 / 48182` |
-| Portainer Standalone | `./volumes` relativo ao diretório efetivo do Compose no host | `stack.env` | `48083 / 48183` |
+| Plataforma           | Persistência                                                 | Ambiente               | Porta padrão (develop / production) |
+| -------------------- | ------------------------------------------------------------ | ---------------------- | ----------------------------------- |
+| Docker Compose       | `./volumes` ao lado do Compose                               | `.env`                 | `48080 / 48180`                     |
+| Dockge               | `./volumes` dentro da pasta da stack                         | `.env`                 | `48081 / 48181`                     |
+| CloudPanel           | `./volumes` na pasta da stack                                | `.env` e proxy reverso | `48082 / 48182`                     |
+| Portainer Standalone | `./volumes` relativo ao diretório efetivo do Compose no host | `stack.env`            | `48083 / 48183`                     |
 
 Todos os dados persistentes ficam em bind mounts locais: `./volumes/postgres`, `./volumes/redis`, `./volumes/rabbitmq`, `./volumes/garage/config`, `./volumes/garage/meta` e `./volumes/garage/data`. Não existem volumes nomeados nos novos manifests. Diretórios não existentes são criados pelo Docker ao iniciar os serviços.
 
