@@ -98,6 +98,16 @@ assert not bootstrap_service.get("profiles"), f"{folder}: initial OWNER bootstra
 assert model["services"]["api"]["depends_on"]["bootstrap"]["condition"] == "service_completed_successfully", (
     f"{folder}: API must not start before OWNER provisioning is checked"
 )
+# A senha do bootstrap não pode vazar para os serviços permanentes.
+for protected_service in ("migrate", "api", "dispatcher", "worker", "browser-worker", "scheduler", "webhook-worker"):
+    service_environment = model["services"][protected_service].get("environment", {})
+    assert service_environment.get("SCOUT_BOOTSTRAP_ADMIN_PASSWORD") == "", (
+        f"{folder}/{protected_service}: bootstrap credentials must not be available in runtime services"
+    )
+bootstrap_environment = model["services"]["bootstrap"].get("environment", {})
+assert bootstrap_environment.get("SCOUT_BOOTSTRAP_ADMIN_PASSWORD") == env["SCOUT_BOOTSTRAP_ADMIN_PASSWORD"], (
+    f"{folder}: the one-shot bootstrap must still receive its initial password"
+)
 browser_environment = model["services"]["browser-worker"].get("environment", {})
 assert browser_environment.get("SCOUT_BROWSER_CONCURRENCY") == env["SCOUT_BROWSER_CONCURRENCY"], (
     f"{folder}: browser concurrency was not propagated"
