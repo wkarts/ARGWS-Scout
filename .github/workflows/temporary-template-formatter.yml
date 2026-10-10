@@ -1,0 +1,37 @@
+name: Temporary Scout template formatter
+on:
+  push:
+    branches: [feat/scout-marketplace-template-catalog-20261010]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply canonical Prettier formatting
+        run: pnpm exec prettier --write apps/api/src/instance-templates.ts apps/api/src/template-routes.ts apps/api/src/routes.ts apps/manager/src/views/TemplateCatalog.vue apps/manager/src/App.vue test/instance-template-catalog.test.ts test/instance-template-ui.test.ts test/template-clone.integration.test.ts apps/browser-worker/test/manager-viewport-smoke.mjs apps/docs/viewer.js apps/docs/index.html docs/instance-templates.md docs/first-steps.md docs/openapi.yaml
+      - name: Commit formatting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add apps/api/src/instance-templates.ts apps/api/src/template-routes.ts apps/api/src/routes.ts apps/manager/src/views/TemplateCatalog.vue apps/manager/src/App.vue test/instance-template-catalog.test.ts test/instance-template-ui.test.ts test/template-clone.integration.test.ts apps/browser-worker/test/manager-viewport-smoke.mjs apps/docs/viewer.js apps/docs/index.html docs/instance-templates.md docs/first-steps.md docs/openapi.yaml
+          if git diff --cached --quiet; then
+            echo "No formatting changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: normalize marketplace template catalog and UI"
+          git push origin HEAD:refs/heads/feat/scout-marketplace-template-catalog-20261010
