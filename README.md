@@ -50,7 +50,7 @@ Requisitos: Node.js 24.21+, pnpm 11, Docker Engine e Compose v2.
 4. Execute `pnpm dev` para iniciar API, Manager, dispatcher, workers HTTP/browser, scheduler e webhook worker em modo watch.
 5. Abra `http://localhost:5173`; o primeiro login exige cadastro de MFA. A API fica em `localhost:8080` e os serviços de apoio aceitam conexões do host somente via loopback.
 
-Para executar tudo em containers, use `docker compose up --build -d`, crie o OWNER com `docker compose exec api pnpm db:seed` e abra `http://127.0.0.1:8081`. Essa configuração local mantém as portas de infraestrutura presas ao loopback; os pacotes de deployment não publicam portas de banco, cache, fila ou armazenamento.
+Para executar tudo em containers, use `docker compose up --build -d`, crie o OWNER com `docker compose exec api pnpm db:seed` e abra `http://127.0.0.1:48080`. Essa configuração local mantém as portas de infraestrutura presas ao loopback; os pacotes de deployment não publicam portas de banco, cache, fila ou armazenamento.
 
 ## Matriz de implantação
 
@@ -61,7 +61,7 @@ Para executar tudo em containers, use `docker compose up --build -d`, crie o OWN
 | CloudPanel     | deploy/cloudpanel/develop | deploy/cloudpanel/production |
 | Portainer      | deploy/portainer/develop  | deploy/portainer/production  |
 
-Cada pacote contém apenas `compose.yaml` e `.env.example`. Baixe o [deployer Windows](https://github.com/wkarts/ARGWS-Scout/releases/latest) para gerar automaticamente os dois arquivos, já com segredos aleatórios; o pacote inclui interface gráfica e CLI. Para Portainer, o arquivo sai como `stack.env`, conforme o Compose desse alvo. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge e CloudPanel mantêm os dados em `./volumes` ao lado do Compose; Portainer usa volumes nomeados pelo `COMPOSE_PROJECT_NAME`. Cada alvo e ambiente tem seu próprio nome e porta de loopback. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
+Cada pacote contém apenas `compose.yaml` e `.env.example`. Baixe o [deployer Windows](https://github.com/wkarts/ARGWS-Scout/releases/latest) para gerar automaticamente os dois arquivos, já com segredos aleatórios; o pacote inclui interface gráfica e CLI. Para Portainer, o arquivo sai como `stack.env`, conforme o Compose desse alvo. Não há scripts do host, arquivos de configuração externos nem build no servidor. Consulte [o guia de deploy](docs/deployment.md). Docker, Dockge, CloudPanel e Portainer Standalone utilizam bind mounts locais `./volumes` ao lado do Compose efetivamente executado no host; migre volumes nomeados existentes antes de atualizar e valide o caminho real no Portainer. Cada alvo e ambiente tem seu próprio nome e porta externa do Manager em `4xxxx` (por exemplo, Dockge produção `48181`). O deployer Windows parametriza SMTP global de recuperação de senha e concorrência do browser-worker. O pacote Portainer é para Docker Standalone e carrega as variáveis do `.env.example` pelo stack; Swarm exige outro perfil.
 
 Para instalar um alvo:
 

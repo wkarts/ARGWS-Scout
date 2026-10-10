@@ -5,7 +5,7 @@ import re
 root=Path(__file__).resolve().parents[1]
 targets=("docker","dockge","cloudpanel","portainer")
 channels=("develop","production")
-ports={"docker":{"develop":8080,"production":8180},"dockge":{"develop":8081,"production":8181},"cloudpanel":{"develop":8082,"production":8182},"portainer":{"develop":8083,"production":8183}}
+ports={"docker":{"develop":48080,"production":48180},"dockge":{"develop":48081,"production":48181},"cloudpanel":{"develop":48082,"production":48182},"portainer":{"develop":48083,"production":48183}}
 version=(root/"VERSION").read_text().strip()
 compose_hashes=set()
 projects=set()
@@ -47,11 +47,9 @@ for target in targets:
   assert 'if [ "$$(printf \'%s\' "$$GARAGE_RPC_SECRET" | wc -c)" -ne 64 ]; then' in config_init, f"{d}: missing 32-byte RPC secret validation"
   assert "*[!0-9a-fA-F]*)" in config_init, f"{d}: RPC secret must be hexadecimal"
   assert y.count("    entrypoint: [/bin/sh, -ec]\n    command:\n      - |") == 2, f"{d}: Garage init scripts must each be passed as a single shell argument"
-  assert "garage-config-data:/etc/garage-config:ro" in y and "garage-config-data:/config" in y
-  if target=="portainer":
-   assert "garage-meta-data:/var/lib/garage/meta:ro" in y, f"{d}: Garage CLI requires the same metadata volume"
-  else:
-   assert "./volumes/garage/meta:/var/lib/garage/meta:ro" in y, f"{d}: Garage CLI requires the same metadata directory"
+  assert "./volumes/garage/config:/etc/garage-config:ro" in y and "./volumes/garage/config:/config" in y, f"{d}: Garage config must be a local bind mount"
+  assert "\nvolumes:" not in y, f"{d}: named Docker volumes must not be used"
+  assert "./volumes/garage/meta:/var/lib/garage/meta:ro" in y, f"{d}: Garage CLI requires the same local metadata directory"
   assert "./garage.toml" not in y
   refs=[line.split("=",1)[1] for line in e.splitlines() if line.startswith("ARGWS_SCOUT_") and "_IMAGE=" in line]
   assert refs and all(x.startswith("ghcr.io/wkarts/argws-scout-") for x in refs), f"{d}: infrastructure images must come from GHCR"
@@ -62,19 +60,19 @@ for target in targets:
   assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and channel tag"
   expected_tag=image_tag
   assert env.get("SCOUT_TAG")==expected_tag, f"{d}: SCOUT_TAG must be {expected_tag}"
-  assert int(env["SCOUT_MANAGER_PORT"])==ports[target][channel], f"{d}: manager port must be isolated by target and channel"
+  assert int(env["SCOUT_MANAGER_PORT"])==ports[target][channel] and 40000<=int(env["SCOUT_MANAGER_PORT"])<=49999, f"{d}: the Manager must expose an isolated 4xxxx port"
+  assert env["SCOUT_BROWSER_CONCURRENCY"]=="1", f"{d}: default browser concurrency must be 1"
+  assert "SCOUT_BROWSER_CONCURRENCY: ${SCOUT_BROWSER_CONCURRENCY:-1}" in y, f"{d}: browser concurrency must be configurable"
   assert env["SCOUT_ENCRYPTION_KEY_BASE64"]=="REPLACE_WITH_BASE64_32_BYTE_KEY", f"{d}: example must never contain a deployable encryption key"
   if target=="portainer":
-   assert "env_file: [stack.env]" in y, f"{d}: Portainer must consume its uploaded stack.env"
+   assert "env_file: [stack.env]" in y, f"{d}: Portainer standalone must consume its stack.env"
    assert "env_file: [.env]" not in y
-   assert "./volumes/" not in y, f"{d}: Portainer stack volumes must not depend on relative-path support"
   else:
-   assert "env_file: [.env]" in y, f"{d}: Compose and Dockge consume .env from the stack directory"
-  if target=="portainer":
-   assert "postgres-data:/var/lib/postgresql/data" in y
-   assert f"name: ${{COMPOSE_PROJECT_NAME:-{project}}}-postgres" in y
-  else:
-   assert "./volumes/postgres:/var/lib/postgresql/data" in y
+   assert "env_file: [.env]" in y, f"{d}: Compose, Dockge and CloudPanel use .env"
+  for mount in ("postgres:/var/lib/postgresql/data", "redis:/data", "rabbitmq:/var/lib/rabbitmq",
+                "garage/meta:/var/lib/garage/meta", "garage/data:/var/lib/garage/data",
+                "garage/config:/etc/garage-config:ro"):
+   assert f"./volumes/{mount}" in y, f"{d}: required relative bind mount missing: {mount}"
   assert f"SCOUT_MANAGER_PORT={ports[target][channel]}" in e
   current_service=None
   service_blocks={}
@@ -119,4 +117,4 @@ for manifest in scout_manifests:
     assert browser_section.count("    tmpfs:") == 1, f"{manifest}: duplicate browser tmpfs declaration"
 
 
-print("Eight distinct Compose+env bundles have isolated project names, ports and persistent data.")
+print("Eight Compose+env bundles have unique projects, 4xxxx ports and ./volumes bind mounts.")
