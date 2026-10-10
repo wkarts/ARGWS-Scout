@@ -1001,12 +1001,25 @@ export async function registerRoutes(
         where: { id: request.principal.userId! },
         select: { profile: true },
       });
-      const previousProfile = previous?.profile && typeof previous.profile === "object" && !Array.isArray(previous.profile)
-        ? previous.profile as Record<string, unknown> : {};
+      const previousProfile =
+        previous?.profile &&
+        typeof previous.profile === "object" &&
+        !Array.isArray(previous.profile)
+          ? (previous.profile as Record<string, unknown>)
+          : {};
       // Avatar storage keys cannot be provided by the client.
-      const { avatarKey: _ignoredAvatarKey, avatarType: _ignoredAvatarType, ...metadata } = body.profile;
-      const profile = { ...previousProfile, ...metadata,
-        phone: typeof metadata.phone === "string" ? metadata.phone.slice(0, 30) : (previousProfile.phone ?? ""),
+      const {
+        avatarKey: _ignoredAvatarKey,
+        avatarType: _ignoredAvatarType,
+        ...metadata
+      } = body.profile;
+      const profile = {
+        ...previousProfile,
+        ...metadata,
+        phone:
+          typeof metadata.phone === "string"
+            ? metadata.phone.slice(0, 30)
+            : (previousProfile.phone ?? ""),
         locale: "pt-BR",
       } as Prisma.InputJsonValue;
       const user = await prisma.user.update({
