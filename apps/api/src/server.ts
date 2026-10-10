@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { buildVersion } from "./version.ts";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -85,7 +86,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
-  version: process.env.SCOUT_VERSION ?? "0.4.0",
+  version: buildVersion,
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([

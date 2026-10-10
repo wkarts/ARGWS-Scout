@@ -37,6 +37,7 @@ import {
 import { renderInputTemplate } from "@argws/scout-core";
 import { audit } from "./audit.ts";
 import { prisma } from "./db.ts";
+import { buildVersion } from "./version.ts";
 import {
   recoverySmtpSettings,
   sendRecoveryEmail,
@@ -2286,7 +2287,7 @@ export async function registerRoutes(
         dependencies,
         activity: { queuedJobs, activeJobs, failedJobsLast24Hours: failedJobs },
         runtime: {
-          version: process.env.SCOUT_VERSION ?? "0.4.0",
+          version: buildVersion,
           uptimeSeconds: Math.floor(process.uptime()),
           memoryBytes: process.memoryUsage().rss,
           node: process.version,

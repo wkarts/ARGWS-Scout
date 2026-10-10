@@ -1,6 +1,8 @@
 ARG NGINX_BASE=ghcr.io/wkarts/argws-scout-nginx:1.30.5-alpine
 FROM ${NGINX_BASE}
 COPY apps/docs/index.html /usr/share/nginx/html/index.html
+COPY VERSION /tmp/scout-version
+RUN version="$(cat /tmp/scout-version)" && sed -i "s/__SCOUT_VERSION__/$version/g" /usr/share/nginx/html/index.html
 COPY apps/manager/public/brand /usr/share/nginx/html/brand
 COPY docs /usr/share/nginx/html/guides
 COPY docs/openapi.yaml /usr/share/nginx/html/api/openapi.yaml

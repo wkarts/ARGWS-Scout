@@ -1718,3 +1718,28 @@ tbody tr:hover {
     padding: 10px 0;
   }
 }
+
+/* Legibilidade e layout fluidos — modo claro por padrão. */
+:root { font-size: 16px; }
+.page-content { width: 100%; max-width: none; padding: clamp(18px, 2.3vw, 38px); }
+.button { font-size: 13px; min-height: 40px; }
+.small-button { font-size: 12px; min-height: 34px; }
+.eyebrow, .nav-caption { font-size: 11px; }
+.side-nav button { font-size: 13px; min-height: 43px; }
+.sidebar .workspace-switcher small, .sidebar .user-meta small { font-size: 11px; }
+.sidebar .workspace-switcher strong, .breadcrumbs, .top-profile { font-size: 12px; }
+.page-heading p:not(.eyebrow), .panel-header p, .modal-card > .muted { font-size: 13px; }
+.modal-card label, .access-create label, .smtp-settings-form label { font-size: 13px; }
+.modal-card input, .modal-card textarea, .modal-card select { font-size: 14px; min-height: 40px; }
+.modal-card select[multiple] { min-height: 170px; }
+.app-footer, .stat-card > small, .stat-top { font-size: 11px; }
+.modal-card { width: min(560px, 100%); }
+.modal-card.result-modal { width: min(850px, 100%); }
+.guide-steps { padding: clamp(16px, 2vw, 28px); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 16px; }
+.guide-steps article { display: flex; align-items: flex-start; gap: 14px; border: 1px solid #dbe4ef; background: #fff; border-radius: 12px; padding: 18px; min-width: 0; }
+.guide-steps article > span { background: #eff6ff; color: #1d4ed8; border-radius: 9px; padding: 9px 10px; font-weight: 750; }
+.guide-steps h3 { margin: 0 0 7px; font-size: 15px; color: #14243a; }
+.guide-steps p { font-size: 13px; color: #52647a; line-height: 1.6; }
+.guide-steps .button { margin-top: 9px; }
+@media (max-width: 850px) { .stat-grid, .dependency-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .page-content { padding: 18px; } .access-create { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 560px) { body { min-width: 320px; } .stat-grid, .access-create, .dependency-grid, .operations-grid { grid-template-columns: 1fr; } .modal-backdrop { padding: 8px; } .modal-card { max-height: calc(100dvh - 16px); padding: 20px 14px; } .page-heading { align-items: stretch; } .heading-actions { flex-wrap: wrap; } .modal-actions { flex-wrap: wrap; } .modal-actions .button { flex: 1 1 130px; } .panel-header { flex-wrap: wrap; gap: 10px; } .guide-steps { grid-template-columns: 1fr; } }

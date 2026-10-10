@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import managerPackage from "../package.json";
 import {
   Activity,
   ArrowDownRight,
@@ -123,6 +124,7 @@ type WhatsAppInstanceOption = {
   usable: boolean;
 };
 
+const buildVersion = managerPackage.version;
 const loading = ref(false);
 const busy = ref(false);
 const error = ref("");
@@ -249,7 +251,8 @@ const title = computed(
       jobs: "Execuções",
       schedules: "Agendamentos",
       webhooks: "Webhooks",
-      whatsapp: "WhatsApp",
+      whatsapp: "Connect|API",
+      guide: "Primeiros passos",
       access: "Acesso e auditoria",
       operations: "Saúde da plataforma",
       settings: "Configurações",
@@ -971,7 +974,8 @@ function selectSection(section: string) {
     void loadSmtpSettings();
 }
 function closeDialogs() {
-  if (mfaRecoveryCodes.value.length) return;
+  if (mfaRecoveryCodes.value.length && !window.confirm("Você já guardou os códigos de recuperação? Eles não serão mostrados novamente.")) return;
+  mfaRecoveryCodes.value = [];
   showInstanceForm.value = false;
   showSourceForm.value = false;
   showJobForm.value = false;
@@ -981,6 +985,12 @@ function closeDialogs() {
   showMfaDialog.value = false;
   showRecoveryCodesDialog.value = false;
   showMfaDisableDialog.value = false;
+  showTokenDialog.value = false;
+  issuedToken.value = "";
+  issuedWebhookSecret.value = "";
+  selectedJob.value = null;
+  showPublicationForm.value = false;
+  showEmailPublicationForm.value = false;
   error.value = "";
 }
 async function copyValue(value: string) {
@@ -1118,9 +1128,16 @@ function openScreenshot(job: Job) {
     );
 }
 const selectedJob = ref<Job | null>(null);
+function onEscape(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  if (selectedJob.value || showProfile.value || showTokenDialog.value || showInstanceForm.value || showSourceForm.value || showScheduleForm.value || showWebhookForm.value || showMfaDialog.value || showRecoveryCodesDialog.value || showMfaDisableDialog.value || issuedToken.value || issuedWebhookSecret.value) closeDialogs();
+  else mobileMenu.value = false;
+}
 onMounted(() => {
+  window.addEventListener("keydown", onEscape);
   void checkSession();
 });
+onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
 
 <template>
@@ -1369,7 +1386,7 @@ onMounted(() => {
           :class="{ active: activeSection === 'whatsapp' }"
           @click="selectSection('whatsapp')"
         >
-          <MessageCircle :size="18" /> WhatsApp
+          <MessageCircle :size="18" /> Connect|API
         </button>
         <button
           :class="{ active: activeSection === 'schedules' }"
@@ -1442,9 +1459,9 @@ onMounted(() => {
           ><strong>{{ title }}</strong>
         </div>
         <div class="top-actions">
-          <button class="icon-button" title="Ajuda">
+          <button class="icon-button" title="Primeiros passos" aria-label="Abrir orientações" @click="selectSection('guide')">
             <CircleHelp :size="18" /></button
-          ><button class="icon-button notice-button" title="Notificações">
+          ><button class="icon-button notice-button" title="Saúde da plataforma" aria-label="Consultar saúde" @click="selectSection('operations')">
             <Bell :size="18" /><i></i></button
           ><span class="top-divider"></span
           ><button class="top-profile" @click="showProfile = true">
@@ -2252,6 +2269,18 @@ onMounted(() => {
           </section></template
         >
 
+        <template v-else-if="activeSection === 'guide'">
+          <section class="panel guide-panel">
+            <div class="panel-header"><div><h2>Da primeira busca à publicação</h2><p>Conheça o fluxo completo com orientações práticas.</p></div><a class="button subtle" href="/docs/guides/first-steps.md" target="_blank" rel="noopener noreferrer">Guia detalhado <ExternalLink :size="15" /></a></div>
+            <div class="guide-steps">
+              <article><span>01</span><div><h3>Organize suas coletas</h3><p>Crie uma instância para agrupar fontes, execuções e automações.</p><button class="button primary" @click="selectSection('instances'); showInstanceForm = true">Criar instância</button></div></article>
+              <article><span>02</span><div><h3>Cadastre um site público</h3><p>Informe uma URL HTTPS e os hosts permitidos. Respeite as regras de acesso do site.</p><button class="button outline" @click="selectSection('instances'); activeTab = 'sources'">Ir para fontes</button></div></article>
+              <article><span>03</span><div><h3>Execute e confira o resultado</h3><p>Envie uma coleta para a fila, acompanhe a execução e confira o JSON.</p><button class="button outline" @click="selectSection('jobs')">Consultar execuções</button></div></article>
+              <article><span>04</span><div><h3>Conecte o canal de comunicação</h3><p>Configure Connect|API e uma instância WhatsApp. Outros canais poderão chegar futuramente.</p><button class="button outline" @click="selectSection('whatsapp')">Configurar Connect|API</button></div></article>
+              <article><span>05</span><div><h3>Publique com confirmação</h3><p>Abra uma coleta concluída, escolha “Publicar pelo WhatsApp”, revise o contato e confirme.</p><button class="button outline" @click="selectSection('jobs')">Escolher resultado</button></div></article>
+            </div>
+          </section>
+        </template>
         <template v-else-if="activeSection === 'whatsapp'">
           <WhatsAppConsole
             :role="me.role"
@@ -2842,11 +2871,7 @@ onMounted(() => {
               v-model="profileForm.phone"
               placeholder="+55 75 9xxxx-xxxx" /></label
           ><label
-            >Idioma<select v-model="profileForm.locale">
-              <option value="pt-BR">Português (Brasil)</option>
-              <option value="en">English</option>
-            </select></label
-          >
+            
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Cancelar</button
             ><button
@@ -2936,7 +2961,7 @@ onMounted(() => {
             <MessageCircle :size="16" /> Publicar pelo WhatsApp
           </button>
           <p v-if="!whatsappConfigured" class="muted">
-            Configure a Connect API no menu WhatsApp para publicar esta coleta.
+            Configure a Connect|API no menu Connect|API para publicar esta coleta.
           </p>
           <p
             v-else-if="!whatsappInstances.some((item) => item.usable)"
@@ -3123,7 +3148,7 @@ onMounted(() => {
     </div>
     <div v-if="toast" class="toast"><Check :size="16" /> {{ toast }}</div>
     <footer class="app-footer">
-      <span>ARGWS Scout <i>·</i> {{ "0.4.0" }}</span
+      <span>ARGWS Scout <i>·</i> {{ buildVersion }}</span
       ><span
         >Web Intelligence & Automation <i>·</i>
         <a href="/docs/" target="_blank"
