@@ -22,6 +22,7 @@ DOCKERFILE_BASES = {
     "Dockerfile.browser-worker": "argws-scout-playwright",
     "Dockerfile.docs": "argws-scout-nginx",
     "Dockerfile.garage-init": "argws-scout-garage",
+    "Dockerfile.content-engine": "argws-scout-python",
 }
 
 
@@ -62,6 +63,7 @@ def load_catalog(owner):
         "argws-scout-alpine",
         "argws-scout-playwright",
         "argws-scout-buildkit",
+        "argws-scout-python",
     }
     missing = required_packages - available_packages
     if missing:

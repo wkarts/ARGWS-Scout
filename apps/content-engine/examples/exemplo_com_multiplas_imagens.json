@@ -1,0 +1,8 @@
+{
+  "source": {"url_final": "https://exemplo.com.br/catalogo", "loja": "Catálogo de exemplo", "data_captura_utc": "2026-10-10T20:21:02Z"},
+  "items": [
+    {
+      "id": "DEMO-COLAGEM", "kind": "produto", "title": "Peça de demonstração com duas imagens", "description": "Imagens de teste para demonstrar composição de colagem. Não é um anúncio real.", "price": "277.11", "url": "https://exemplo.com.br/produto/demo-colagem", "images": ["exemplo-1.png", "exemplo-2.png"], "installment_count": 8, "installment_value": "34.64"
+    }
+  ]
+}

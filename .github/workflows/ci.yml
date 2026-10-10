@@ -42,6 +42,13 @@ jobs:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Teste isolado do refinamento Python
+        run: |
+          python -m pip install -r apps/content-engine/requirements.txt pytest httpx
+          PYTHONPATH=apps/content-engine python -m pytest -q apps/content-engine/tests
       - run: pnpm db:generate
       - name: Apply migrations and bootstrap test tenant
         run: pnpm db:migrate && pnpm db:seed

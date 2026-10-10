@@ -264,3 +264,7 @@ O formato incorreto impede a criação do serviço e pode interromper o deploy c
 Execute `docker compose --env-file .env -f compose.yaml config --format json` e confirme que `services.browser-worker.tmpfs` tem um único item antes de iniciar o stack. O contrato em `scripts/validate-compose-model.py` valida também destinos absolutos para todos os volumes.
 
 Para recuperar o Dockge Production, **atualize a definição Compose do stack** com o arquivo da versão corrigida. Não basta trocar o tag da imagem: essa falha está na configuração de montagem, não no código da imagem. Após conferir `config --quiet`, recrie apenas o serviço afetado quando possível; serviços que dependem de migrations/bootstraps devem respeitar a ordem de inicialização. Não execute `docker compose down -v`, não altere `COMPOSE_PROJECT_NAME` e mantenha os volumes existentes.
+
+## Serviços opcionais de refinamento
+
+Esta integração candidata acrescenta dois serviços privados a cada variante de deploy: `content-engine` (Python e Pillow) e `content-worker` (Node, consumidor dedicado de `content.refine`). Esses serviços ficam no perfil `content` e não alteram portas externas, redes ou bind mounts. Para ativá-los, use `SCOUT_CONTENT_ENABLED=true`, `COMPOSE_PROFILES=content` e gere `SCOUT_CONTENT_ENGINE_KEY` via `openssl rand -hex 32`. Recomenda-se validar primeiro no ambiente `develop`. O Manager possui nova seção **Publicações** e as configurações de refinamento são isoladas por instância, desabilitadas por padrão. Consulte [refinamento e publicações](content-refinement.md).

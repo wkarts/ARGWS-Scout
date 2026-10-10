@@ -63,6 +63,8 @@ model Tenant {
   whatsAppPublications WhatsAppPublication[]
   smtpConfig TenantSmtpConfig?
   invitations UserInvitation[]
+  contentBatches ContentBatch[]
+  contentIdentities ContentIdentity[]
 }
 
 model User {
@@ -193,6 +195,8 @@ model Instance {
   apiTokens   ApiToken[]
   schedules   Schedule[]
   webhooks    Webhook[]
+  contentBatches ContentBatch[]
+  contentIdentities ContentIdentity[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, enabled, createdAt])
@@ -241,6 +245,8 @@ model Job {
   attemptsLog JobAttempt[]
   artifacts   Artifact[]
   whatsAppPublications WhatsAppPublication[]
+  contentBatch ContentBatch?
+  contentObservations ContentObservation[]
 
   @@index([tenantId, createdAt])
   @@index([instanceId, status, createdAt])
@@ -466,4 +472,104 @@ model WhatsAppPublication {
   @@unique([tenantId, requestId])
   @@index([tenantId, createdAt])
   @@index([jobId, createdAt])
+}
+
+// O resultado bruto de Job é preservado. Esta camada registra apenas o
+// refinamento e a produção de publicações; não altera os workers de coleta.
+enum ContentBatchStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ContentReviewStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+model ContentBatch {
+  id             String @id @default(uuid()) @db.Uuid
+  tenantId       String @db.Uuid
+  instanceId     String @db.Uuid
+  jobId          String @unique @db.Uuid
+  status         ContentBatchStatus @default(QUEUED)
+  options        Json @default("{}")
+  total          Int @default(0)
+  reviewRequired Int @default(0)
+  attempts       Int @default(0)
+  errorCode      String? @db.VarChar(80)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instance       Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  job            Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  entries        ContentEntry[]
+
+  @@index([tenantId, createdAt])
+  @@index([instanceId, status, createdAt])
+}
+
+model ContentIdentity {
+  id          String @id @default(uuid()) @db.Uuid
+  tenantId    String @db.Uuid
+  instanceId  String @db.Uuid
+  originHost  String @db.VarChar(255)
+  externalKey String @db.VarChar(190)
+  title       String @db.VarChar(500)
+  url         String? @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  entries     ContentEntry[]
+  observations ContentObservation[]
+
+  @@unique([instanceId, originHost, externalKey])
+  @@index([tenantId, originHost])
+}
+
+model ContentEntry {
+  id           String @id @default(uuid()) @db.Uuid
+  batchId      String @db.Uuid
+  identityId   String @db.Uuid
+  sourceRecordId String @db.VarChar(190)
+  title        String @db.VarChar(500)
+  kind         String @db.VarChar(64)
+  url          String? @db.Text
+  price        Decimal? @db.Decimal(18, 2)
+  normalized   Json
+  channels     Json @default("{}")
+  images       Json @default("{}")
+  warnings     Json @default("[]")
+  reviewStatus ContentReviewStatus @default(DRAFT)
+  reviewedAt   DateTime?
+  reviewedById String? @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  batch        ContentBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  identity     ContentIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, sourceRecordId])
+  @@index([batchId, reviewStatus])
+  @@index([identityId, createdAt])
+}
+
+model ContentObservation {
+  id          String @id @default(uuid()) @db.Uuid
+  identityId  String @db.Uuid
+  jobId       String @db.Uuid
+  price       Decimal? @db.Decimal(18, 2)
+  previousPrice Decimal? @db.Decimal(18, 2)
+  capturedAt  DateTime?
+  observedAt  DateTime @default(now())
+  identity    ContentIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  job         Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, jobId])
+  @@index([identityId, observedAt])
 }

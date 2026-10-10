@@ -45,6 +45,11 @@
       "source": "docker.io/moby/buildkit:buildx-stable-1",
       "package": "argws-scout-buildkit",
       "tag": "buildx-stable-1"
+    },
+    {
+      "source": "docker.io/library/python:3.13-slim-bookworm",
+      "package": "argws-scout-python",
+      "tag": "3.13-slim-bookworm"
     }
   ]
 }

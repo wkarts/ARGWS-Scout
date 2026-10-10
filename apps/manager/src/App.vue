@@ -30,6 +30,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Images,
   UsersRound,
   Server,
   Webhook,
@@ -40,6 +41,7 @@ import AccessConsole from "./views/AccessConsole.vue";
 import OperationsConsole from "./views/OperationsConsole.vue";
 import WhatsAppConsole from "./views/WhatsAppConsole.vue";
 import TemplateCatalog from "./views/TemplateCatalog.vue";
+import ContentConsole from "./views/ContentConsole.vue";
 
 type Me = {
   user: {
@@ -297,6 +299,7 @@ const title = computed(
       overview: "Visão geral",
       instances: "Instâncias",
       templates: "Modelos prontos",
+      content: "Refinamento e publicações",
       jobs: "Execuções",
       schedules: "Agendamentos",
       webhooks: "Webhooks",
@@ -1815,6 +1818,10 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <Sparkles :size="18" /> Modelos prontos
         </button>
         <button
+          :class="{ active: activeSection === 'content' }"
+          @click="selectSection('content')"
+        ><Images :size="18" /> Publicações</button>
+        <button
           :class="{ active: activeSection === 'jobs' }"
           @click="selectSection('jobs')"
         >
@@ -2589,6 +2596,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           </template>
         </template>
 
+        <template v-else-if="activeSection === 'content'">
+          <ContentConsole :role="me.role" :instances="instances" @error="error=$event" @notify="notify" />
+        </template>
         <template v-else-if="activeSection === 'templates'">
           <TemplateCatalog
             :role="me.role"

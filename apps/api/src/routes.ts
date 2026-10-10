@@ -49,6 +49,7 @@ import {
 } from "./email.ts";
 import { consumeRecoveryCode, replaceRecoveryCodes } from "./mfa.ts";
 import { registerWhatsAppRoutes } from "./whatsapp-routes.ts";
+import { registerContentRoutes } from "./content-routes.ts";
 import { registerInvitationRoutes } from "./invitations.ts";
 import { registerTemplateRoutes } from "./template-routes.ts";
 import {
@@ -185,6 +186,7 @@ export async function registerRoutes(
   await registerWhatsAppRoutes(app);
   await registerInvitationRoutes(app);
   await registerTemplateRoutes(app);
+  await registerContentRoutes(app);
   app.post(
     "/integrations/smtp/test",
     {

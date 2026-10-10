@@ -1,0 +1,8 @@
+{
+  "source": {"url_final": "https://loja.exemplo.com/catalogo", "loja": "Loja Exemplo", "data_captura_utc": "2026-10-10T20:21:02Z"},
+  "items": [
+    {"id":"demo-001","title":"Notebook de demonstração 16 GB, SSD 512 GB","kind":"produto","price":"3499.00","previous_price":"3699.00","url":"https://loja.exemplo.com/produto/demo-001","description":"Dados meramente ilustrativos; substitua por informações reais do scraping."},
+    {"id":"demo-002","title":"Agenda aberta para serviços","kind":"servico","description":"Conheça horários e as condições de agendamento.","url":"https://loja.exemplo.com/agenda"},
+    {"id":"demo-003","title":"Guia prático de configuração","kind":"artigo","description":"Um artigo técnico com links e orientações úteis.","url":"https://loja.exemplo.com/blog/guia"}
+  ]
+}

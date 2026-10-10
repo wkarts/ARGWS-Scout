@@ -691,6 +691,171 @@ paths:
                   activity:
                     { type: object, additionalProperties: { type: integer } }
                   runtime: { type: object, additionalProperties: true }
+  /content/status:
+    get:
+      summary: Estado e canais do refinamento de conteúdo.
+      responses:
+        "200": { description: Estado e formatos de publicação disponíveis. }
+        "403": { description: Requer usuário do Manager. }
+  /content/instances/{id}/settings:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Configurações do refinamento isoladas por instância.
+      responses:
+        "200": { description: Configurações atuais. }
+        "404": { description: Instância não encontrada. }
+    patch:
+      summary: Atualiza opções de refinamento da instância (OWNER/ADMIN).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                autoProcess: { type: boolean, default: false }
+                query: { type: string, maxLength: 150 }
+                onlyRelevant: { type: boolean }
+                maxItems: { type: integer, minimum: 1, maximum: 250 }
+                createStory: { type: boolean }
+                fetchImages: { type: boolean, default: false }
+                enrichImages: { type: boolean, default: false }
+      responses:
+        "200": { description: Configuração atualizada. }
+        "403": { description: Permissão de administrador necessária. }
+  /content/jobs:
+    get:
+      summary: Coletas concluídas para refinamento.
+      parameters:
+        - in: query
+          name: instanceId
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lista de coletas e lotes relacionados. }
+  /content/jobs/{jobId}/refine:
+    post:
+      summary: Enfileira refinamento de Job concluído, sem alterar a coleta.
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query: { type: string }
+                onlyRelevant: { type: boolean }
+                maxItems: { type: integer, minimum: 1, maximum: 250 }
+                createStory: { type: boolean }
+                fetchImages: { type: boolean }
+                enrichImages: { type: boolean }
+      responses:
+        "202": { description: Refinamento enfileirado. }
+        "200": { description: Lote pré-existente reutilizado. }
+        "503": { description: Módulo desativado no ambiente. }
+  /content/import:
+    post:
+      summary: Importa retorno JSON para fonte existente e gera refinamento assíncrono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [instanceId, sourceId, payload]
+              properties:
+                instanceId: { type: string, format: uuid }
+                sourceId: { type: string, format: uuid }
+                payload: { type: object, additionalProperties: true }
+                options: { type: object, additionalProperties: true }
+      responses:
+        "202": { description: Importação registrada e lote enfileirado. }
+        "404": { description: Fonte não pertence à instância autorizada. }
+  /content/batches:
+    get:
+      summary: Lotes refinados pertencentes à organização.
+      parameters:
+        - in: query
+          name: instanceId
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lotes e contadores. }
+  /content/batches/{id}:
+    get:
+      summary: Detalhamento de lote e publicações individuais.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Lote autorizado e até 250 itens. }
+        "404": { description: Lote inexistente. }
+  /content/identities/{id}/history:
+    get:
+      summary: Histórico de preços e observações do mesmo conteúdo na instância.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Histórico de até 100 observações. }
+  /content/items/{id}/review:
+    patch:
+      summary: Aprova, retorna a rascunho ou arquiva uma publicação.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { type: string, enum: [DRAFT, APPROVED, ARCHIVED] }
+      responses:
+        "200": { description: Revisão registrada; não envia mensagem. }
+        "403": { description: Item divergente requer administrador. }
+  /content/items/{id}/export:
+    get:
+      summary: Exporta dados refinados e rascunhos multicanal, sem envio.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Dados, textos, avisos, mídias e estado de aprovação. }
+  /content/items/{id}/media/{kind}:
+    get:
+      summary: Recupera imagem ou arquivo EML de um item autenticado.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: kind
+          required: true
+          schema: { type: string, enum: [square, wide, story, eml] }
+      responses:
+        "200": { description: Arquivo privado do Garage/S3. }
+        "404": { description: Artefato não disponível. }
 components:
   securitySchemes:
     ScoutSession: { type: apiKey, in: cookie, name: scout_access }

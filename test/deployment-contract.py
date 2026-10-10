@@ -65,7 +65,7 @@ for target in targets:
   image_tag="develop" if channel=="develop" else "stable"
   pattern=r"image: ghcr\.io/\$\{SCOUT_IMAGE_OWNER:-wkarts\}/argws-scout-[^:]+:\$\{SCOUT_TAG:-"+image_tag+r"\}"
   app_images=re.findall(pattern, y)
-  assert len(app_images)==12 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==10, f"{d}: all ten Scout image names must use the common owner and channel tag"
+  assert len(app_images)==14 and len({line.split("/argws-scout-",1)[1].split(":",1)[0] for line in app_images})==12, f"{d}: all twelve Scout image names must use the common owner and channel tag"
   expected_tag=image_tag
   assert env.get("SCOUT_TAG")==expected_tag, f"{d}: SCOUT_TAG must be {expected_tag}"
   assert int(env["SCOUT_MANAGER_PORT"])==ports[target][channel] and 40000<=int(env["SCOUT_MANAGER_PORT"])<=49999, f"{d}: the Manager must expose an isolated 4xxxx port"
@@ -93,6 +93,8 @@ for target in targets:
     service_blocks[current_service].append(line)
   assert env.get("SCOUT_CONNECT_API_URL","")=="" and env.get("SCOUT_CONNECT_API_TOKEN","")=="", f"{d}: global Connect|API credentials must be placeholders, never committed"
   recovery_keys=("HOST","PORT","SECURE","USERNAME","PASSWORD","FROM_EMAIL","FROM_NAME")
+  assert "  content-engine:" in y and "  content-worker:" in y, f"{d}: optional processing services missing"
+  assert "    profiles: [content]" in y, f"{d}: content must be optional"
   for service,block in service_blocks.items():
    block_text="\n".join(block)
    if service!="api" and "env_file:" in block_text:
@@ -100,6 +102,8 @@ for target in targets:
      assert f'{secret}: ""' in block_text, f"{d}/{service}: global Connect|API secret must not reach workers"
     for key in recovery_keys:
      assert f'SCOUT_RECOVERY_SMTP_{key}: ""' in block_text, f"{d}/{service}: recovery SMTP must stay inside the API container"
+    if service != "content-worker":
+     assert 'SCOUT_CONTENT_ENGINE_KEY: ""' in block_text, f"{d}/{service}: private refinement key must not reach unrelated workers"
 # Enforce the lightweight RabbitMQ readiness check for all supported deployments.
 scout_manifests = [root / "compose.yaml", root / "ops/deployment/compose.yaml"]
 scout_manifests += [root / "deploy" / target / channel / "compose.yaml"

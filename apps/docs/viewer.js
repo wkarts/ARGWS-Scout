@@ -11,6 +11,7 @@ const entries = [
   ["manager", "Manager"],
   ["connectors", "Conectores"],
   ["instance-templates", "Modelos prontos"],
+  ["content-refinement", "Refinamento e publicações"],
   ["whatsapp-connect-api", "Connect|API"],
   ["security", "Segurança"],
   ["deployment", "Implantação"],

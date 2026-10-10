@@ -59,6 +59,9 @@ jobs:
           - component: runtime
             dockerfile: Dockerfile
             platforms: linux/amd64,linux/arm64
+          - component: content-engine
+            dockerfile: Dockerfile.content-engine
+            platforms: linux/amd64,linux/arm64
           - component: manager
             dockerfile: Dockerfile.manager
             platforms: linux/amd64,linux/arm64
@@ -85,7 +88,7 @@ jobs:
           version="$(tr -d '\r\n' < VERSION)"
           components=("${{ matrix.component }}")
           if [[ "${{ matrix.component }}" == runtime ]]; then
-            components=(runtime api migrate dispatcher worker scheduler webhook-worker)
+            components=(runtime api migrate dispatcher worker content-worker scheduler webhook-worker)
           fi
           if [[ "$branch" != develop && "$branch" != main ]]; then
             echo "Unsupported source branch: $branch" >&2
@@ -129,6 +132,7 @@ jobs:
             "ghcr.io/$owner/argws-scout-playwright:v1.63.0-noble"
             "ghcr.io/$owner/argws-scout-alpine:3.23"
             "ghcr.io/$owner/argws-scout-buildkit:buildx-stable-1"
+            "ghcr.io/$owner/argws-scout-python:3.13-slim-bookworm"
           )
           for image in "${images[@]}"; do
             ready=false
@@ -157,6 +161,7 @@ jobs:
           tags: ${{ steps.tags.outputs.value }}
           build-args: |
             NODE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-node:24.21.0-bookworm-slim
+            PYTHON_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-python:3.13-slim-bookworm
             NGINX_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-nginx:1.30.5-alpine
             PLAYWRIGHT_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-playwright:v1.63.0-noble
             GARAGE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-garage:v2.4.1
@@ -218,7 +223,7 @@ jobs:
           owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           branch="${{ github.event.workflow_run.head_branch }}"
           version="$(tr -d '\r\n' < VERSION)"
-          components=(runtime api migrate dispatcher worker scheduler webhook-worker manager docs browser-worker garage-init)
+          components=(runtime api migrate dispatcher worker content-worker scheduler webhook-worker manager docs browser-worker garage-init content-engine)
           if [[ "$branch" == develop ]]; then
             tags=(develop)
           else

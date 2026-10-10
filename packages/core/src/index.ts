@@ -4,6 +4,7 @@ export const QUEUES = {
   http: "scout.jobs.http",
   browser: "scout.jobs.browser",
   webhooks: "scout.webhooks",
+  content: "scout.content.refine",
 } as const;
 
 export type JobEnvelope = { jobId: string; tenantId: string; engine: Engine };
@@ -48,3 +49,5 @@ export function renderInputTemplate(
     },
   );
 }
+
+export { contentSettings, DEFAULT_CONTENT_SETTINGS, type ContentSettings } from "./content-settings.ts";
