@@ -2000,5 +2000,15 @@ tbody tr:hover {
   }
 }
 
-.access-create .access-mode-option { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #304159; }
-.access-mode-option input[type="checkbox"] { flex: none; width: 18px; height: 18px; }
+.access-create .access-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: #304159;
+}
+.access-mode-option input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
