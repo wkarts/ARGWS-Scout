@@ -2342,6 +2342,34 @@ export async function registerRoutes(
     return { data, nextCursor: data.length === 100 ? data.at(-1)?.id : null };
   });
 
+  app.get("/ops/diagnostics", { preHandler: authenticated() }, async (request, reply) => {
+    if (!(await mayAdmin(request, reply))) return;
+    const owner = tenantId(request);
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [errors, failedJobs, recentAudit, failedDeliveries, counters] = await Promise.all([
+      prisma.diagnosticLog.findMany({
+        where: { tenantId: owner, createdAt: { gte: since } },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: { id: true, requestId: true, method: true, route: true, statusCode: true, createdAt: true },
+      }),
+      prisma.job.findMany({
+        where: { tenantId: owner, status: JobStatus.FAILED, createdAt: { gte: since } },
+        orderBy: { createdAt: "desc" }, take: 100,
+        select: { id: true, status: true, errorCode: true, attempts: true, createdAt: true, finishedAt: true, source: { select: { name: true } } },
+      }),
+      prisma.auditLog.findMany({ where: { tenantId: owner, createdAt: { gte: since } }, orderBy: { createdAt: "desc" }, take: 100,
+        select: { id: true, action: true, resourceType: true, resourceId: true, createdAt: true } }),
+      prisma.webhookDelivery.findMany({ where: { webhook: { tenantId: owner }, status: "FAILED", createdAt: { gte: since } },
+        orderBy: { createdAt: "desc" }, take: 100,
+        select: { id: true, status: true, attempts: true, lastStatusCode: true, createdAt: true } }),
+      prisma.diagnosticLog.count({ where: { tenantId: owner, createdAt: { gte: since } } }),
+    ]);
+    return { schemaVersion: 1, generatedAt: new Date().toISOString(), windowDays: 7,
+      version: buildVersion, summary: { requestFailures: counters, failedJobs: failedJobs.length, failedDeliveries: failedDeliveries.length },
+      requestFailures: errors, jobs: failedJobs, audit: recentAudit, webhookFailures: failedDeliveries };
+  });
+
   app.get(
     "/ops/health",
     { preHandler: authenticated() },

@@ -105,6 +105,25 @@ app.get("/health/ready", async (_request, reply) => {
 });
 
 await app.register(registerRoutes, { prefix: "/v1", redis });
+// Registra falhas por organização de forma persistente, sem URL de consulta,
+// payloads, senhas, tokens, IPs ou cabeçalhos sensíveis.
+app.addHook("onResponse", async (request, reply) => {
+  const principal = request.principal;
+  if (reply.statusCode < 400 || !principal?.tenantId) return;
+  try {
+    await prisma.diagnosticLog.create({
+      data: {
+        tenantId: principal.tenantId,
+        requestId: String(request.id).slice(0, 100),
+        method: request.method.slice(0, 10),
+        route: String(request.routeOptions.url ?? "[unmatched]").slice(0, 200),
+        statusCode: reply.statusCode,
+      },
+    });
+  } catch {
+    request.log.warn({ requestId: request.id }, "Falha ao persistir diagnóstico.");
+  }
+});
 app.setNotFoundHandler((_request, reply) =>
   reply
     .code(404)
