@@ -1,6 +1,6 @@
-# Refinamento de conteúdo e publicações — integração candidata Scout 0.7.0
+# Refinamento de conteúdo e publicações — Scout v0.8.0
 
-> **Estado:** implementação em código entregue como candidato à integração. A implantação Docker, build GHCR, migrações PostgreSQL e end-to-end Node/Vue ainda exigem validação em CI/ambiente com Docker e pnpm. Esta alteração **não** é uma versão publicada no GHCR nem substitui a versão 0.7.0.
+> **Estado:** módulo opcional da v0.8.0, desligado por padrão. Testes Python/TypeScript/Prisma, compilação e validação de Compose fazem parte dos Quality Gates; testes de ponta a ponta com integrações reais exigem homologação específica antes de ativar em produção. A instalação não envia publicações automaticamente.
 
 ## Escopo e compatibilidade
 
@@ -88,7 +88,7 @@ A identidade `id + domínio + instância` é utilizada para histórico e evitar 
 
 ## Limites e próximos testes necessários
 
-- Testes do Python unitários/integrados concluídos; **faltam CI completo (`pnpm db:generate`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm format:check`), migração real, Docker Compose config/build e testes de ponta a ponta com RabbitMQ/Garage**. Não houve publicação de imagens no GHCR nem merge/deploy.
+- Testes do Python unitários/integrados concluídos; **os Quality Gates, migrations, build e Compose devem ser aprovados para publicação; ainda são necessários testes operacionais ponta a ponta com RabbitMQ/Garage na instalação do cliente**. Publicação do GHCR e GitHub Release é controlada pelo pipeline, separada do deploy da VPS.
 - Sem fila de campanhas, sem agendamento ou disparos em massa nesta integração. O módulo gera rascunhos individuais; publicação/exposição externa deve ser uma capacidade posterior com autorização por canal, consentimento do destinatário, idempotência e quotas.
 - A revisão de produtos pode apontar divergência de título e URL e descontos, mas capturas antigas sem metadados de imagem continuarão com arte ilustrativa.
 - O diagnóstico enviado identifica dois jobs Mercado Livre com `COLLECTION_FAILED`, três tentativas cada; o JSON não inclui stack trace nem mensagem de origem, portanto este módulo não corrige nem diagnostica sozinho os bloqueios da coleta.

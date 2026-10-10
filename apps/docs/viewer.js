@@ -17,6 +17,7 @@ const entries = [
   ["deployment", "Implantação"],
   ["operations", "Operação"],
   ["workspace-isolation", "Evolução de isolamento"],
+  ["release-v0.8.0", "Notas da v0.8.0"],
   ["release-v0.7.0", "Notas da v0.7.0"],
   ["release-v0.6.1", "Notas da v0.6.1"],
   ["release-v0.6.0", "Notas da v0.6.0"],

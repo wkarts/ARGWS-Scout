@@ -49,7 +49,7 @@ def project_root() -> Path:
 
 def product_version() -> str:
     version_file = project_root() / "VERSION"
-    return version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.7.0"
+    return version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.8.0"
 
 
 def env_filename(target: str) -> str:
