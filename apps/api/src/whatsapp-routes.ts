@@ -850,7 +850,7 @@ export async function registerWhatsAppRoutes(
           return fail(reply, 409, "CONNECT_API_NOT_CONFIGURED", "A conexão Connect|API está indisponível.");
         const instanceToken = decryptSecret(instance.tokenEncrypted!);
         try {
-          remoteResult = await deleteRemoteInstance(instanceToken, connection.apiKey, (apiKey) =>
+          remoteResult = await deleteRemoteInstance(instanceToken, (apiKey) =>
             connectApiRequest<unknown>({
               baseUrl: connection.baseUrl,
               apiKey,
