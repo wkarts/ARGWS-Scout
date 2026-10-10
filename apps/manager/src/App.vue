@@ -3435,20 +3435,21 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             >Nome do token<input
               v-model="tokenForm.name"
               placeholder="Ex.: Integração do ERP" /></label
-          ><label
-            >Escopos<select v-model="tokenForm.scopes" multiple>
-              <option value="instances:read">instances:read</option>
-              <option value="sources:read">sources:read</option>
-              <option value="jobs:create">jobs:create</option>
-              <option value="jobs:read">jobs:read</option>
-              <option value="results:read">results:read</option>
-            </select></label
           >
+          <fieldset class="scope-choices">
+            <legend>Permissões deste token</legend>
+            <label><input v-model="tokenForm.scopes" type="checkbox" value="instances:read" /> Consultar instâncias</label>
+            <label><input v-model="tokenForm.scopes" type="checkbox" value="sources:read" /> Consultar fontes</label>
+            <label><input v-model="tokenForm.scopes" type="checkbox" value="jobs:create" /> Iniciar execuções</label>
+            <label><input v-model="tokenForm.scopes" type="checkbox" value="jobs:read" /> Consultar execuções</label>
+            <label><input v-model="tokenForm.scopes" type="checkbox" value="results:read" /> Consultar resultados</label>
+            <small>Marque somente as permissões necessárias para esta integração.</small>
+          </fieldset>
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Fechar</button
             ><button
               class="button primary"
-              :disabled="busy || !selectedInstance || tokenForm.name.length < 2"
+              :disabled="busy || !selectedInstance || tokenForm.name.length < 2 || !tokenForm.scopes.length"
               @click="createToken"
             >
               Gerar token

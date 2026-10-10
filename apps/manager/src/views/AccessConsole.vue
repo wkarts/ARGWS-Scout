@@ -214,7 +214,7 @@ onMounted(() => void load());
         >
         <label class="access-mode-option"
           ><input v-model="userForm.independentWorkspace" type="checkbox" />
-          Criar espaço independente para a pessoa convidada</label
+          Criar espaço de trabalho próprio para a pessoa convidada</label
         >
         <label v-if="userForm.independentWorkspace"
           >Nome do espaço<input
