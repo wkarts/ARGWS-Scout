@@ -1,0 +1,115 @@
+:root {
+  font:
+    16px/1.65 system-ui,
+    -apple-system,
+    Segoe UI,
+    sans-serif;
+  color: #182b44;
+  background: #f6f9fd;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 940px;
+  margin: auto;
+  padding: clamp(22px, 5vw, 66px);
+}
+h1 {
+  font-size: clamp(29px, 4vw, 43px);
+  line-height: 1.2;
+}
+h2 {
+  font-size: 20px;
+  margin-top: 0;
+}
+p,
+li {
+  color: #425772;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+a {
+  color: #1859c6;
+}
+a:focus-visible {
+  outline: 2px solid #1859c6;
+  outline-offset: 3px;
+}
+nav a {
+  text-decoration: none;
+  margin-right: 14px;
+}
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.11em;
+  font-weight: 700;
+  color: #2563eb;
+}
+section {
+  background: white;
+  border: 1px solid #dce5f1;
+  border-radius: 14px;
+  padding: 22px 26px;
+  margin: 14px 0;
+  box-shadow: 0 4px 17px #10213b06;
+}
+code {
+  background: #eef4fe;
+  border-radius: 4px;
+  padding: 2px 5px;
+  overflow-wrap: anywhere;
+}
+ol {
+  padding-left: 23px;
+}
+.tip {
+  border-left: 4px solid #2563eb;
+  padding: 12px 17px;
+  background: #edf5ff;
+  border-radius: 5px;
+}
+footer {
+  margin: 38px 0;
+  color: #64748b;
+  font-size: 13px;
+}
+@media (max-width: 560px) {
+  section {
+    padding: 16px;
+  }
+  main {
+    padding: 16px;
+  }
+}
+
+/* Documentation pages: readable on narrow Windows windows and desktop. */
+html,body { min-width:0; width:100%; }
+body { overflow-x:hidden; font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+main,.wrap,article,section,header,.grid,.card { min-width:0; max-width:100%; }
+h1,h2,h3,p,li,td { overflow-wrap:break-word; }
+a { overflow-wrap:anywhere; }
+a:focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
+@media(max-width:750px) {
+  .wrap, main { padding:clamp(16px,4vw,30px); }
+  .brand { height:42px; max-width:190px; }
+  h1 { font-size:clamp(26px,6vw,38px); }
+  .grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); }
+  header { gap:10px; }
+}
+@media(max-width:450px) {
+  .wrap,main { padding:16px; }
+  section,article,.card { padding:14px; }
+  header { flex-wrap:wrap; }
+  header nav { display:flex; flex-wrap:wrap; gap:8px; }
+  header nav a { margin-right:0; }
+  table { display:block; overflow-x:auto; }
+}
