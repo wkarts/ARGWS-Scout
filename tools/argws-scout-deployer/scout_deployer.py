@@ -11,18 +11,18 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.0.2"
 TARGETS = ("docker", "dockge", "cloudpanel", "portainer")
 CHANNELS = ("develop", "production")
 DEFAULT_PORTS = {
-    ("docker", "develop"): 8080,
-    ("docker", "production"): 8180,
-    ("dockge", "develop"): 8081,
-    ("dockge", "production"): 8181,
-    ("cloudpanel", "develop"): 8082,
-    ("cloudpanel", "production"): 8182,
-    ("portainer", "develop"): 8083,
-    ("portainer", "production"): 8183,
+    ("docker", "develop"): 48080,
+    ("docker", "production"): 48180,
+    ("dockge", "develop"): 48081,
+    ("dockge", "production"): 48181,
+    ("cloudpanel", "develop"): 48082,
+    ("cloudpanel", "production"): 48182,
+    ("portainer", "develop"): 48083,
+    ("portainer", "production"): 48183,
 }
 SECRET_VALUES = {
     "POSTGRES_PASSWORD": lambda: secrets.token_urlsafe(36),
@@ -67,15 +67,60 @@ def parse_env(content: str) -> dict[str, str]:
         if not stripped or stripped.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
+        raw = value.strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+            quote = raw[0]
+            raw = raw[1:-1]
+            if quote == "'":
+                raw = raw.replace("\\'", "'")
+        values[key.strip()] = raw
     return values
 
 
 def dotenv_value(value: str) -> str:
-    if "\n" in value or "\r" in value or "#" in value or "$" in value or '"' in value:
-        raise ValueError("O valor contém caracteres que não são seguros para o arquivo .env.")
-    return f'"{value}"' if any(char.isspace() for char in value) else value
+    """Protect literal SMTP credentials in a Compose dotenv file."""
+    if "\n" in value or "\r" in value or "\0" in value:
+        raise ValueError("O valor contém caracteres de controle não permitidos no .env.")
+    if any(char.isspace() or char in "#$'\"\\" for char in value):
+        return "'" + value.replace("'", "\\'") + "'"
+    return value
 
+
+def validate_runtime_settings(
+    *,
+    manager_port: int,
+    browser_concurrency: int,
+    smtp_host: str,
+    smtp_port: int,
+    smtp_secure: str,
+    smtp_username: str,
+    smtp_password: str,
+    smtp_from_email: str,
+    smtp_from_name: str,
+) -> None:
+    if not 40000 <= manager_port <= 49999:
+        raise ValueError("A porta do Manager deve ter cinco dígitos e começar com 4 (40000 a 49999).")
+    if not 1 <= browser_concurrency <= 16:
+        raise ValueError("A concorrência do navegador deve ficar entre 1 e 16.")
+    if not 1 <= smtp_port <= 65535:
+        raise ValueError("A porta SMTP deve ficar entre 1 e 65535.")
+    if smtp_secure not in ("true", "false"):
+        raise ValueError("SMTP seguro deve ser true ou false.")
+    if not smtp_from_name.strip():
+        raise ValueError("Informe o nome do remetente SMTP.")
+    if smtp_host and (
+        any(char.isspace() for char in smtp_host)
+        or any(char in smtp_host for char in "/@?#\\")
+    ):
+        raise ValueError("Informe somente o hostname ou IP do servidor SMTP.")
+    if bool(smtp_host) != bool(smtp_from_email):
+        raise ValueError("SMTP de recuperação exige host e e-mail remetente juntos.")
+    if bool(smtp_username) != bool(smtp_password):
+        raise ValueError("Usuário e senha SMTP devem ser informados juntos.")
+    if (smtp_username or smtp_password) and not smtp_host:
+        raise ValueError("Configure o host SMTP antes das credenciais.")
+    if smtp_from_email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", smtp_from_email):
+        raise ValueError("E-mail remetente SMTP inválido.")
 
 def render_env(
     template: str,
@@ -87,6 +132,14 @@ def render_env(
     tenant_slug: str,
     admin_name: str,
     admin_email: str,
+    browser_concurrency: int = 1,
+    smtp_host: str = "",
+    smtp_port: int = 587,
+    smtp_secure: str = "false",
+    smtp_username: str = "",
+    smtp_password: str = "",
+    smtp_from_email: str = "",
+    smtp_from_name: str = "ARGWS Scout",
 ) -> str:
     replacements = {key: factory() for key, factory in SECRET_VALUES.items()}
     replacements.update(
@@ -95,6 +148,14 @@ def render_env(
             "SCOUT_TAG": "develop" if environment == "develop" else "stable",
             "SCOUT_PUBLIC_URL": public_url.rstrip("/"),
             "SCOUT_MANAGER_PORT": str(manager_port),
+            "SCOUT_BROWSER_CONCURRENCY": str(browser_concurrency),
+            "SCOUT_RECOVERY_SMTP_HOST": smtp_host,
+            "SCOUT_RECOVERY_SMTP_PORT": str(smtp_port),
+            "SCOUT_RECOVERY_SMTP_SECURE": smtp_secure,
+            "SCOUT_RECOVERY_SMTP_USERNAME": smtp_username,
+            "SCOUT_RECOVERY_SMTP_PASSWORD": smtp_password,
+            "SCOUT_RECOVERY_SMTP_FROM_EMAIL": smtp_from_email,
+            "SCOUT_RECOVERY_SMTP_FROM_NAME": smtp_from_name,
             "SCOUT_BOOTSTRAP_TENANT_NAME": tenant_name,
             "SCOUT_BOOTSTRAP_TENANT_SLUG": tenant_slug,
             "SCOUT_BOOTSTRAP_ADMIN_NAME": admin_name,
@@ -140,9 +201,21 @@ def generate(args: argparse.Namespace) -> int:
         admin_email = safe_profile(args.admin_email, r"[^\s@]+@[^\s@]+\.[^\s@]+", "E-mail do administrador")
         if not args.tenant_name.strip() or not args.admin_name.strip():
             raise ValueError("Informe o nome da organização e do administrador.")
-        manager_port = args.manager_port or DEFAULT_PORTS[(args.target, args.environment)]
-        if not 1 <= manager_port <= 65535:
-            raise ValueError("A porta do Manager deve ficar entre 1 e 65535.")
+        manager_port = args.manager_port if args.manager_port is not None else DEFAULT_PORTS[(args.target, args.environment)]
+        recovery_smtp_password = (
+            sys.stdin.readline().rstrip("\r\n") if args.recovery_smtp_password_stdin else ""
+        )
+        validate_runtime_settings(
+            manager_port=manager_port,
+            browser_concurrency=args.browser_concurrency,
+            smtp_host=args.recovery_smtp_host.strip(),
+            smtp_port=args.recovery_smtp_port,
+            smtp_secure=args.recovery_smtp_secure,
+            smtp_username=args.recovery_smtp_username.strip(),
+            smtp_password=recovery_smtp_password,
+            smtp_from_email=args.recovery_smtp_from_email.strip(),
+            smtp_from_name=args.recovery_smtp_from_name.strip(),
+        )
         root = project_root()
         template_dir = root / "deploy" / args.target / args.environment
         compose_template = template_dir / "compose.yaml"
@@ -154,7 +227,9 @@ def generate(args: argparse.Namespace) -> int:
         compose_path = output_dir / "compose.yaml"
         env_path = output_dir / env_filename(args.target)
         unexpected = sorted(
-            path.name for path in output_dir.iterdir() if path.name not in {"compose.yaml", env_path.name}
+            path.name for path in output_dir.iterdir()
+            if path.name not in {"compose.yaml", env_path.name}
+            and not (path.name == "volumes" and path.is_dir() and not path.is_symlink())
         )
         if unexpected:
             raise ValueError("A pasta de saída deve estar vazia ou conter somente compose.yaml e .env.")
@@ -171,6 +246,14 @@ def generate(args: argparse.Namespace) -> int:
                 tenant_slug=tenant_slug,
                 admin_name=args.admin_name.strip(),
                 admin_email=admin_email,
+                browser_concurrency=args.browser_concurrency,
+                smtp_host=args.recovery_smtp_host.strip(),
+                smtp_port=args.recovery_smtp_port,
+                smtp_secure=args.recovery_smtp_secure,
+                smtp_username=args.recovery_smtp_username.strip(),
+                smtp_password=recovery_smtp_password,
+                smtp_from_email=args.recovery_smtp_from_email.strip(),
+                smtp_from_name=args.recovery_smtp_from_name.strip(),
             )
         compose_path.write_text(compose_template.read_text(encoding="utf-8"), encoding="utf-8")
         if generated_env is not None:
@@ -192,14 +275,18 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
         entries = list(directory.iterdir())
         files = {path.name for path in entries if path.is_file()}
         env_files = files - {"compose.yaml"}
+        allowed_files = {"compose.yaml", ".env", "stack.env"}
+        extra = [
+            path.name for path in entries
+            if path.name not in allowed_files
+            and not (path.name == "volumes" and path.is_dir() and not path.is_symlink())
+        ]
         if (
-            len(entries) != 2
-            or len(files) != 2
-            or "compose.yaml" not in files
-            or len(env_files) != 1
-            or not env_files.issubset({".env", "stack.env"})
+            extra or len(files) != 2 or "compose.yaml" not in files
+            or len(env_files) != 1 or not env_files.issubset({".env", "stack.env"})
+            or any(path.is_symlink() for path in entries)
         ):
-            raise ValueError("A pasta deve conter somente compose.yaml e um arquivo de ambiente (.env ou stack.env).")
+            raise ValueError("A pasta deve conter compose.yaml, .env (ou stack.env) e, opcionalmente, volumes/.")
         compose = (directory / "compose.yaml").read_text(encoding="utf-8")
         env_path = directory / next(iter(env_files))
         env = parse_env(env_path.read_text(encoding="utf-8"))
@@ -227,6 +314,29 @@ def validate_directory(directory: Path, *, quiet: bool) -> int:
                 raise ValueError(f"A variável {key} ainda contém um valor de exemplo.")
         if "services:" not in compose or "image:" not in compose:
             raise ValueError("compose.yaml não parece ser uma stack Scout válida.")
+        try:
+            manager_port = int(env["SCOUT_MANAGER_PORT"])
+            browser_concurrency = int(env.get("SCOUT_BROWSER_CONCURRENCY", "1"))
+            smtp_port = int(env.get("SCOUT_RECOVERY_SMTP_PORT", "587"))
+        except ValueError as error:
+            raise ValueError("As portas e a concorrência devem ser números inteiros.") from error
+        validate_runtime_settings(
+            manager_port=manager_port,
+            browser_concurrency=browser_concurrency,
+            smtp_host=env.get("SCOUT_RECOVERY_SMTP_HOST", ""),
+            smtp_port=smtp_port,
+            smtp_secure=env.get("SCOUT_RECOVERY_SMTP_SECURE", "false"),
+            smtp_username=env.get("SCOUT_RECOVERY_SMTP_USERNAME", ""),
+            smtp_password=env.get("SCOUT_RECOVERY_SMTP_PASSWORD", ""),
+            smtp_from_email=env.get("SCOUT_RECOVERY_SMTP_FROM_EMAIL", ""),
+            smtp_from_name=env.get("SCOUT_RECOVERY_SMTP_FROM_NAME", "ARGWS Scout"),
+        )
+        for bind in (
+            "./volumes/postgres:", "./volumes/redis:", "./volumes/rabbitmq:",
+            "./volumes/garage/config:", "./volumes/garage/meta:", "./volumes/garage/data:",
+        ):
+            if bind not in compose:
+                raise ValueError(f"Persistência local obrigatória não encontrada: {bind}")
         if not re.fullmatch(r"[0-9a-fA-F]{64}", env["GARAGE_RPC_SECRET"]):
             raise ValueError("GARAGE_RPC_SECRET precisa conter 64 caracteres hexadecimais (32 bytes).")
         key = base64.b64decode(env["SCOUT_ENCRYPTION_KEY_BASE64"], validate=True)
@@ -251,7 +361,15 @@ def build_parser() -> argparse.ArgumentParser:
     make.add_argument("--environment", required=True, choices=CHANNELS)
     make.add_argument("--output", required=True)
     make.add_argument("--public-url", required=True)
-    make.add_argument("--manager-port", type=int, help="Porta local do Manager (padrão da plataforma/canal)")
+    make.add_argument("--manager-port", type=int, help="Porta local do Manager (40000-49999; padrão por plataforma/canal)")
+    make.add_argument("--browser-concurrency", type=int, default=1, help="Execuções simultâneas do navegador (1-16)")
+    make.add_argument("--recovery-smtp-host", default="", help="Host SMTP global exclusivo de recuperação de senha")
+    make.add_argument("--recovery-smtp-port", type=int, default=587)
+    make.add_argument("--recovery-smtp-secure", choices=("true", "false"), default="false")
+    make.add_argument("--recovery-smtp-username", default="")
+    make.add_argument("--recovery-smtp-password-stdin", action="store_true", help="Lê a senha SMTP de stdin para não expor segredos na linha de comando")
+    make.add_argument("--recovery-smtp-from-email", default="")
+    make.add_argument("--recovery-smtp-from-name", default="ARGWS Scout")
     make.add_argument("--tenant-name", default="Minha organização")
     make.add_argument("--tenant-slug", default="minha-organizacao")
     make.add_argument("--admin-name", default="Administrador")
