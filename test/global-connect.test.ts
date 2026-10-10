@@ -1,23 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { globalConnectSettings, remoteInstanceName } from "../apps/api/src/global-connect.ts";
+import {
+  globalConnectSettings,
+  remoteInstanceName,
+} from "../apps/api/src/global-connect.ts";
 
 describe("single global Connect|API configuration", () => {
   it("requires both URL and token without falling back to workspace credentials", () => {
     expect(globalConnectSettings({})).toBeNull();
-    expect(globalConnectSettings({ SCOUT_CONNECT_API_URL: "https://connect.example" })).toBeNull();
-    expect(globalConnectSettings({ SCOUT_CONNECT_API_TOKEN: "secret" })).toBeNull();
-    expect(globalConnectSettings({
-      SCOUT_CONNECT_API_URL: "https://connect.example/api/",
-      SCOUT_CONNECT_API_TOKEN: "global-test-token",
-    })).toEqual({ baseUrl: "https://connect.example/api", apiKey: "global-test-token" });
+    expect(
+      globalConnectSettings({
+        SCOUT_CONNECT_API_URL: "https://connect.example",
+      }),
+    ).toBeNull();
+    expect(
+      globalConnectSettings({ SCOUT_CONNECT_API_TOKEN: "secret" }),
+    ).toBeNull();
+    expect(
+      globalConnectSettings({
+        SCOUT_CONNECT_API_URL: "https://connect.example/api/",
+        SCOUT_CONNECT_API_TOKEN: "global-test-token",
+      }),
+    ).toEqual({
+      baseUrl: "https://connect.example/api",
+      apiKey: "global-test-token",
+    });
   });
   it("enforces HTTPS and rejects URL userinfo", () => {
-    expect(() => globalConnectSettings({
-      SCOUT_CONNECT_API_URL: "http://connect.example", SCOUT_CONNECT_API_TOKEN: "secret",
-    })).toThrow(/HTTPS/);
-    expect(() => globalConnectSettings({
-      SCOUT_CONNECT_API_URL: "https://user:pass@connect.example", SCOUT_CONNECT_API_TOKEN: "secret",
-    })).toThrow();
+    expect(() =>
+      globalConnectSettings({
+        SCOUT_CONNECT_API_URL: "http://connect.example",
+        SCOUT_CONNECT_API_TOKEN: "secret",
+      }),
+    ).toThrow(/HTTPS/);
+    expect(() =>
+      globalConnectSettings({
+        SCOUT_CONNECT_API_URL: "https://user:pass@connect.example",
+        SCOUT_CONNECT_API_TOKEN: "secret",
+      }),
+    ).toThrow();
   });
   it("namespaces instances by workspace and keeps friendly labels outside the global name", () => {
     const a = "11111111-1111-4111-8111-111111111111";

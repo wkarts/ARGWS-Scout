@@ -15,18 +15,18 @@ A conta principal configurada pelo servidor é protegida no banco e na API; não
 
 ## Menu da plataforma
 
-| Área                | Função                                            |
-| ------------------- | ------------------------------------------------- |
-| Visão geral         | Indicadores, tarefas recentes e estado do espaço  |
-| Instâncias          | Agrupamento de fontes e resultados                |
-| Execuções           | Enfileiramento, histórico, artefatos e publicação |
-| Connect\|API       | Integração com canais de comunicação, inicialmente WhatsApp |
-| Agendamentos        | Regras cron de coleta periódica                   |
-| Webhooks            | Recebimento de eventos por sistemas externos      |
-| Configurações       | SMTP da organização e opções operacionais         |
-| Acesso e auditoria  | Convites, papéis e trilha administrativa          |
-| Saúde da plataforma | Dependências e diagnóstico exportável             |
-| Primeiros passos    | Assistente guiado da primeira coleta ao envio     |
+| Área                | Função                                                      |
+| ------------------- | ----------------------------------------------------------- |
+| Visão geral         | Indicadores, tarefas recentes e estado do espaço            |
+| Instâncias          | Agrupamento de fontes e resultados                          |
+| Execuções           | Enfileiramento, histórico, artefatos e publicação           |
+| Connect\|API        | Integração com canais de comunicação, inicialmente WhatsApp |
+| Agendamentos        | Regras cron de coleta periódica                             |
+| Webhooks            | Recebimento de eventos por sistemas externos                |
+| Configurações       | SMTP da organização e opções operacionais                   |
+| Acesso e auditoria  | Convites, papéis e trilha administrativa                    |
+| Saúde da plataforma | Dependências e diagnóstico exportável                       |
+| Primeiros passos    | Assistente guiado da primeira coleta ao envio               |
 
 ## Canais de comunicação
 

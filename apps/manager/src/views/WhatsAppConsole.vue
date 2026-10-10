@@ -238,7 +238,12 @@ async function claimExistingInstance(instance: WhatsAppInstance) {
     emit("notify", "Vínculo da instância revalidado com seu token particular.");
     await refresh();
   } catch (error) {
-    emit("error", error instanceof Error ? error.message : "Não foi possível revalidar esta instância.");
+    emit(
+      "error",
+      error instanceof Error
+        ? error.message
+        : "Não foi possível revalidar esta instância.",
+    );
   } finally {
     claimToken.value = "";
     busy.value = false;
@@ -354,7 +359,10 @@ onMounted(() => void refresh());
       <div class="panel-header">
         <div>
           <h2>Connect|API</h2>
-          <p>Uma conexão global; cada espaço administra seus próprios canais e instâncias.</p>
+          <p>
+            Uma conexão global; cada espaço administra seus próprios canais e
+            instâncias.
+          </p>
         </div>
         <span class="status-pill" :class="configured ? 'succeeded' : 'running'"
           ><i></i>{{ configured ? "Configurada" : "Não configurada" }}</span
@@ -365,9 +373,10 @@ onMounted(() => void refresh());
         <div>
           <strong>Conexão global da plataforma</strong>
           <p>
-            A URL e o token administrativos da Connect|API são definidos exclusivamente
-            no servidor (`SCOUT_CONNECT_API_URL` e `SCOUT_CONNECT_API_TOKEN`).
-            Cada espaço de trabalho administra somente suas próprias instâncias e publicações.
+            A URL e o token administrativos da Connect|API são definidos
+            exclusivamente no servidor (`SCOUT_CONNECT_API_URL` e
+            `SCOUT_CONNECT_API_TOKEN`). Cada espaço de trabalho administra
+            somente suas próprias instâncias e publicações.
           </p>
           <p v-if="!configured" class="wa-warning">
             Conexão ainda não configurada pelo operador do servidor.
@@ -505,7 +514,8 @@ onMounted(() => void refresh());
               instance.profileName || instance.number || instance.integration
             }}</small
             ><small v-if="!instance.usable" class="wa-warning"
-              >Vínculo não validado neste servidor; revalide usando o token particular.</small
+              >Vínculo não validado neste servidor; revalide usando o token
+              particular.</small
             >
           </div>
           <span
@@ -523,7 +533,10 @@ onMounted(() => void refresh());
             v-if="canManage && !instance.usable && configured"
             class="button outline small-button"
             :disabled="busy"
-            @click="claimName = claimName === instance.name ? '' : instance.name; claimToken = ''"
+            @click="
+              claimName = claimName === instance.name ? '' : instance.name;
+              claimToken = '';
+            "
           >
             <RefreshCw :size="14" /> Revalidar vínculo
           </button>
@@ -571,18 +584,41 @@ onMounted(() => void refresh());
           >
             <label>
               Token particular para revalidar o vínculo
-              <input v-model="claimToken" type="password" autocomplete="off"
-                minlength="8" required placeholder="Token exclusivo da instância" />
+              <input
+                v-model="claimToken"
+                type="password"
+                autocomplete="off"
+                minlength="8"
+                required
+                placeholder="Token exclusivo da instância"
+              />
             </label>
-            <button class="button primary" :disabled="busy || claimToken.length < 8">Revalidar</button>
-            <button type="button" class="button subtle" @click="claimName = ''; claimToken = ''">Cancelar</button>
+            <button
+              class="button primary"
+              :disabled="busy || claimToken.length < 8"
+            >
+              Revalidar
+            </button>
+            <button
+              type="button"
+              class="button subtle"
+              @click="
+                claimName = '';
+                claimToken = '';
+              "
+            >
+              Cancelar
+            </button>
           </form>
         </article>
       </div>
       <div v-else class="empty-state compact">
         <span class="empty-icon"><Server :size="19" /></span>
         <h3>Nenhuma instância WhatsApp</h3>
-        <p>Crie sua primeira instância neste espaço. Para vínculos antigos, revalide o token particular.</p>
+        <p>
+          Crie sua primeira instância neste espaço. Para vínculos antigos,
+          revalide o token particular.
+        </p>
       </div>
 
       <div v-if="connectionPayload" class="wa-pairing">
@@ -816,27 +852,106 @@ onMounted(() => void refresh());
     flex: 1;
   }
 }
-.wa-global-settings { display:flex; flex-wrap:wrap; align-items:flex-start; gap:14px; padding:18px 20px 22px; color:#41516b; }
-.wa-global-settings > svg { flex:0 0 auto; color:#2563eb; margin-top:3px; }
-.wa-global-settings > div { flex:1 1 300px; min-width:0; }
-.wa-global-settings strong { color:#172e4a; font-size:14px; }
-.wa-global-settings p { color:#62758b; font-size:13px; line-height:1.55; margin:7px 0; overflow-wrap:anywhere; }
-.wa-global-settings > .button { flex:0 1 auto; white-space:normal; }
-.wa-inline-form { grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); }
-.wa-instance-list, .wa-instance-card, .wa-instance-info { min-width:0; max-width:100%; }
-.wa-instance-info { overflow-wrap:anywhere; }
-@media(max-width:600px) {
-  .wa-global-settings { padding:14px; gap:10px; }
-  .wa-global-settings > .button { width:100%; }
-  .wa-inline-form { margin:10px; grid-template-columns:1fr; }
-  .wa-instance-list { padding:0 10px 12px; }
-  .wa-instance-card { padding:12px; }
-  .wa-instance-info { flex:1 1 100%; }
-  .wa-instance-card .button { flex:1 1 135px; }
+.wa-global-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px 22px;
+  color: #41516b;
 }
-.wa-claim-form { flex:1 1 100%; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-top:1px solid #e8edf4; padding-top:12px; min-width:0; }
-.wa-claim-form label { display:grid; gap:6px; flex:1 1 240px; min-width:0; font-size:13px; color:#42536a; }
-.wa-claim-form input { width:100%; min-height:40px; border:1px solid #dfe6ef; border-radius:8px; padding:0 10px; }
-.wa-claim-form > button { flex:0 1 auto; }
-@media (max-width:500px) { .wa-claim-form > button { flex:1 1 110px; } }
+.wa-global-settings > svg {
+  flex: 0 0 auto;
+  color: #2563eb;
+  margin-top: 3px;
+}
+.wa-global-settings > div {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.wa-global-settings strong {
+  color: #172e4a;
+  font-size: 14px;
+}
+.wa-global-settings p {
+  color: #62758b;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+.wa-global-settings > .button {
+  flex: 0 1 auto;
+  white-space: normal;
+}
+.wa-inline-form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+.wa-instance-list,
+.wa-instance-card,
+.wa-instance-info {
+  min-width: 0;
+  max-width: 100%;
+}
+.wa-instance-info {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .wa-global-settings {
+    padding: 14px;
+    gap: 10px;
+  }
+  .wa-global-settings > .button {
+    width: 100%;
+  }
+  .wa-inline-form {
+    margin: 10px;
+    grid-template-columns: 1fr;
+  }
+  .wa-instance-list {
+    padding: 0 10px 12px;
+  }
+  .wa-instance-card {
+    padding: 12px;
+  }
+  .wa-instance-info {
+    flex: 1 1 100%;
+  }
+  .wa-instance-card .button {
+    flex: 1 1 135px;
+  }
+}
+.wa-claim-form {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  border-top: 1px solid #e8edf4;
+  padding-top: 12px;
+  min-width: 0;
+}
+.wa-claim-form label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: 13px;
+  color: #42536a;
+}
+.wa-claim-form input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+.wa-claim-form > button {
+  flex: 0 1 auto;
+}
+@media (max-width: 500px) {
+  .wa-claim-form > button {
+    flex: 1 1 110px;
+  }
+}
 </style>

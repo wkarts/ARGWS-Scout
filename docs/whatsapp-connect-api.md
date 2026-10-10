@@ -40,17 +40,17 @@ As configurações antigas de URL e token por organização permanecem armazenad
 
 ## Contratos da integração
 
-| Operação | Política |
-| --- | --- |
-| `GET /v1/whatsapp` | Configuração global disponível (sim/não) e instâncias do espaço, sem token |
-| `POST /v1/whatsapp/instances` | Cria instância remota de nome exclusivo e token particular cifrado |
-| `POST /v1/whatsapp/sync` | Atualiza apenas instâncias reivindicadas pelo espaço |
-| `POST /v1/whatsapp/instances/import` | Vincula instância com token particular, se livre |
-| `POST /v1/whatsapp/instances/claim` | Revalida nome remoto e token informado pelo responsável |
-| `PUT /v1/whatsapp/default` | Salva a preferência de envio somente para o espaço |
-| `POST /v1/whatsapp/instances/{name}/{action}` | Status, QR, reiniciar e desconectar somente de instância reivindicada |
-| `DELETE /v1/whatsapp/instances/{name}` | Exclui instância reivindicada sem afetar outros espaços |
-| `POST /v1/whatsapp/publications` | Publicação idempotente de coleta concluída pelo próprio espaço |
+| Operação                                      | Política                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET /v1/whatsapp`                            | Configuração global disponível (sim/não) e instâncias do espaço, sem token |
+| `POST /v1/whatsapp/instances`                 | Cria instância remota de nome exclusivo e token particular cifrado         |
+| `POST /v1/whatsapp/sync`                      | Atualiza apenas instâncias reivindicadas pelo espaço                       |
+| `POST /v1/whatsapp/instances/import`          | Vincula instância com token particular, se livre                           |
+| `POST /v1/whatsapp/instances/claim`           | Revalida nome remoto e token informado pelo responsável                    |
+| `PUT /v1/whatsapp/default`                    | Salva a preferência de envio somente para o espaço                         |
+| `POST /v1/whatsapp/instances/{name}/{action}` | Status, QR, reiniciar e desconectar somente de instância reivindicada      |
+| `DELETE /v1/whatsapp/instances/{name}`        | Exclui instância reivindicada sem afetar outros espaços                    |
+| `POST /v1/whatsapp/publications`              | Publicação idempotente de coleta concluída pelo próprio espaço             |
 
 O mecanismo de propriedade é garantido por uma reserva única de nome remoto no PostgreSQL. O token particular é criptografado. Isso constitui isolamento **lógico** de canais: banco e domínio físicos exclusivos continuam pendentes na [issue #30](https://github.com/wkarts/ARGWS-Scout/issues/30).
 

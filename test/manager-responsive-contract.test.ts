@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8");
 
 describe("Manager responsive layout contract", () => {
   it("renders the footer inside the main column, not as another horizontal flex child", () => {
@@ -34,7 +35,9 @@ describe("workspace Connect|API UI", () => {
     const vue = source("apps/manager/src/views/WhatsAppConsole.vue");
     expect(vue).not.toContain('v-model="apiKey"');
     expect(vue).not.toContain('v-model="baseUrl"');
-    expect(vue).not.toContain('method: "PUT",\n      body: JSON.stringify({ baseUrl');
+    expect(vue).not.toContain(
+      'method: "PUT",\n      body: JSON.stringify({ baseUrl',
+    );
     expect(vue).toContain("Revalidar vínculo");
     expect(vue).toContain("token particular");
   });

@@ -2992,16 +2992,16 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             </form></section
         ></template>
       </main>
-    <footer class="app-footer">
-      <span
-        >ARGWS Scout <i>·</i> {{ buildVersion }} · {{ buildChannel }} ·
-        {{ buildSha.slice(0, 8) }}</span
-      ><span
-        >Web Intelligence & Automation <i>·</i>
-        <a href="/docs/" target="_blank"
-          >Documentação <ExternalLink :size="12" /></a
-      ></span>
-    </footer>
+      <footer class="app-footer">
+        <span
+          >ARGWS Scout <i>·</i> {{ buildVersion }} · {{ buildChannel }} ·
+          {{ buildSha.slice(0, 8) }}</span
+        ><span
+          >Web Intelligence & Automation <i>·</i>
+          <a href="/docs/" target="_blank"
+            >Documentação <ExternalLink :size="12" /></a
+        ></span>
+      </footer>
     </section>
 
     <div
