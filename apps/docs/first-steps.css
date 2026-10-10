@@ -92,24 +92,87 @@ footer {
 }
 
 /* Documentation pages: readable on narrow Windows windows and desktop. */
-html,body { min-width:0; width:100%; }
-body { overflow-x:hidden; font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
-main,.wrap,article,section,header,.grid,.card { min-width:0; max-width:100%; }
-h1,h2,h3,p,li,td { overflow-wrap:break-word; }
-a { overflow-wrap:anywhere; }
-a:focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
-@media(max-width:750px) {
-  .wrap, main { padding:clamp(16px,4vw,30px); }
-  .brand { height:42px; max-width:190px; }
-  h1 { font-size:clamp(26px,6vw,38px); }
-  .grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); }
-  header { gap:10px; }
+html,
+body {
+  min-width: 0;
+  width: 100%;
 }
-@media(max-width:450px) {
-  .wrap,main { padding:16px; }
-  section,article,.card { padding:14px; }
-  header { flex-wrap:wrap; }
-  header nav { display:flex; flex-wrap:wrap; gap:8px; }
-  header nav a { margin-right:0; }
-  table { display:block; overflow-x:auto; }
+body {
+  overflow-x: hidden;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+main,
+.wrap,
+article,
+section,
+header,
+.grid,
+.card {
+  min-width: 0;
+  max-width: 100%;
+}
+h1,
+h2,
+h3,
+p,
+li,
+td {
+  overflow-wrap: break-word;
+}
+a {
+  overflow-wrap: anywhere;
+}
+a:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+@media (max-width: 750px) {
+  .wrap,
+  main {
+    padding: clamp(16px, 4vw, 30px);
+  }
+  .brand {
+    height: 42px;
+    max-width: 190px;
+  }
+  h1 {
+    font-size: clamp(26px, 6vw, 38px);
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  }
+  header {
+    gap: 10px;
+  }
+}
+@media (max-width: 450px) {
+  .wrap,
+  main {
+    padding: 16px;
+  }
+  section,
+  article,
+  .card {
+    padding: 14px;
+  }
+  header {
+    flex-wrap: wrap;
+  }
+  header nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header nav a {
+    margin-right: 0;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+  }
 }

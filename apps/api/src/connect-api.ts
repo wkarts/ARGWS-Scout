@@ -113,13 +113,14 @@ export function createWhatsAppInstancePayload(
 }
 
 /** QR remains independent of a phone pairing-code request. */
-export function connectPairingPath(
-  name: string,
-  number: string,
-): string {
+export function connectPairingPath(name: string, number: string): string {
   if (!/^[1-9]\d{7,14}$/.test(number))
     throw new ConnectApiError("Informe telefone internacional com DDI e DDD.");
-  return connectInstancePath(name, "connect") + "?number=" + encodeURIComponent(number);
+  return (
+    connectInstancePath(name, "connect") +
+    "?number=" +
+    encodeURIComponent(number)
+  );
 }
 
 export function sendWhatsAppTextPayload(number: string, text: string) {

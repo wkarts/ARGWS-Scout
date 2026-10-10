@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8");
 
 describe("documentation pages must render under the restrictive Nginx CSP", () => {
   const pages = [
@@ -13,15 +14,20 @@ describe("documentation pages must render under the restrictive Nginx CSP", () =
   const dockerfile = source("Dockerfile.docs");
   const policy = source("apps/docs/nginx.conf");
 
-  it.each(pages)("%s has its own external stylesheet actually included in the image", (html, css) => {
-    const page = source("apps/docs/" + html);
-    const sheet = source("apps/docs/" + css);
-    expect(page).toContain('href="/docs/' + css + '"');
-    expect(page).not.toContain("<style>");
-    expect(page).not.toContain('style="');
-    expect(sheet).toMatch(/min-width|@media/);
-    expect(dockerfile).toContain("COPY apps/docs/" + css + " /usr/share/nginx/html/" + css);
-  });
+  it.each(pages)(
+    "%s has its own external stylesheet actually included in the image",
+    (html, css) => {
+      const page = source("apps/docs/" + html);
+      const sheet = source("apps/docs/" + css);
+      expect(page).toContain('href="/docs/' + css + '"');
+      expect(page).not.toContain("<style>");
+      expect(page).not.toContain('style="');
+      expect(sheet).toMatch(/min-width|@media/);
+      expect(dockerfile).toContain(
+        "COPY apps/docs/" + css + " /usr/share/nginx/html/" + css,
+      );
+    },
+  );
 
   it("keeps a strict CSP and does not enable unsafe-inline", () => {
     expect(policy).toContain("style-src 'self'");
