@@ -67,11 +67,11 @@ export async function registerInvitationRoutes(app: FastifyInstance): Promise<vo
     const email = normalize(data.data.email);
     if (isProtectedUser({ email, isPlatformMaster: false }))
       return error(reply, 403, "ACCOUNT_PROTECTED", "Esta identidade não pode receber convites.");
-    const existing = await prisma.user.findUnique({ where: { email }, select: { isPlatformMaster: true } });
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, isPlatformMaster: true } });
     if (existing?.isPlatformMaster)
       return error(reply, 403, "ACCOUNT_PROTECTED", "Esta identidade não pode receber convites.");
     const existingMembership = existing ? await prisma.membership.findUnique({
-      where: { tenantId_userId: { tenantId: request.principal!.tenantId, userId: (await prisma.user.findUnique({ where: { email }, select: { id: true } }))!.id } },
+      where: { tenantId_userId: { tenantId: request.principal!.tenantId, userId: existing.id } },
     }) : null;
     if (existingMembership) return error(reply, 409, "USER_EXISTS", "A pessoa já possui acesso a este espaço.");
     const sender = await prisma.tenantSmtpConfig.findUnique({ where: { tenantId: request.principal!.tenantId }, select: { tenantId: true } });
@@ -235,7 +235,8 @@ export async function registerInvitationRoutes(app: FastifyInstance): Promise<vo
     });
     if (!membership) return error(reply, 403, "SPACE_FORBIDDEN", "Você não possui acesso a esta organização.");
     await createSession(app, reply, request.principal.userId!, body.data.spaceId);
-    await prisma.authSession.updateMany({ where: { id: request.principal.sessionId, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (request.principal.sessionId)
+      await prisma.authSession.updateMany({ where: { id: request.principal.sessionId, revokedAt: null }, data: { revokedAt: new Date() } });
     return { switched: true };
   });
 }
