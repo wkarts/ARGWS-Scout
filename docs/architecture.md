@@ -28,7 +28,7 @@ Scheduler → PostgreSQL/Outbox → Dispatcher
 
 ## Independência
 
-Não há pacote, imagem, banco, fila ou código da ARGWS Connect API no grafo de dependências/deploy da Scout. A integração WhatsApp é opcional e usa contratos REST configurados por organização; a API Scout valida a URL, guarda a chave administrativa cifrada e usa o token próprio de cada instância nas ações vinculadas a ela.
+Não há pacote, imagem, banco, fila ou código da ARGWS Connect API no grafo de dependências/deploy da Scout. A integração Connect|API é opcional e usa uma única URL e token administrativos configurados por `SCOUT_CONNECT_API_URL` e `SCOUT_CONNECT_API_TOKEN` no ambiente da API Scout. Cada espaço tem sua própria reserva de nomes remotos de instância e tokens particulares cifrados; a sincronização e os comandos ficam restritos aos vínculos previamente autorizados. O backend não lista instâncias globais da Connect|API para usuários.
 
 ## Entrega
 

@@ -91,10 +91,13 @@ for target in targets:
     service_blocks[current_service]=[]
    if current_service:
     service_blocks[current_service].append(line)
+  assert env.get("SCOUT_CONNECT_API_URL","")=="" and env.get("SCOUT_CONNECT_API_TOKEN","")=="", f"{d}: global Connect|API credentials must be placeholders, never committed"
   recovery_keys=("HOST","PORT","SECURE","USERNAME","PASSWORD","FROM_EMAIL","FROM_NAME")
   for service,block in service_blocks.items():
    block_text="\n".join(block)
    if service!="api" and "env_file:" in block_text:
+    for secret in ("SCOUT_CONNECT_API_URL","SCOUT_CONNECT_API_TOKEN"):
+     assert f'{secret}: ""' in block_text, f"{d}/{service}: global Connect|API secret must not reach workers"
     for key in recovery_keys:
      assert f'SCOUT_RECOVERY_SMTP_{key}: ""' in block_text, f"{d}/{service}: recovery SMTP must stay inside the API container"
 # Enforce the lightweight RabbitMQ readiness check for all supported deployments.

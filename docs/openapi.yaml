@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: ARGWS Scout API
-  version: 0.5.0
-  description: REST API para tenants, coleta web e publicação WhatsApp via Connect API.
+  version: 0.6.1
+  description: REST API para espaços de trabalho, coleta web e publicação via Connect|API, com canais e instâncias WhatsApp isolados logicamente.
 servers:
   - url: /v1
 security:

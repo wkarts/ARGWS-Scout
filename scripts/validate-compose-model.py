@@ -108,6 +108,17 @@ bootstrap_environment = model["services"]["bootstrap"].get("environment", {})
 assert bootstrap_environment.get("SCOUT_BOOTSTRAP_ADMIN_PASSWORD") == env["SCOUT_BOOTSTRAP_ADMIN_PASSWORD"], (
     f"{folder}: the one-shot bootstrap must still receive its initial password"
 )
+# The global Connect|API is used only by the API service.
+api_environment = model["services"]["api"].get("environment", {})
+for connect_key in ("SCOUT_CONNECT_API_URL", "SCOUT_CONNECT_API_TOKEN"):
+    assert api_environment.get(connect_key, "") == env.get(connect_key, ""), (
+        f"{folder}/api: global Connect|API configuration must originate only from the stack environment"
+    )
+    for service_name, service in model["services"].items():
+        if service_name != "api" and service.get("env_file"):
+            assert service.get("environment", {}).get(connect_key) == "", (
+                f"{folder}/{service_name}: global Connect|API credential must be masked"
+            )
 browser_environment = model["services"]["browser-worker"].get("environment", {})
 assert browser_environment.get("SCOUT_BROWSER_CONCURRENCY") == env["SCOUT_BROWSER_CONCURRENCY"], (
     f"{folder}: browser concurrency was not propagated"

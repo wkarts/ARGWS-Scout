@@ -58,6 +58,8 @@ model Tenant {
   diagnosticLogs DiagnosticLog[]
   connectApi  ConnectApiConfig?
   connectInstances ConnectApiInstance[]
+  connectClaims ConnectInstanceClaim[]
+  connectDefaultInstanceName String? @db.VarChar(120)
   whatsAppPublications WhatsAppPublication[]
   smtpConfig TenantSmtpConfig?
   invitations UserInvitation[]
@@ -417,6 +419,7 @@ model ConnectApiInstance {
   id               String   @id @default(uuid()) @db.Uuid
   tenantId         String   @db.Uuid
   name             String   @db.VarChar(120)
+  displayName      String?  @db.VarChar(120)
   integration      String   @default("WHATSAPP-BAILEYS") @db.VarChar(40)
   tokenEncrypted   String?  @db.Text
   connectionState String?  @db.VarChar(40)
@@ -429,6 +432,16 @@ model ConnectApiInstance {
 
   @@unique([tenantId, name])
   @@index([tenantId, present, connectionState])
+  @@index([tenantId, displayName])
+}
+
+model ConnectInstanceClaim {
+  name        String   @id @db.VarChar(120)
+  tenantId    String   @db.Uuid
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model WhatsAppPublication {
