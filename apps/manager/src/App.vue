@@ -192,6 +192,16 @@ if (recoveryTokenFromUrl) {
   cleanUrl.hash = "";
   window.history.replaceState({}, "", cleanUrl.toString());
 }
+const inviteTokenFromUrl = new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? new URLSearchParams(window.location.search).get("invite") ?? "";
+if (inviteTokenFromUrl) {
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("invite");
+  cleanUrl.hash = "";
+  window.history.replaceState({}, "", cleanUrl.toString());
+}
+const inviteToken = ref(inviteTokenFromUrl);
+const invitation = ref<{ name: string; email: string; organization: string; hasAccount: boolean; expiresAt: string } | null>(null);
+const inviteForm = ref({ name: "", password: "", confirmation: "" });
 const resetToken = ref(recoveryTokenFromUrl);
 const forgotEmail = ref("");
 const resetPasswordForm = ref({ password: "", confirm: "" });
@@ -204,7 +214,8 @@ const loginStage = ref<
   | "forgot-sent"
   | "reset"
   | "reset-done"
->(recoveryTokenFromUrl ? "reset" : "credentials");
+  | "invitation"
+>(recoveryTokenFromUrl ? "reset" : inviteTokenFromUrl ? "invitation" : "credentials");
 const instanceForm = ref({ name: "", description: "" });
 const sourceForm = ref({
   name: "",
@@ -604,6 +615,7 @@ async function login() {
       }
     } else {
       await checkSession();
+      if (inviteToken.value) await acceptExistingInvitation();
     }
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : "Falha ao autenticar.";
@@ -631,6 +643,7 @@ async function verifyMfa() {
       return;
     }
     await checkSession();
+    if (inviteToken.value) await acceptExistingInvitation();
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : "Código inválido.";
   } finally {
@@ -689,6 +702,65 @@ async function completePasswordReset() {
   }
 }
 
+async function previewInvitation() {
+  if (!inviteToken.value) return;
+  busy.value = true;
+  error.value = "";
+  try {
+    const result = await api<{ name: string; email: string; organization: string; hasAccount: boolean; expiresAt: string }>(
+      "/auth/invitations/preview",
+      { method: "POST", body: JSON.stringify({ token: inviteToken.value }), noRefresh: true },
+    );
+    invitation.value = result;
+    inviteForm.value.name = result.name;
+    loginForm.value.email = result.email;
+    loginStage.value = "invitation";
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Convite inválido ou expirado.";
+  } finally {
+    busy.value = false;
+  }
+}
+async function activateInvitation() {
+  if (!inviteToken.value || inviteForm.value.password !== inviteForm.value.confirmation) {
+    error.value = "As senhas não coincidem.";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/auth/invitations/accept", {
+      method: "POST",
+      body: JSON.stringify({ token: inviteToken.value, password: inviteForm.value.password, name: inviteForm.value.name }),
+      noRefresh: true,
+    });
+    loginForm.value.email = invitation.value?.email ?? "";
+    inviteToken.value = "";
+    inviteForm.value = { name: "", password: "", confirmation: "" };
+    loginStage.value = "credentials";
+    notify("Conta ativada. Entre com seu e-mail e a senha que acabou de definir.");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Não foi possível ativar a conta.";
+  } finally {
+    busy.value = false;
+  }
+}
+async function acceptExistingInvitation() {
+  if (!inviteToken.value) return;
+  try {
+    await api("/users/invitations/accept-existing", {
+      method: "POST",
+      body: JSON.stringify({ token: inviteToken.value }),
+    });
+    inviteToken.value = "";
+    invitation.value = null;
+    await checkSession();
+    notify("Convite aceito. Você já está no espaço de trabalho correspondente.");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Entre com o e-mail convidado para aceitar.";
+    loginStage.value = "credentials";
+  }
+}
 async function logout() {
   await api("/auth/logout", { method: "POST", noRefresh: true }).catch(
     () => undefined,
@@ -1207,7 +1279,8 @@ function onEscape(event: KeyboardEvent) {
 }
 onMounted(() => {
   window.addEventListener("keydown", onEscape);
-  void checkSession();
+  if (inviteToken.value) void previewInvitation();
+  else void checkSession();
 });
 onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
@@ -1223,7 +1296,9 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       <p class="eyebrow">WEB INTELLIGENCE & AUTOMATION</p>
       <h1>
         {{
-          loginStage === "credentials"
+          loginStage === "invitation"
+            ? "Ative sua conta"
+            : loginStage === "credentials"
             ? "Acesse sua plataforma"
             : loginStage === "setup"
               ? "Proteja sua conta"
@@ -1241,7 +1316,26 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
       <p class="muted auth-copy" v-if="loginStage === 'credentials'">
         Entre para acompanhar fontes, execuções e resultados.
       </p>
-      <template v-if="loginStage === 'credentials'">
+      <template v-if="loginStage === 'invitation'">
+        <p class="muted" v-if="invitation">
+          Convite para participar de <strong>{{ invitation.organization }}</strong>.
+          O convite foi enviado para <strong>{{ invitation.email }}</strong>.
+        </p>
+        <p class="muted" v-else>Validando convite...</p>
+        <template v-if="invitation?.hasAccount">
+          <p class="muted">Você já possui uma conta. Entre com suas credenciais atuais para aceitar o convite.</p>
+          <button class="button primary full" @click="loginStage = 'credentials'">Entrar e aceitar convite <ArrowRight :size="16" /></button>
+          <button class="button outline full" :disabled="busy" @click="acceptExistingInvitation">Já estou conectado — aceitar</button>
+        </template>
+        <template v-else-if="invitation">
+          <label>Seu nome<input v-model="inviteForm.name" autocomplete="name" minlength="2" maxlength="120" /></label>
+          <label>Escolha uma senha<input v-model="inviteForm.password" type="password" autocomplete="new-password" minlength="16" maxlength="256" /></label>
+          <label>Confirme a senha<input v-model="inviteForm.confirmation" type="password" autocomplete="new-password" minlength="16" maxlength="256" /></label>
+          <button class="button primary full" :disabled="busy || inviteForm.name.length < 2 || inviteForm.password.length < 16 || !inviteForm.confirmation" @click="activateInvitation">Ativar conta <ArrowRight :size="16" /></button>
+          <p class="muted">Sua senha será conhecida apenas por você. Nunca responda ao e-mail de convite com uma senha.</p>
+        </template>
+      </template>
+      <template v-else-if="loginStage === 'credentials'">
         <label
           >E-mail<input
             v-model="loginForm.email"
