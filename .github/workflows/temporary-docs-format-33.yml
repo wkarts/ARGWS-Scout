@@ -1,0 +1,38 @@
+name: Temporary docs formatting
+on:
+  push:
+    branches: [fix/scout-responsive-global-connect-20261010]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    if: github.repository == 'wkarts/ARGWS-Scout'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format online docs renderer
+        run: pnpm exec prettier --write apps/docs/index.html apps/docs/viewer-core.mjs apps/docs/viewer.css apps/docs/viewer.html apps/docs/viewer.js test/docs-viewer.test.mjs
+      - name: Commit normalized documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add apps/docs/index.html apps/docs/viewer-core.mjs apps/docs/viewer.css apps/docs/viewer.html apps/docs/viewer.js test/docs-viewer.test.mjs
+          if git diff --cached --quiet; then
+            echo 'Documentation already formatted.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style(docs): format online documentation components'
+          git push origin HEAD:refs/heads/fix/scout-responsive-global-connect-20261010
