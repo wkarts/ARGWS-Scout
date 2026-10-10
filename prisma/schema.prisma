@@ -61,6 +61,7 @@ model Tenant {
   connectClaims ConnectInstanceClaim[]
   connectDefaultInstanceName String? @db.VarChar(120)
   whatsAppPublications WhatsAppPublication[]
+  channelActions ChannelAction[]
   smtpConfig TenantSmtpConfig?
   invitations UserInvitation[]
   contentBatches ContentBatch[]
@@ -448,6 +449,24 @@ model ConnectInstanceClaim {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+model ChannelAction {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  remoteInstance String   @db.VarChar(120)
+  kind           String   @db.VarChar(32)
+  requestId      String   @db.VarChar(80)
+  payloadHash    String   @db.Char(64)
+  status         String   @default("PENDING") @db.VarChar(20)
+  errorCode      String?  @db.VarChar(80)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sentAt         DateTime?
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId, createdAt])
 }
 
 model WhatsAppPublication {
