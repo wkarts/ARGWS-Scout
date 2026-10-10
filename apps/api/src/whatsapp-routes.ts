@@ -289,46 +289,33 @@ export async function registerWhatsAppRoutes(
           "CONNECT_API_NOT_CONFIGURED",
           "Configure primeiro a Connect API.",
         );
-      const existing = await prisma.connectApiInstance.findUnique({
-        where: {
-          tenantId_name: { tenantId: tenant, name: body.data.name },
+      const existing = await prisma.connectApiInstance.findFirst({
+        where: { tenantId: tenant, present: true,
+          OR: [{ displayName: body.data.name }, { name: body.data.name }],
         },
       });
-      if (existing?.present)
-        return fail(
-          reply,
-          409,
-          "INSTANCE_ALREADY_REGISTERED",
-          "Este nome já está vinculado à organização. Sincronize ou use outro nome.",
-        );
+      if (existing)
+        return fail(reply, 409, "INSTANCE_ALREADY_REGISTERED", "Já existe uma instância com esse nome neste espaço.");
       const token = randomToken(36);
-      const reservation = existing
-        ? await prisma.connectApiInstance.update({
-            where: { id: existing.id },
-            data: {
-              integration: "WHATSAPP-BAILEYS",
-              tokenEncrypted: encryptSecret(token),
-              connectionState: "connecting",
-              present: false,
-            },
-          })
-        : await prisma.connectApiInstance.create({
-            data: {
-              tenantId: tenant,
-              name: body.data.name,
-              integration: "WHATSAPP-BAILEYS",
-              tokenEncrypted: encryptSecret(token),
-              connectionState: "connecting",
-              present: false,
-            },
-          });
+      const remoteName = remoteInstanceName(tenant, body.data.name);
+      // Reserve global name atomically before creating the remote instance.
+      const reservation = await prisma.$transaction(async (tx) => {
+        await tx.connectInstanceClaim.create({ data: { name: remoteName, tenantId: tenant } });
+        return tx.connectApiInstance.create({
+          data: {
+            tenantId: tenant, name: remoteName, displayName: body.data.name,
+            integration: "WHATSAPP-BAILEYS", tokenEncrypted: encryptSecret(token),
+            connectionState: "connecting", present: false,
+          },
+        });
+      });
       try {
         await connectApiRequest({
           baseUrl: auth.baseUrl,
           apiKey: auth.apiKey,
           path: "instance/create",
           method: "POST",
-          body: createWhatsAppInstancePayload(body.data.name, token),
+          body: createWhatsAppInstancePayload(remoteName, token),
         });
       } catch (error) {
         const mayHaveCreated = !(
@@ -337,9 +324,10 @@ export async function registerWhatsAppRoutes(
           error.statusCode < 500
         );
         if (!mayHaveCreated)
-          await prisma.connectApiInstance.delete({
-            where: { id: reservation.id },
-          });
+          await prisma.$transaction([
+            prisma.connectApiInstance.delete({ where: { id: reservation.id } }),
+            prisma.connectInstanceClaim.delete({ where: { name: remoteName } }),
+          ]);
         else
           await prisma.connectApiInstance.update({
             where: { id: reservation.id },
@@ -367,7 +355,7 @@ export async function registerWhatsAppRoutes(
         resourceId: instance.id,
         metadata: { name: instance.name },
       });
-      return reply.code(201).send({ instance: publicInstance(instance) });
+      return reply.code(201).send({ instance: publicInstance(instance, true) });
     },
   );
 
@@ -393,6 +381,12 @@ export async function registerWhatsAppRoutes(
           "CONNECT_API_NOT_CONFIGURED",
           "Configure primeiro a Connect API.",
         );
+      // A global administrative token is never valid as a per-instance import token.
+      if (body.data.token === auth.apiKey)
+        return fail(reply, 403, "INSTANCE_TOKEN_REQUIRED", "Use somente o token particular da instância.");
+      const priorClaim = await prisma.connectInstanceClaim.findUnique({ where: { name: body.data.name } });
+      if (priorClaim && priorClaim.tenantId !== tenant)
+        return fail(reply, 409, "INSTANCE_NOT_AVAILABLE", "Esta instância não pode ser vinculada neste espaço.");
       try {
         const payload = await connectApiRequest<unknown>({
           baseUrl: auth.baseUrl,
@@ -416,28 +410,25 @@ export async function registerWhatsAppRoutes(
             "UNSUPPORTED_INTEGRATION",
             "Esta integração não é um canal WhatsApp.",
           );
-        const instance = await prisma.connectApiInstance.upsert({
-          where: {
-            tenantId_name: { tenantId: tenant, name: remote.name },
-          },
-          create: {
-            tenantId: tenant,
-            name: remote.name,
-            integration: remote.integration,
-            tokenEncrypted: encryptSecret(body.data.token),
-            connectionState: remote.connectionState,
-            number: remote.number,
-            profileName: remote.profileName,
-            present: true,
-          },
-          update: {
-            integration: remote.integration,
-            tokenEncrypted: encryptSecret(body.data.token),
-            connectionState: remote.connectionState,
-            number: remote.number,
-            profileName: remote.profileName,
-            present: true,
-          },
+        const instance = await prisma.$transaction(async (tx) => {
+          const claim = await tx.connectInstanceClaim.findUnique({ where: { name: remote.name } });
+          if (claim && claim.tenantId !== tenant) throw new Error("INSTANCE_NOT_AVAILABLE");
+          if (!claim)
+            await tx.connectInstanceClaim.create({ data: { name: remote.name, tenantId: tenant } });
+          return tx.connectApiInstance.upsert({
+            where: { tenantId_name: { tenantId: tenant, name: remote.name } },
+            create: {
+              tenantId: tenant, name: remote.name, displayName: remote.name,
+              integration: remote.integration, tokenEncrypted: encryptSecret(body.data.token),
+              connectionState: remote.connectionState, number: remote.number,
+              profileName: remote.profileName, present: true,
+            },
+            update: {
+              integration: remote.integration, tokenEncrypted: encryptSecret(body.data.token),
+              connectionState: remote.connectionState, number: remote.number,
+              profileName: remote.profileName, present: true,
+            },
+          });
         });
         await audit({
           tenantId: tenant,
@@ -447,8 +438,11 @@ export async function registerWhatsAppRoutes(
           resourceId: instance.id,
           metadata: { name: instance.name },
         });
-        return reply.code(201).send({ instance: publicInstance(instance) });
+        return reply.code(201).send({ instance: publicInstance(instance, true) });
       } catch (error) {
+        if ((error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ||
+            (error instanceof Error && error.message === "INSTANCE_NOT_AVAILABLE"))
+          return fail(reply, 409, "INSTANCE_NOT_AVAILABLE", "Esta instância não pode ser vinculada neste espaço.");
         const info = connectError(error);
         return fail(reply, info.status, info.code, info.message);
       }
@@ -482,19 +476,9 @@ export async function registerWhatsAppRoutes(
             "A instância não está vinculada e pronta para uso.",
           );
       }
-      const updated = await prisma.connectApiConfig
-        .update({
-          where: { tenantId: tenant },
-          data: { defaultInstanceName: body.data.instanceName },
-        })
-        .catch(() => null);
-      if (!updated)
-        return fail(
-          reply,
-          409,
-          "CONNECT_API_NOT_CONFIGURED",
-          "Configure primeiro a Connect API.",
-        );
+      const updated = await prisma.tenant.update({
+        where: { id: tenant }, data: { connectDefaultInstanceName: body.data.instanceName },
+      });
       await audit({
         tenantId: tenant,
         actorUserId: request.principal?.userId,
@@ -502,7 +486,7 @@ export async function registerWhatsAppRoutes(
         resourceType: "whatsapp-instance",
         resourceId: body.data.instanceName ?? undefined,
       });
-      return { defaultInstanceName: updated.defaultInstanceName };
+      return { defaultInstanceName: updated.connectDefaultInstanceName };
     },
   );
 
@@ -578,7 +562,7 @@ export async function registerWhatsAppRoutes(
             where: { id: instance.id },
             data: { connectionState: state },
           });
-          return { instance: publicInstance(updated), state };
+          return { instance: publicInstance(updated, true), state };
         }
         if (action === "logout")
           await prisma.connectApiInstance.update({
@@ -641,9 +625,9 @@ export async function registerWhatsAppRoutes(
               connectionState: "deleted",
             },
           }),
-          prisma.connectApiConfig.updateMany({
-            where: { tenantId: tenant, defaultInstanceName: instance.name },
-            data: { defaultInstanceName: null },
+          prisma.tenant.updateMany({
+            where: { id: tenant, connectDefaultInstanceName: instance.name },
+            data: { connectDefaultInstanceName: null },
           }),
         ]);
         await audit({
