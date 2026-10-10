@@ -145,6 +145,8 @@ model UserInvitation {
   name            String     @db.VarChar(120)
   email           String     @db.VarChar(254)
   role            TenantRole @default(VIEWER)
+  independentWorkspace Boolean @default(true)
+  workspaceName   String?    @db.VarChar(120)
   tokenHash       String     @unique @db.Char(64)
   expiresAt       DateTime
   acceptedAt      DateTime?

@@ -9,6 +9,8 @@ CREATE TABLE "UserInvitation" (
   "name" VARCHAR(120) NOT NULL,
   "email" VARCHAR(254) NOT NULL,
   "role" "TenantRole" NOT NULL DEFAULT 'VIEWER',
+  "independentWorkspace" BOOLEAN NOT NULL DEFAULT true,
+  "workspaceName" VARCHAR(120),
   "tokenHash" CHAR(64) NOT NULL,
   "expiresAt" TIMESTAMP(3) NOT NULL,
   "acceptedAt" TIMESTAMP(3),
