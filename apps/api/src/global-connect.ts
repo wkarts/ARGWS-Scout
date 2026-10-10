@@ -5,7 +5,7 @@ export type GlobalConnectSettings = { baseUrl: string; apiKey: string };
 
 /** Single server-owned administrative credential. Never return apiKey to clients. */
 export function globalConnectSettings(
-  env: Pick<NodeJS.ProcessEnv, "SCOUT_CONNECT_API_URL" | "SCOUT_CONNECT_API_TOKEN"> = process.env,
+  env: NodeJS.ProcessEnv = process.env,
 ): GlobalConnectSettings | null {
   const rawUrl = env.SCOUT_CONNECT_API_URL?.trim() ?? "";
   const apiKey = env.SCOUT_CONNECT_API_TOKEN?.trim() ?? "";
