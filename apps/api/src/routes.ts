@@ -2667,6 +2667,8 @@ export async function registerRoutes(
         generatedAt: new Date().toISOString(),
         windowDays: 7,
         version: buildVersion,
+        buildSha: process.env.SCOUT_BUILD_SHA ?? "local",
+        channel: process.env.SCOUT_BUILD_CHANNEL ?? "local",
         summary: {
           requestFailures: counters,
           failedJobs: failedJobsTotal,
@@ -2788,6 +2790,8 @@ export async function registerRoutes(
         activity: { queuedJobs, activeJobs, failedJobsLast24Hours: failedJobs },
         runtime: {
           version: buildVersion,
+          buildSha: process.env.SCOUT_BUILD_SHA ?? "local",
+          channel: process.env.SCOUT_BUILD_CHANNEL ?? "local",
           uptimeSeconds: Math.floor(process.uptime()),
           memoryBytes: process.memoryUsage().rss,
           node: process.version,

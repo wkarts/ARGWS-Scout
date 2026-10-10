@@ -15,6 +15,8 @@ type HealthReport = {
   };
   runtime: {
     version: string;
+    buildSha?: string;
+    channel?: string;
     uptimeSeconds: number;
     memoryBytes: number;
     node: string;
@@ -23,9 +25,11 @@ type HealthReport = {
 const emit = defineEmits<{ error: [message: string] }>();
 const report = ref<HealthReport | null>(null);
 const managerVersion = managerPackage.version;
+const managerBuildSha = import.meta.env.VITE_BUILD_SHA ?? "local";
+const managerChannel = import.meta.env.VITE_BUILD_CHANNEL ?? "local";
 const versionMismatch = computed(
   () =>
-    report.value !== null && report.value.runtime.version !== managerVersion,
+    report.value !== null && (report.value.runtime.version !== managerVersion || (managerBuildSha !== "local" && report.value.runtime.buildSha !== undefined && report.value.runtime.buildSha !== managerBuildSha)),
 );
 const busy = ref(false);
 const exporting = ref(false);
@@ -137,7 +141,7 @@ onMounted(() => {
     <div v-if="versionMismatch" class="version-mismatch" role="alert">
       <strong>Versões diferentes entre interface e API.</strong>
       <p>
-        Interface {{ managerVersion }} · API {{ report?.runtime.version }}.
+        Interface {{ managerVersion }} ({{ managerChannel }} · {{ managerBuildSha.slice(0, 8) }}) · API {{ report?.runtime.version }} ({{ report?.runtime.channel ?? "local" }} · {{ report?.runtime.buildSha?.slice(0, 8) ?? "local" }}).
         Atualize as imagens da mesma versão no GHCR e recrie os serviços
         correspondentes para evitar incompatibilidade.
       </p>

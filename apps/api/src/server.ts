@@ -87,6 +87,8 @@ app.get("/health/live", async () => ({
   status: "ok",
   service: "argws-scout-api",
   version: buildVersion,
+  buildSha: process.env.SCOUT_BUILD_SHA ?? "local",
+  channel: process.env.SCOUT_BUILD_CHANNEL ?? "local",
 }));
 app.get("/health/ready", async (_request, reply) => {
   const checks = await Promise.allSettled([

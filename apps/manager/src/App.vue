@@ -125,6 +125,8 @@ type WhatsAppInstanceOption = {
 };
 
 const buildVersion = managerPackage.version;
+const buildSha = import.meta.env.VITE_BUILD_SHA ?? "local";
+const buildChannel = import.meta.env.VITE_BUILD_CHANNEL ?? "local";
 const loading = ref(false);
 const busy = ref(false);
 const error = ref("");
@@ -3754,7 +3756,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
     </div>
     <div v-if="toast" class="toast"><Check :size="16" /> {{ toast }}</div>
     <footer class="app-footer">
-      <span>ARGWS Scout <i>·</i> {{ buildVersion }}</span
+      <span>ARGWS Scout <i>·</i> {{ buildVersion }} · {{ buildChannel }} · {{ buildSha.slice(0, 8) }}</span
       ><span
         >Web Intelligence & Automation <i>·</i>
         <a href="/docs/" target="_blank"
