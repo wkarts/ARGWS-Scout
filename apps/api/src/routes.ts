@@ -33,6 +33,7 @@ import { assertSafePublicUrl } from "@argws/scout-shared/url-policy";
 import {
   checkObjectStorage,
   getArtifactStream,
+  storeArtifact,
 } from "@argws/scout-shared/storage";
 import { renderInputTemplate } from "@argws/scout-core";
 import { audit } from "./audit.ts";
@@ -1000,7 +1001,11 @@ export async function registerRoutes(
         where: { id: request.principal.userId },
         data: {
           name: body.name,
-          profile: body.profile as Prisma.InputJsonValue,
+          profile: {
+            ...((await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } }))?.profile as Record<string, unknown> ?? {}),
+            phone: body.profile.phone ?? "",
+            locale: "pt-BR",
+          } as Prisma.InputJsonValue,
         },
         select: { id: true, email: true, name: true, profile: true },
       });
@@ -1014,6 +1019,91 @@ export async function registerRoutes(
       return { user };
     },
   );
+
+  // Alteração de senha exige a senha atual e revoga sessões antigas.
+  app.post(
+    "/profile/password",
+    { preHandler: authenticated(), config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      if (request.principal?.kind !== "user")
+        return fail(reply, 403, "USER_REQUIRED", "Apenas o próprio usuário pode mudar sua senha.");
+      const body = parsed(
+        z.object({ currentPassword: z.string().min(1).max(256), newPassword: z.string().min(16).max(256) }),
+        request.body, reply,
+      );
+      if (!body) return;
+      const user = await prisma.user.findUnique({ where: { id: request.principal.userId! } });
+      if (!user || !(await verifyPassword(user.passwordHash, body.currentPassword)))
+        return fail(reply, 401, "CURRENT_PASSWORD_INVALID", "A senha atual não confere.");
+      if (await verifyPassword(user.passwordHash, body.newPassword))
+        return fail(reply, 400, "PASSWORD_REUSED", "Escolha uma senha diferente da atual.");
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { passwordHash: await argon2.hash(body.newPassword, { type: argon2.argon2id }) } }),
+        prisma.authSession.updateMany({ where: { userId: user.id, id: { not: request.principal.sessionId! }, revokedAt: null }, data: { revokedAt: new Date() } }),
+        prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
+      ]);
+      await audit({ tenantId: tenantId(request), actorUserId: user.id, action: "profile.password.changed", resourceType: "user", resourceId: user.id });
+      return { changed: true };
+    },
+  );
+
+  app.post(
+    "/profile/avatar",
+    { preHandler: authenticated(), config: { rateLimit: { max: 8, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      if (request.principal?.kind !== "user")
+        return fail(reply, 403, "USER_REQUIRED", "Imagem disponível somente ao próprio usuário.");
+      const body = parsed(
+        z.object({ dataBase64: z.string().min(16).max(220000), contentType: z.enum(["image/png", "image/jpeg", "image/webp"]) }),
+        request.body, reply,
+      );
+      if (!body) return;
+      const bytes = Buffer.from(body.dataBase64, "base64");
+      if (!bytes.length || bytes.byteLength > 160 * 1024 || bytes.toString("base64") !== body.dataBase64)
+        return fail(reply, 400, "AVATAR_SIZE", "Use uma imagem de até 160 KB.");
+      const png = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+      const jpeg = bytes.length >= 3 && bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex"));
+      const webp = bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+      const actual = png ? "image/png" : jpeg ? "image/jpeg" : webp ? "image/webp" : null;
+      if (!actual || actual !== body.contentType)
+        return fail(reply, 400, "AVATAR_FORMAT", "Escolha uma imagem PNG, JPG ou WebP válida.");
+      const user = await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } });
+      const profile = user?.profile && typeof user.profile === "object" && !Array.isArray(user.profile) ? user.profile as Record<string, unknown> : {};
+      const artifact = await storeArtifact({
+        tenantId: tenantId(request),
+        jobId: "profile-" + request.principal.userId!,
+        fileName: "avatar." + (png ? "png" : jpeg ? "jpg" : "webp"),
+        contentType: actual,
+        bytes,
+      });
+      await prisma.user.update({
+        where: { id: request.principal.userId! },
+        data: { profile: { ...profile, avatarKey: artifact.objectKey, avatarType: actual } as Prisma.InputJsonValue },
+      });
+      await audit({ tenantId: tenantId(request), actorUserId: request.principal.userId, action: "profile.avatar.updated", resourceType: "user", resourceId: request.principal.userId });
+      return { updated: true };
+    },
+  );
+
+  app.get("/profile/avatar", { preHandler: authenticated() }, async (request, reply) => {
+    if (request.principal?.kind !== "user") return fail(reply, 403, "USER_REQUIRED", "Imagem indisponível.");
+    const user = await prisma.user.findUnique({ where: { id: request.principal.userId! }, select: { profile: true } });
+    const profile = user?.profile && typeof user.profile === "object" && !Array.isArray(user.profile) ? user.profile as Record<string, unknown> : {};
+    const key = profile.avatarKey;
+    const contentType = profile.avatarType;
+    if (typeof key !== "string" || typeof contentType !== "string" || !["image/png", "image/jpeg", "image/webp"].includes(contentType))
+      return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não configurada.");
+    if (!key.startsWith(tenantId(request) + "/profile-" + request.principal.userId! + "/"))
+      return fail(reply, 403, "AVATAR_FORBIDDEN", "Foto indisponível.");
+    try {
+      const object = await getArtifactStream(key);
+      const bytes = await object.Body?.transformToByteArray();
+      if (!bytes) return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
+      return reply.header("Cache-Control", "private, no-store").type(contentType).send(Buffer.from(bytes));
+    } catch {
+      return fail(reply, 404, "AVATAR_NOT_FOUND", "Foto não localizada.");
+    }
+  });
 
   app.post(
     "/profile/mfa/setup",
@@ -1139,6 +1229,8 @@ export async function registerRoutes(
     { preHandler: authenticated() },
     async (request, reply) => {
       if (!(await mayAdmin(request, reply))) return;
+      if (process.env.SCOUT_LEGACY_USER_CREATE !== "true")
+        return fail(reply, 410, "USE_INVITATIONS", "Convide a pessoa por e-mail para que ela ative a própria conta.");
       const body = parsed(
         z.object({
           name: z.string().trim().min(2).max(120),

@@ -228,6 +228,10 @@ const tokenForm = ref({
   scopes: ["jobs:create", "jobs:read", "results:read"],
 });
 const profileForm = ref({ name: "", phone: "", locale: "pt-BR" });
+const passwordForm = ref({ currentPassword: "", newPassword: "", confirmation: "" });
+const avatarRevision = ref(Date.now());
+const showChangePassword = ref(false);
+const profileHasAvatar = computed(() => Boolean(me.value?.user.profile.avatarKey));
 const recoveryEmailConfigured = ref(false);
 const smtpConfigured = ref(false);
 const smtpSettingsLoaded = ref(false);
@@ -558,6 +562,7 @@ async function checkSession() {
     me.value = response;
     profileForm.value.name = response.user.name;
     profileForm.value.phone = String(response.user.profile.phone ?? "");
+    avatarRevision.value = Date.now();
     await loadData();
     if (["OWNER", "ADMIN", "OPERATOR"].includes(response.role))
       await loadSmtpSettings();
@@ -961,6 +966,71 @@ async function saveProfile() {
   }
 }
 
+async function changePassword() {
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmation) {
+    error.value = "As senhas não coincidem.";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    await api("/profile/password", {
+      method: "POST",
+      body: JSON.stringify(passwordForm.value),
+    });
+    passwordForm.value = { currentPassword: "", newPassword: "", confirmation: "" };
+    showChangePassword.value = false;
+    notify("Sua senha foi alterada. Outras sessões foram encerradas.");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Não foi possível alterar a senha.";
+  } finally {
+    busy.value = false;
+  }
+}
+async function uploadAvatar(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  error.value = "";
+  busy.value = true;
+  try {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024)
+      throw new Error("Escolha PNG, JPG ou WebP de até 5 MB para redimensionar.");
+    const url = URL.createObjectURL(file);
+    let dataUrl = "";
+    try {
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+        image.src = url;
+      });
+      const scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("O navegador não suporta edição de imagens.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      dataUrl = canvas.toDataURL("image/webp", 0.75);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    const parts = dataUrl.split(",");
+    const prefix = parts[0] ?? "";
+    const encoded = parts[1] ?? "";
+    const contentType = prefix.startsWith("data:image/webp;") ? "image/webp" : "image/png";
+    if (!encoded || encoded.length > 220000) throw new Error("A foto ainda está grande. Escolha outra imagem.");
+    await api("/profile/avatar", { method: "POST", body: JSON.stringify({ dataBase64: encoded, contentType }) });
+    await checkSession();
+    notify("Foto atualizada.");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Falha ao enviar foto.";
+  } finally {
+    input.value = "";
+    busy.value = false;
+  }
+}
 function openInstance(item: Instance) {
   selectedInstance.value = item;
   activeSection.value = "instances";
@@ -982,6 +1052,8 @@ function closeDialogs() {
   showScheduleForm.value = false;
   showWebhookForm.value = false;
   showProfile.value = false;
+  showChangePassword.value = false;
+  passwordForm.value = { currentPassword: "", newPassword: "", confirmation: "" };
   showMfaDialog.value = false;
   showRecoveryCodesDialog.value = false;
   showMfaDisableDialog.value = false;
@@ -1432,7 +1504,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           <span>Conectado à API Scout</span>
         </div>
         <button class="side-user" @click="showProfile = true">
-          <span class="avatar">{{ initials(me.user.name) }}</span
+          <span class="avatar"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" class="avatar-photo" /><template v-else>{{ initials(me.user.name) }}</template></span
           ><span class="user-meta"
             ><strong>{{ me.user.name }}</strong
             ><small>{{ roleLabel }}</small></span
@@ -1465,7 +1537,7 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
             <Bell :size="18" /><i></i></button
           ><span class="top-divider"></span
           ><button class="top-profile" @click="showProfile = true">
-            <span class="avatar small-avatar">{{ initials(me.user.name) }}</span
+            <span class="avatar small-avatar"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" class="avatar-photo" /><template v-else>{{ initials(me.user.name) }}</template></span
             ><span>{{ me.user.name }}</span
             ><ChevronDown :size="14" />
           </button>
@@ -2865,12 +2937,20 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
           ><p class="eyebrow">CONTA</p>
           <h2>Seu perfil</h2>
           <p class="muted">Atualize suas informações pessoais.</p>
+          <label class="avatar-input">Sua foto <span class="avatar-preview"><img v-if="profileHasAvatar" :src="'/api/v1/profile/avatar?rev=' + avatarRevision" alt="Sua foto" /><span v-else>{{ initials(me.user.name) }}</span></span><input type="file" accept="image/png,image/jpeg,image/webp" :disabled="busy" @change="uploadAvatar" /><small>A foto é redimensionada para 256 px e armazenada privadamente.</small></label>
           <label>Nome<input v-model="profileForm.name" /></label
           ><label
             >Telefone<input
               v-model="profileForm.phone"
               placeholder="+55 75 9xxxx-xxxx" /></label
           >
+          <button class="button outline" @click="showChangePassword = !showChangePassword">{{ showChangePassword ? "Ocultar alteração de senha" : "Alterar senha" }}</button>
+          <div v-if="showChangePassword" class="password-change-form">
+            <label>Senha atual<input v-model="passwordForm.currentPassword" type="password" autocomplete="current-password" /></label>
+            <label>Nova senha<input v-model="passwordForm.newPassword" type="password" autocomplete="new-password" minlength="16" /></label>
+            <label>Confirmar nova senha<input v-model="passwordForm.confirmation" type="password" autocomplete="new-password" minlength="16" /></label>
+            <button class="button primary" :disabled="busy || passwordForm.newPassword.length < 16" @click="changePassword">Confirmar troca de senha</button>
+          </div>
           <div class="modal-actions">
             <button class="button subtle" @click="closeDialogs">Cancelar</button
             ><button
