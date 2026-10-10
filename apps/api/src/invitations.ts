@@ -528,8 +528,8 @@ export async function registerInvitationRoutes(
           });
           if (claim.count !== 1) throw new Error("expired");
           if (invitation.independentWorkspace) {
-            await provisionIndependentSpace(tx, user.id, invitation.workspaceName ?? "Meu espaço");
-          } else {
+            return await provisionIndependentSpace(tx, user.id, invitation.workspaceName ?? "Meu espaço");
+          }
           await tx.membership.create({
             data: {
               tenantId: invitation.tenantId,
@@ -537,9 +537,7 @@ export async function registerInvitationRoutes(
               role: invitation.role,
             },
           });
-          }
-          return invitation.independentWorkspace ?
-            (await tx.membership.findFirstOrThrow({ where: { userId: user.id, role: TenantRole.OWNER }, orderBy: { createdAt: "desc" }, select: { tenantId: true } })).tenantId : invitation.tenantId;
+          return invitation.tenantId;
         });
         await createSession(app, reply, user.id, targetSpaceId);
         await audit({
