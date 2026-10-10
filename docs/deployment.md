@@ -4,20 +4,75 @@ Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}
 
 ## Perfil por plataforma
 
-| Plataforma     | Persistência                                               | Entrada de variáveis                                                                          | Porta padrão do Manager           |
-| -------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- |
-| Docker Compose | Diretórios `./volumes` ao lado do Compose                  | Copie `.env.example` para `.env`                                                              | develop `8080`, production `8180` |
-| Dockge         | Diretórios `./volumes` dentro da pasta gerenciada do stack | Mantenha `.env` ao lado do Compose                                                            | develop `8081`, production `8181` |
-| CloudPanel     | Diretórios `./volumes` da stack                            | `.env` ao lado do Compose; proxy CloudPanel para `127.0.0.1`                                  | develop `8082`, production `8182` |
-| Portainer      | Volumes Docker com nome do projeto                         | Docker Standalone: carregue `.env.example` como variáveis do stack; o Compose usa `stack.env` | develop `8083`, production `8183` |
+| Plataforma | Persistência | Ambiente | Porta padrão (develop / production) |
+| --- | --- | --- | --- |
+| Docker Compose | `./volumes` ao lado do Compose | `.env` | `48080 / 48180` |
+| Dockge | `./volumes` dentro da pasta da stack | `.env` | `48081 / 48181` |
+| CloudPanel | `./volumes` na pasta da stack | `.env` e proxy reverso | `48082 / 48182` |
+| Portainer Standalone | `./volumes` relativo ao diretório efetivo do Compose no host | `stack.env` | `48083 / 48183` |
 
-Cada arquivo tem `COMPOSE_PROJECT_NAME` próprio por plataforma e ambiente. Preserve esse valor ao atualizar: ele identifica rede e volumes e evita colisão entre staging e produção. Docker, Dockge e CloudPanel mantêm os dados nos diretórios relativos da stack; Portainer usa volumes nomeados. As portas de loopback também são isoladas para permitir que vários stacks compartilhem o mesmo host.
+Todos os dados persistentes ficam em bind mounts locais: `./volumes/postgres`, `./volumes/redis`, `./volumes/rabbitmq`, `./volumes/garage/config`, `./volumes/garage/meta` e `./volumes/garage/data`. Não existem volumes nomeados nos novos manifests. Diretórios não existentes são criados pelo Docker ao iniciar os serviços.
 
-No Dockge, use a ação de atualização da stack para baixar imagens e recriar os serviços depois de alterar `SCOUT_TAG`; o diretório `./volumes` permanece associado à pasta da stack. Na CloudPanel, atualize a mesma stack com `docker compose pull` e `docker compose up -d` após trocar `SCOUT_TAG`.
+Mantenha `COMPOSE_PROJECT_NAME` inalterado. Todas as portas **externas do Manager** têm cinco dígitos e começam com 4 (40000–49999). Isso não altera as portas internas dos serviços, como 8080 na API. Para atualizar uma instalação existente, ajuste o valor de `SCOUT_MANAGER_PORT` no ambiente e também a configuração do proxy reverso.
 
-Em instalações Portainer existentes da 0.3.0, pare a stack e faça backup antes da atualização: os novos volumes nomeados não reaproveitam automaticamente os bind mounts antigos em `./volumes`. Copie ou restaure PostgreSQL, Redis, RabbitMQ e Garage nos volumes `${COMPOSE_PROJECT_NAME}-postgres`, `-redis`, `-rabbitmq`, `-garage-meta` e `-garage-data` antes do primeiro deploy; mantenha `COMPOSE_PROJECT_NAME` estável.
+**Portainer:** bind mounts relativos só funcionam de modo previsível quando o diretório efetivo da stack está disponível no host de execução. Instalações feitas diretamente pelo editor web podem utilizar um diretório gerenciado pelo Portainer, diferente daquele pretendido. Verifique o caminho de origem real com `docker inspect` antes de gravar dados. Para controle pleno, use uma pasta estável no host e faça deploy com Docker Compose/Dockge. Docker Swarm não é suportado pelos manifests Standalone.
 
-O bundle de Portainer é para endpoint **Docker Standalone**. Docker Swarm tem outra semântica de stack, variáveis e volumes e não é suportado por estes manifests. No Portainer, dê ao stack o mesmo nome definido em `COMPOSE_PROJECT_NAME` e importe o `.env.example` na seção de variáveis do stack. O manifest passa essas variáveis aos containers por `stack.env`, que o Portainer fornece no modo Docker Standalone. Para atualizar, edite `SCOUT_TAG`, faça pull das imagens e redeploy do stack.
+No Dockge, alterar somente `SCOUT_TAG` não atualiza o Compose salvo pela interface. Substitua também a definição YAML preservando projeto, ambiente e diretórios persistentes.
+
+### Migração de volumes nomeados existentes
+
+**Não aponte uma instalação já usada para bind mounts vazios.** Faça backup verificado, pare os serviços e copie o conteúdo para o novo local antes de aplicar o Compose atualizado. Uma migração sem cópia pode fazer o banco parecer vazio, embora os dados ainda estejam no volume antigo.
+
+As versões anteriores de Docker/Dockge/CloudPanel já armazenavam PostgreSQL, Redis, RabbitMQ e Garage meta/data em `./volumes`, mas a configuração do Garage estava no volume `<COMPOSE_PROJECT_NAME>-garage-config`. Migre o volume para `./volumes/garage/config`. No Portainer anterior, todos os seis volumes precisam ser migrados.
+
+Exemplo para a VPS, com stack parada e backup concluído:
+
+```bash
+# Execute na pasta da stack antiga antes de substituir o Compose.
+export PROJECT=argws-scout-dockge-production # ajuste para seu COMPOSE_PROJECT_NAME
+docker compose stop
+mkdir -p ./volumes/garage/config
+source_dir="$(docker volume inspect -f '{{ .Mountpoint }}' "$PROJECT-garage-config")" || exit 1
+test -d "$source_dir" || exit 1
+test -z "$(ls -A ./volumes/garage/config)" || { echo "Destino não vazio"; exit 1; }
+cp -a "$source_dir/." ./volumes/garage/config/
+test -s ./volumes/garage/config/garage.toml
+```
+
+Para Portainer, depois de parar a stack antiga e preparar a pasta definitiva no **host**, copie também os volumes de dados:
+
+```bash
+export PROJECT=argws-scout-portainer-production # ajuste para sua instalação
+while read -r suffix relative; do
+  src="$(docker volume inspect -f '{{ .Mountpoint }}' "$PROJECT-$suffix")" || exit 1
+  dest="./volumes/$relative"
+  mkdir -p "$dest"
+  test -z "$(ls -A "$dest")" || { echo "Destino não vazio: $dest"; exit 1; }
+  cp -a "$src/." "$dest/" || exit 1
+done <<'EOF'
+postgres postgres
+redis redis
+rabbitmq rabbitmq
+garage-config garage/config
+garage-meta garage/meta
+garage-data garage/data
+EOF
+```
+
+A cópia física do PostgreSQL exige que o banco esteja parado. Não remova os volumes antigos antes da conferência da restauração, do acesso aos arquivos e de um novo backup consistente. Preserve permissões, UID/GID, chaves RPC e credenciais.
+
+### Status no Dockge
+
+A marcação `encerrado` é atribuída pelo Dockge ao estado detectado da stack; não há uma propriedade no YAML que permita forçar a cor azul. Os serviços `garage-config-init`, `garage-init`, `migrate` e `bootstrap` são tarefas temporárias que devem terminar com código 0. Mantê-los artificialmente em execução apenas para mudar a cor mascara problemas reais.
+
+```bash
+docker compose config --quiet
+docker compose up -d
+docker compose ps -a
+docker compose logs --tail=100 api manager garage-config-init garage-init migrate bootstrap
+```
+
+Verifique por que a stack está indicada como encerrada, especialmente quando `api`, `manager` e as dependências persistentes não permanecem em execução. Tarefas `exited (0)` são esperadas; serviços persistentes parados ou `unhealthy` não são.
 
 ## Instalação e atualização
 
@@ -59,6 +114,23 @@ docker compose exec api pnpm auth:recover-owner
 O operador deve confirmar digitando `REDEFINIR` e fornecer uma nova senha duas vezes; a entrada fica oculta, nenhuma senha vai para argumentos de processo, variáveis de contêiner ou logs. O procedimento revoga sessões existentes, invalida tokens de redefinição e preserva MFA e permissões. Caso o OWNER tenha perdido o autenticador, a recuperação de senha não remove a exigência do MFA.
 
 Não execute `docker compose down -v`, não troque `COMPOSE_PROJECT_NAME`, não altere os volumes e não use `pnpm db:seed` para redefinir uma senha já existente. Se o e-mail de OWNER armazenado no banco for diferente do `.env`, o operador poderá selecionar explicitamente outro OWNER configurando somente `SCOUT_AUTH_RECOVERY_EMAIL` para **essa execução**, sem nenhuma senha nessa variável.
+
+## SMTP global e concorrência do navegador
+
+O SMTP global atende **exclusivamente à recuperação de senha pela API**. Os outros serviços continuam sem essas credenciais. O deployer Windows tem aba exclusiva e envia a senha ao CLI pela entrada padrão, sem colocá-la nos argumentos do processo. Se SMTP for configurado, host e remetente são obrigatórios; usuário e senha devem ser fornecidos juntos quando a autenticação for necessária.
+
+```dotenv
+SCOUT_RECOVERY_SMTP_HOST=
+SCOUT_RECOVERY_SMTP_PORT=587
+SCOUT_RECOVERY_SMTP_SECURE=false
+SCOUT_RECOVERY_SMTP_USERNAME=
+SCOUT_RECOVERY_SMTP_PASSWORD=
+SCOUT_RECOVERY_SMTP_FROM_EMAIL=
+SCOUT_RECOVERY_SMTP_FROM_NAME=ARGWS Scout
+SCOUT_BROWSER_CONCURRENCY=1
+```
+
+A porta 587 normalmente usa STARTTLS (`SCOUT_RECOVERY_SMTP_SECURE=false`); a porta 465 costuma usar TLS direto (`true`). O deployer não sobrescreve arquivos de ambiente existentes: para atualizar uma instalação, edite o `.env`/`stack.env` após fazer backup e recrie somente `api` para aplicar o SMTP ou `browser-worker` para aplicar a concorrência.
 
 ## Chromium no browser-worker
 
@@ -115,7 +187,7 @@ O `garage-config-init` agora verifica tamanho e caracteres da chave **antes** de
 
 ## Garage: correção do bootstrap S3
 
-Nas oito distribuições, `garage-config-init` grava `garage.toml` no volume `garage-config-data`, montado em `/etc/garage-config` no Garage. Ambos os scripts `garage-config-init` e `garage-init` precisam receber o script inteiro como **um único argumento** de `/bin/sh -ec`. Use `command:` como lista com um elemento de texto multilinha (`- |`); `command: |` e `command: >-` escalares não preservam corretamente o script ao gerar o comando de execução do container.
+Nas oito distribuições, `garage-config-init` grava `garage.toml` no diretório `./volumes/garage/config`, montado em `/etc/garage-config` no Garage. Ambos os scripts `garage-config-init` e `garage-init` precisam receber o script inteiro como **um único argumento** de `/bin/sh -ec`. Use `command:` como lista com um elemento de texto multilinha (`- |`); `command: |` e `command: >-` escalares não preservam corretamente o script ao gerar o comando de execução do container.
 
 A inicialização verifica `test -s /config/garage.toml`. Se o arquivo já existir e contiver dados, é preservado. Dados e metadados S3 permanecem nos seus volumes originais.
 O inicializador `garage-init` monta o mesmo diretório persistente `garage/meta` do servidor **em somente leitura** (`:ro`). O cliente CLI precisa ler nesse diretório a chave do nó para operar, mesmo quando compartilha a rede do container `garage`.
