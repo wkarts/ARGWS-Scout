@@ -78,10 +78,19 @@ async function provisionIndependentSpace(
   label: string,
 ): Promise<string> {
   const safeName = label.trim().slice(0, 120) || "Meu espaço";
-  const prefix = safeName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 38) || "espaco";
+  const prefix =
+    safeName
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 38) || "espaco";
   const space = await tx.tenant.create({
-    data: { name: safeName, slug: prefix + "-" + randomBytes(8).toString("hex") },
+    data: {
+      name: safeName,
+      slug: prefix + "-" + randomBytes(8).toString("hex"),
+    },
   });
   await tx.membership.create({
     data: { tenantId: space.id, userId, role: TenantRole.OWNER },
@@ -214,7 +223,9 @@ export async function registerInvitationRoutes(
             invitedByUserId: request.principal!.userId!,
             name,
             email,
-            role: data.data.independentWorkspace ? TenantRole.OWNER : data.data.role as TenantRole,
+            role: data.data.independentWorkspace
+              ? TenantRole.OWNER
+              : (data.data.role as TenantRole),
             independentWorkspace: data.data.independentWorkspace,
             workspaceName: data.data.independentWorkspace
               ? (data.data.workspaceName ?? "Espaço de " + name).slice(0, 120)
@@ -350,7 +361,9 @@ export async function registerInvitationRoutes(
       return {
         name: invitation.name,
         email: invitation.email,
-        organization: invitation.independentWorkspace ? invitation.workspaceName ?? "Meu espaço" : invitation.tenant.name,
+        organization: invitation.independentWorkspace
+          ? (invitation.workspaceName ?? "Meu espaço")
+          : invitation.tenant.name,
         independentWorkspace: invitation.independentWorkspace,
         hasAccount: Boolean(existing),
         expiresAt: invitation.expiresAt,
@@ -423,15 +436,19 @@ export async function registerInvitationRoutes(
             },
           });
           if (invitation.independentWorkspace) {
-            await provisionIndependentSpace(tx, created.id, invitation.workspaceName ?? "Meu espaço");
+            await provisionIndependentSpace(
+              tx,
+              created.id,
+              invitation.workspaceName ?? "Meu espaço",
+            );
           } else {
-          await tx.membership.create({
-            data: {
-              tenantId: invitation.tenantId,
-              userId: created.id,
-              role: invitation.role,
-            },
-          });
+            await tx.membership.create({
+              data: {
+                tenantId: invitation.tenantId,
+                userId: created.id,
+                role: invitation.role,
+              },
+            });
           }
           return created;
         });
@@ -498,15 +515,31 @@ export async function registerInvitationRoutes(
           "INVITATION_FORBIDDEN",
           "Este convite pertence a outra conta.",
         );
-      const membership = invitation.independentWorkspace ? null : await prisma.membership.findUnique({
-        where: {
-          tenantId_userId: { tenantId: invitation.tenantId, userId: user.id },
-        },
-      });
-      if (invitation.independentWorkspace && process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false") {
-        const security = await prisma.user.findUnique({ where: { id: user.id }, select: { mfaEnabled: true } });
+      const membership = invitation.independentWorkspace
+        ? null
+        : await prisma.membership.findUnique({
+            where: {
+              tenantId_userId: {
+                tenantId: invitation.tenantId,
+                userId: user.id,
+              },
+            },
+          });
+      if (
+        invitation.independentWorkspace &&
+        process.env.SCOUT_MFA_REQUIRED_FOR_OWNER !== "false"
+      ) {
+        const security = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { mfaEnabled: true },
+        });
         if (!security?.mfaEnabled)
-          return error(reply, 409, "MFA_REQUIRED", "Ative a verificação em duas etapas no seu perfil antes de assumir um espaço próprio.");
+          return error(
+            reply,
+            409,
+            "MFA_REQUIRED",
+            "Ative a verificação em duas etapas no seu perfil antes de assumir um espaço próprio.",
+          );
       }
       if (membership)
         return error(
@@ -528,7 +561,11 @@ export async function registerInvitationRoutes(
           });
           if (claim.count !== 1) throw new Error("expired");
           if (invitation.independentWorkspace) {
-            return await provisionIndependentSpace(tx, user.id, invitation.workspaceName ?? "Meu espaço");
+            return await provisionIndependentSpace(
+              tx,
+              user.id,
+              invitation.workspaceName ?? "Meu espaço",
+            );
           }
           await tx.membership.create({
             data: {
