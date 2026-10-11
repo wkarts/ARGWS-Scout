@@ -313,8 +313,9 @@ def fetch_public_html(url: str, max_redirects: int = 3) -> str:
                     if not redirect:
                         raise ValueError("Redirect inválido")
                     new_url=urljoin(url,redirect)
-                    if urlparse(new_url).hostname != p.hostname:
-                        raise ValueError("Redirect para outro host não permitido")
+                    from .ingestion import registrable_host
+                    if registrable_host(urlparse(new_url).hostname) != registrable_host(p.hostname):
+                        raise ValueError("Redirect para outro domínio não permitido")
                     url=new_url
                     continue
                 if response.status!=200:
