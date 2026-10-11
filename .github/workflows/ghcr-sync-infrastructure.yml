@@ -45,3 +45,59 @@ jobs:
           args=(--mode ensure --owner "$IMAGE_OWNER")
           if [[ "$REFRESH" == true ]]; then args+=(--refresh-existing); fi
           python3 scripts/ghcr-bases.py "${args[@]}"
+
+  # MinIO is optional. Its old Docker Hub / Quay image registries no longer
+  # allow anonymous pulls; build from the verified upstream GitHub binaries.
+  # Keep the same pinned GHCR tag and existing ./volumes/minio/data bind mount.
+  minio-image:
+    needs: [mirror]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check whether pinned MinIO GHCR image already exists
+        id: status
+        env:
+          MINIO_IMAGE: ghcr.io/${{ github.repository_owner }}/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z
+          REFRESH: ${{ inputs.refresh_existing || github.event_name == 'schedule' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$REFRESH" != "true" ]] && docker buildx imagetools inspect "$MINIO_IMAGE" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Preserving verified pinned GHCR MinIO image."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build MinIO release with verified amd64/arm64 SHA-256 digests
+        if: steps.status.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.minio
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z
+          build-args: |
+            ALPINE_BASE=ghcr.io/${{ github.repository_owner }}/argws-scout-alpine:3.23
+          cache-from: type=gha,scope=argws-scout-minio-release
+          cache-to: type=gha,mode=max,scope=argws-scout-minio-release
+      - name: Verify pinned GHCR MinIO manifest
+        shell: bash
+        env:
+          MINIO_IMAGE: ghcr.io/${{ github.repository_owner }}/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$MINIO_IMAGE" >/dev/null
+          echo "MinIO official release image available in GHCR."
