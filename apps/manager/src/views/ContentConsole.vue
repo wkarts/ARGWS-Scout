@@ -498,7 +498,17 @@ async function exportItem(item: Entry) {
       </div>
     </div>
     <div v-if="selectedBatch" class="batch-section">
-      <h3>Publicações individuais · {{ selectedBatch.status }}</h3>
+      <div class="batch-toolbar">
+        <h3>Publicações individuais · {{ selectedBatch.status }}</h3>
+        <button
+          v-if="selectedBatch.status === 'SUCCEEDED' || selectedBatch.status === 'FAILED'"
+          class="button outline"
+          :disabled="!enabled || !canOperate || busy"
+          @click="refreshImages(selectedBatch.id)"
+        >
+          <RefreshCw :size="15" /> Atualizar fotografias oficiais
+        </button>
+      </div>
       <p
         v-if="
           selectedBatch.status === 'QUEUED' ||
@@ -519,10 +529,19 @@ async function exportItem(item: Entry) {
           :key="item.id"
           class="publication-tile"
         >
+          <figure v-if="officialPhoto(item)" class="tile-photo">
+            <img
+              :src="officialPhoto(item)!"
+              :alt="`Fotografia do produto: ${item.title}`"
+              loading="lazy"
+              @error="brokenPhotos[item.id] = true"
+            />
+            <figcaption>{{ photoLabel(item) }}</figcaption>
+          </figure>
           <img
-            v-if="item.images.square"
+            v-else-if="item.images.square"
             :src="media(item.id, 'square')"
-            :alt="item.title"
+            :alt="`Arte ilustrativa da publicação: ${item.title}`"
             loading="lazy"
           />
           <div class="publication-details">
@@ -557,11 +576,43 @@ async function exportItem(item: Entry) {
         </button>
       </div>
       <div class="preview-layout">
-        <img
-          :src="media(selectedItem.id, 'square')"
-          :alt="selectedItem.title"
-          class="preview-media"
-        />
+        <div class="preview-images">
+          <div v-if="officialPhoto(selectedItem)" class="preview-image-block">
+            <strong>{{ photoLabel(selectedItem) }}</strong>
+            <img
+              :src="officialPhoto(selectedItem)!"
+              :alt="`Fotografia original: ${selectedItem.title}`"
+              class="preview-media"
+              @error="brokenPhotos[selectedItem!.id] = true"
+              @click="enlargedPhoto = officialPhoto(selectedItem!)"
+            />
+            <button class="button outline" @click="enlargedPhoto = officialPhoto(selectedItem!)">
+              Ampliar fotografia
+            </button>
+            <a
+              v-if="selectedItem.normalized.image_source_url"
+              :href="String(selectedItem.normalized.image_source_url)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="source-link"
+            >Ver imagem na origem</a>
+          </div>
+          <div v-else class="notice">
+            Fotografia original indisponível. A arte abaixo é ilustrativa.
+          </div>
+          <div v-if="selectedItem.images.square" class="preview-image-block">
+            <strong>Arte preparada para publicação</strong>
+            <img
+              :src="media(selectedItem.id, 'square')"
+              :alt="`Arte de publicação: ${selectedItem.title}`"
+              class="preview-media"
+              @click="enlargedPhoto = media(selectedItem!.id, 'square')"
+            />
+            <button class="button outline" @click="enlargedPhoto = media(selectedItem!.id, 'square')">
+              Ampliar arte
+            </button>
+          </div>
+        </div>
         <div class="preview-copy">
           <h3>{{ selectedItem.title }}</h3>
           <p v-if="selectedItem.warnings?.length" class="warning">
@@ -633,6 +684,19 @@ async function exportItem(item: Entry) {
         Aprovação não realiza envio. As mensagens são rascunhos para uso nos
         canais autorizados.
       </p>
+    </div>
+    <div
+      v-if="enlargedPhoto"
+      class="image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pré-visualização ampliada"
+      @click.self="enlargedPhoto = null"
+    >
+      <button class="button outline lightbox-close" @click="enlargedPhoto = null">
+        Fechar prévia
+      </button>
+      <img :src="enlargedPhoto" alt="Prévia ampliada da imagem selecionada" />
     </div>
   </section>
 </template>
