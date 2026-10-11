@@ -44,8 +44,8 @@ describe("refinamento sem mudar a coleta original", () => {
       <img src="/placeholder.svg">
     </article>`);
     const links = result.links as Array<{ href: string; image_url?: string }>;
-    expect(links[0].image_url).toBeUndefined();
-    expect(links[1].image_url).toBeUndefined();
+    expect(links[0]?.image_url).toBeUndefined();
+    expect(links[1]?.image_url).toBeUndefined();
   });
   it("mantém refinamento e download de imagens desativados por padrão", () => {
     const cfg = contentSettings({});
