@@ -4,6 +4,8 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
+A versão **0.8.1** aprimora a obtenção de fotografias oficiais no refinamento: reconhece imagens por `picture`, `srcset` e lazy loading, armazena prévias privadas das fotografias recuperadas e permite visualizar imagens online quando não há download disponível. É possível atualizar imagens de lotes antigos sem modificar o histórico e as aprovações anteriores. Consulte as [notas da v0.8.1](docs/release-v0.8.1.md).
+
 A versão **0.8.0** acrescenta o **refinamento opcional de conteúdo e o preparo de publicações por canal**, com processamento genérico de JSON/HTML/JSON-LD, histórico de itens por instância, mídia no Garage/S3, versões de imagem, rascunhos e revisão humana. O módulo é desabilitado por padrão e **não envia mensagens automaticamente**. As configurações existentes e o catálogo de modelos permanecem preservados. Consulte as [notas da v0.8.0](docs/release-v0.8.0.md) e o [manual de refinamento](docs/content-refinement.md).
 
 A versão **0.7.0** acrescenta um **catálogo de dez modelos prontos e personalizáveis**: Mercado Livre, Shopee, Amazon Brasil, Magalu, AliExpress, KaBuM!, OLX, Buscapé, eBay e sites genéricos. O usuário pode criar uma instância com fonte pré-configurada, editar a busca, o mecanismo e os seletores e executar quando desejar. Os guias ficam disponíveis no visualizador online e no OpenAPI. São modelos de acesso a páginas públicas, **não integrações oficiais autenticadas dos marketplaces**; verifique robots.txt e regras de acesso. Leia as [notas v0.7.0](docs/release-v0.7.0.md) e o [manual dos modelos](docs/instance-templates.md).
@@ -34,7 +36,7 @@ A versão **0.5.4** corrige o provisionamento inicial do OWNER nas oito distribu
 
 ## Refinamento e publicações (integração candidata)
 
-O módulo opcional de **Publicações** normaliza dados coletados pelos motores HTTP/browser, JSON e HTML de sites variados, preserva o retorno original, mantém identidades e histórico por instância e produz artes individuais e rascunhos de WhatsApp, e-mail, Telegram e outras redes. **Não realiza envios automáticos.** Usa serviço Python privado, content-worker Node, filas e o Garage/S3 existentes, com configuração por instância e aprovação manual. Veja [guia técnico, rotas, políticas e ativação](docs/content-refinement.md). A publicação da v0.8.0 depende da aprovação de todos os gates, GHCR, SemVer Release e artefatos Windows; a homologação operacional das coletas e envios é realizada na stack do usuário.
+O módulo opcional de **Publicações** normaliza dados coletados pelos motores HTTP/browser, JSON e HTML de sites variados, preserva o retorno original, mantém identidades e histórico por instância e produz artes individuais e rascunhos de WhatsApp, e-mail, Telegram e outras redes. **Não realiza envios automáticos.** Usa serviço Python privado, content-worker Node, filas e o Garage/S3 existentes, com configuração por instância e aprovação manual. Veja [guia técnico, rotas, políticas e ativação](docs/content-refinement.md). A publicação estável depende da aprovação de todos os gates, GHCR, SemVer Release e artefatos Windows; a homologação operacional das coletas e envios é realizada na stack do usuário.
 
 ## Gerenciador
 

@@ -1,6 +1,6 @@
-# Refinamento de conteúdo e publicações — Scout v0.8.0
+# Refinamento de conteúdo e publicações — Scout v0.8.1
 
-> **Estado:** módulo opcional da v0.8.0, desligado por padrão. Testes Python/TypeScript/Prisma, compilação e validação de Compose fazem parte dos Quality Gates; testes de ponta a ponta com integrações reais exigem homologação específica antes de ativar em produção. A instalação não envia publicações automaticamente.
+> **Estado:** módulo opcional introduzido na v0.8.0 e atualizado na v0.8.1, desligado por padrão. Testes Python/TypeScript/Prisma, compilação e validação de Compose fazem parte dos Quality Gates; testes de ponta a ponta com integrações reais exigem homologação específica antes de ativar em produção. A instalação não envia publicações automaticamente.
 
 ## Escopo e compatibilidade
 
