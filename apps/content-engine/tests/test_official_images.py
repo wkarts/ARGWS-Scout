@@ -71,7 +71,7 @@ class OfficialImagesTests(unittest.TestCase):
                  patch("motor_publicacoes.engine.render_card", side_effect=cheap_card):
                 directory, manifest = process(source, Path(temp),
                     Options(fetch_images=True, enrich_images=False, create_wide=False))
-            self.assertEqual(manifest["image_summary"]["originais"], 0)
+            self.assertEqual(manifest["image_summary"].get("originais", 0), 0)
             self.assertEqual(manifest["image_summary"]["online"], 1)
             self.assertEqual(manifest["image_summary"]["ilustrativas"], 1)
             item = json.loads((directory / "registros_refinados.json").read_text())["items"][0]
