@@ -52,6 +52,32 @@ def _resolve_public_ip(host: str) -> str:
     return options[0]
 
 
+
+def safe_online_image_url(spec: object) -> str | None:
+    """URL HTTPS de imagem com destino DNS público para prévia opcional."""
+    if not isinstance(spec, str) or len(spec) > 2048:
+        return None
+    parsed = urlparse(spec.strip())
+    if (parsed.scheme != "https" or not parsed.hostname or
+            parsed.username or parsed.password or parsed.port not in (None, 443)):
+        return None
+    try:
+        _resolve_public_ip(parsed.hostname)
+    except (OSError, ValueError, OverflowError):
+        return None
+    return parsed._replace(fragment="").geturl()
+
+
+def save_original_preview(image: Image.Image, out: Path) -> dict:
+    """Fotografia capturada para consulta privada, sem arte promocional."""
+    photo = image.copy()
+    photo.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    photo.save(out, format="WEBP", quality=90, method=5)
+    return {"file": out.name, "width": photo.width, "height": photo.height}
+
+
+
 def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
     """HTTPS com TLS verificado e IP de destino fixado contra DNS rebinding."""
     for _ in range(max_redirects + 1):
