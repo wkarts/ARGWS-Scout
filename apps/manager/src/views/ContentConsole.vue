@@ -74,6 +74,8 @@ const batches = ref<Batch[]>([]);
 const batchId = ref("");
 const entries = ref<Entry[]>([]);
 const selectedItem = ref<Entry | null>(null);
+const brokenPhotos = ref<Record<string, boolean>>({});
+const enlargedPhoto = ref<string | null>(null);
 const jobId = ref("");
 const importText = ref("");
 const showImport = ref(false);
@@ -87,8 +89,32 @@ const canAdmin = computed(() => ["OWNER", "ADMIN"].includes(props.role));
 const selectedBatch = computed(() =>
   batches.value.find((b) => b.id === batchId.value),
 );
-function media(id: string, kind: "square" | "story" | "wide" | "eml") {
+function media(id: string, kind: "original" | "square" | "story" | "wide" | "eml") {
   return `${API_PREFIX}/content/items/${id}/media/${kind}`;
+}
+function onlinePhoto(item: Entry): string | null {
+  // Apenas URLs que o motor validou para prévia online são oferecidas.
+  const value = item.normalized?.image_online_url;
+  if (typeof value !== "string" || !value.startsWith("https://")) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password || (parsed.port && parsed.port !== "443"))
+      return null;
+    if (parsed.hostname === "localhost" || /^127\.|^10\.|^192\.168\.|^169\.254\./.test(parsed.hostname))
+      return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+function officialPhoto(item: Entry): string | null {
+  if (brokenPhotos.value[item.id]) return null;
+  return item.images?.original ? media(item.id, "original") : onlinePhoto(item);
+}
+function photoLabel(item: Entry): string {
+  return item.images?.original
+    ? "Fotografia original armazenada"
+    : "Fotografia online (disponibilidade sujeita à origem)";
 }
 function date(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString("pt-BR") : "—";
@@ -104,6 +130,8 @@ function toast(error: unknown) {
 async function loadBatch(id: string) {
   batchId.value = id;
   selectedItem.value = null;
+  brokenPhotos.value = {};
+  enlargedPhoto.value = null;
   try {
     const result = await api<{ batch: { entries: Entry[] } }>(
       `/content/batches/${id}`,
@@ -218,6 +246,19 @@ async function refine() {
     await refresh();
   } catch (e) {
     toast(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function refreshImages(id: string) {
+  if (!canOperate.value || busy.value) return;
+  busy.value = true;
+  try {
+    await api(`/content/batches/${id}/refresh-images`, { method: "POST" });
+    emit("notify", "Nova busca de fotografias iniciada. O lote anterior permanece intacto.");
+    await refresh();
+  } catch (error) {
+    toast(error);
   } finally {
     busy.value = false;
   }
