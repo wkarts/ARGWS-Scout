@@ -92,7 +92,7 @@ def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
                 if parsed.query:
                     path += "?" + parsed.query
                 tls.sendall((f"GET {path} HTTP/1.1\r\nHost: {parsed.hostname}\r\n"
-                             f"User-Agent: MotorPublicacoes/2.0\r\nAccept: image/jpeg,image/png,image/webp\r\n"
+                             f"User-Agent: MotorPublicacoes/2.0\r\nAccept: image/avif,image/webp,image/jpeg,image/png\r\n"
                              "Connection: close\r\n\r\n").encode("utf-8"))
                 response = http.client.HTTPResponse(tls)
                 response.begin()
@@ -105,7 +105,7 @@ def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
                 if response.status != 200:
                     raise ValueError(f"Falha HTTP ao consultar imagem: {response.status}")
                 content_type = (response.getheader("Content-Type", "").split(";")[0]).lower()
-                if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+                if content_type not in {"image/png", "image/jpeg", "image/webp", "image/avif"}:
                     raise ValueError("O recurso não é uma imagem PNG/JPEG/WebP")
                 length = response.getheader("Content-Length")
                 if length and int(length) > MAX_IMAGE_BYTES:
@@ -143,7 +143,7 @@ def read_media(spec: object, *, media_root: Path | None, fetch_images: bool) -> 
         Image.MAX_IMAGE_PIXELS = 35_000_000
         img = Image.open(io.BytesIO(data))
         img.load()
-        if img.format not in {"PNG", "JPEG", "WEBP"}:
+        if img.format not in {"PNG", "JPEG", "WEBP", "AVIF"}:
             return None, source, "formato_de_imagem_invalido"
         return ImageOps.exif_transpose(img).convert("RGB"), source, None
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError, OverflowError) as err:
