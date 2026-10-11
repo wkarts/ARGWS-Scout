@@ -423,14 +423,33 @@ export async function registerContentRoutes(
         where: { id, tenantId: tid(request) },
         include: { job: true },
       });
-      if (!original || original.job.status !== JobStatus.SUCCEEDED || !original.job.result)
-        return fail(reply, 404, "BATCH_NOT_FOUND", "Coleta original indisponível.");
-      if (original.status === ContentBatchStatus.QUEUED || original.status === ContentBatchStatus.RUNNING)
-        return fail(reply, 409, "BATCH_RUNNING", "Aguarde o processamento atual.");
+      if (
+        !original ||
+        original.job.status !== JobStatus.SUCCEEDED ||
+        !original.job.result
+      )
+        return fail(
+          reply,
+          404,
+          "BATCH_NOT_FOUND",
+          "Coleta original indisponível.",
+        );
+      if (
+        original.status === ContentBatchStatus.QUEUED ||
+        original.status === ContentBatchStatus.RUNNING
+      )
+        return fail(
+          reply,
+          409,
+          "BATCH_RUNNING",
+          "Aguarde o processamento atual.",
+        );
 
       const previous = original.options as Record<string, unknown> | null;
       const options: Prisma.InputJsonValue = {
-        ...(previous && typeof previous === "object" && !Array.isArray(previous) ? previous : {}),
+        ...(previous && typeof previous === "object" && !Array.isArray(previous)
+          ? previous
+          : {}),
         fetchImages: true,
         enrichImages: true,
       };

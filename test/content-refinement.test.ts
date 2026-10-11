@@ -32,10 +32,12 @@ describe("refinamento sem mudar a coleta original", () => {
       </article>
     </div>`);
     const links = result.links as Array<{ href: string; image_url?: string }>;
-    expect(links.find((x) => x.href === "/produto/1")?.image_url)
-      .toBe("https://cdn.exemplo.com/a-900.webp");
-    expect(links.find((x) => x.href === "/produto/2")?.image_url)
-      .toBe("https://cdn.exemplo.com/b.webp");
+    expect(links.find((x) => x.href === "/produto/1")?.image_url).toBe(
+      "https://cdn.exemplo.com/a-900.webp",
+    );
+    expect(links.find((x) => x.href === "/produto/2")?.image_url).toBe(
+      "https://cdn.exemplo.com/b.webp",
+    );
   });
   it("não atribui fotos de outro produto ou placeholders ao link", () => {
     const result = extractHtml(`<article>

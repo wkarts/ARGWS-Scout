@@ -89,7 +89,10 @@ const canAdmin = computed(() => ["OWNER", "ADMIN"].includes(props.role));
 const selectedBatch = computed(() =>
   batches.value.find((b) => b.id === batchId.value),
 );
-function media(id: string, kind: "original" | "square" | "story" | "wide" | "eml") {
+function media(
+  id: string,
+  kind: "original" | "square" | "story" | "wide" | "eml",
+) {
   return `${API_PREFIX}/content/items/${id}/media/${kind}`;
 }
 function onlinePhoto(item: Entry): string | null {
@@ -98,9 +101,16 @@ function onlinePhoto(item: Entry): string | null {
   if (typeof value !== "string" || !value.startsWith("https://")) return null;
   try {
     const parsed = new URL(value);
-    if (parsed.username || parsed.password || (parsed.port && parsed.port !== "443"))
+    if (
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && parsed.port !== "443")
+    )
       return null;
-    if (parsed.hostname === "localhost" || /^127\.|^10\.|^192\.168\.|^169\.254\./.test(parsed.hostname))
+    if (
+      parsed.hostname === "localhost" ||
+      /^127\.|^10\.|^192\.168\.|^169\.254\./.test(parsed.hostname)
+    )
       return null;
     return parsed.href;
   } catch {
@@ -255,7 +265,10 @@ async function refreshImages(id: string) {
   busy.value = true;
   try {
     await api(`/content/batches/${id}/refresh-images`, { method: "POST" });
-    emit("notify", "Nova busca de fotografias iniciada. O lote anterior permanece intacto.");
+    emit(
+      "notify",
+      "Nova busca de fotografias iniciada. O lote anterior permanece intacto.",
+    );
     await refresh();
   } catch (error) {
     toast(error);
@@ -501,7 +514,10 @@ async function exportItem(item: Entry) {
       <div class="batch-toolbar">
         <h3>Publicações individuais · {{ selectedBatch.status }}</h3>
         <button
-          v-if="selectedBatch.status === 'SUCCEEDED' || selectedBatch.status === 'FAILED'"
+          v-if="
+            selectedBatch.status === 'SUCCEEDED' ||
+            selectedBatch.status === 'FAILED'
+          "
           class="button outline"
           :disabled="!enabled || !canOperate || busy"
           @click="refreshImages(selectedBatch.id)"
@@ -586,7 +602,10 @@ async function exportItem(item: Entry) {
               @error="brokenPhotos[selectedItem!.id] = true"
               @click="enlargedPhoto = officialPhoto(selectedItem!)"
             />
-            <button class="button outline" @click="enlargedPhoto = officialPhoto(selectedItem!)">
+            <button
+              class="button outline"
+              @click="enlargedPhoto = officialPhoto(selectedItem!)"
+            >
               Ampliar fotografia
             </button>
             <a
@@ -595,7 +614,8 @@ async function exportItem(item: Entry) {
               target="_blank"
               rel="noopener noreferrer"
               class="source-link"
-            >Ver imagem na origem</a>
+              >Ver imagem na origem</a
+            >
           </div>
           <div v-else class="notice">
             Fotografia original indisponível. A arte abaixo é ilustrativa.
@@ -608,7 +628,10 @@ async function exportItem(item: Entry) {
               class="preview-media"
               @click="enlargedPhoto = media(selectedItem!.id, 'square')"
             />
-            <button class="button outline" @click="enlargedPhoto = media(selectedItem!.id, 'square')">
+            <button
+              class="button outline"
+              @click="enlargedPhoto = media(selectedItem!.id, 'square')"
+            >
               Ampliar arte
             </button>
           </div>
@@ -693,7 +716,10 @@ async function exportItem(item: Entry) {
       aria-label="Pré-visualização ampliada"
       @click.self="enlargedPhoto = null"
     >
-      <button class="button outline lightbox-close" @click="enlargedPhoto = null">
+      <button
+        class="button outline lightbox-close"
+        @click="enlargedPhoto = null"
+      >
         Fechar prévia
       </button>
       <img :src="enlargedPhoto" alt="Prévia ampliada da imagem selecionada" />

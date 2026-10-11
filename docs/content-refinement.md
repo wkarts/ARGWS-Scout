@@ -31,20 +31,20 @@
 
 ## API autenticada do Scout (`/api/v1`, servidor OpenAPI `/v1`)
 
-| Método    | Rota                               | Função                                                                |
-| --------- | ---------------------------------- | --------------------------------------------------------------------- |
-| GET       | `/content/status`                  | Estado do recurso/canais sem revelar a chave privada                  |
-| GET/PATCH | `/content/instances/{id}/settings` | Configurações por instância (alteração OWNER/ADMIN)                   |
-| GET       | `/content/jobs?instanceId={uuid}`  | Jobs concluídos disponíveis                                           |
-| POST      | `/content/jobs/{jobId}/refine`     | Criar/enfileirar refinamento de coleta existente                      |
-| POST      | `/content/import`                  | Importar JSON arbitrário em uma fonte/instância autorizadas           |
-| GET       | `/content/batches`                 | Lotes da organização/instância                                        |
-| GET       | `/content/batches/{id}`            | Lote e registros refinados                                            |
+| Método    | Rota                                   | Função                                                                   |
+| --------- | -------------------------------------- | ------------------------------------------------------------------------ |
+| GET       | `/content/status`                      | Estado do recurso/canais sem revelar a chave privada                     |
+| GET/PATCH | `/content/instances/{id}/settings`     | Configurações por instância (alteração OWNER/ADMIN)                      |
+| GET       | `/content/jobs?instanceId={uuid}`      | Jobs concluídos disponíveis                                              |
+| POST      | `/content/jobs/{jobId}/refine`         | Criar/enfileirar refinamento de coleta existente                         |
+| POST      | `/content/import`                      | Importar JSON arbitrário em uma fonte/instância autorizadas              |
+| GET       | `/content/batches`                     | Lotes da organização/instância                                           |
+| GET       | `/content/batches/{id}`                | Lote e registros refinados                                               |
 | POST      | `/content/batches/{id}/refresh-images` | Gerar novo lote com tentativa de recuperar fotos, preservando o anterior |
-| GET       | `/content/identities/{id}/history` | Preços/observações históricas                                         |
-| PATCH     | `/content/items/{id}/review`       | `DRAFT`, `APPROVED` ou `ARCHIVED` (divergências requerem ADMIN/OWNER) |
-| GET       | `/content/items/{id}/export`       | JSON com textos/links/status sem disparo                              |
-| GET       | `/content/items/{id}/media/{kind}` | PNG privado `square`,`wide`,`story`, foto `original` (WebP) ou EML `eml`                      |
+| GET       | `/content/identities/{id}/history`     | Preços/observações históricas                                            |
+| PATCH     | `/content/items/{id}/review`           | `DRAFT`, `APPROVED` ou `ARCHIVED` (divergências requerem ADMIN/OWNER)    |
+| GET       | `/content/items/{id}/export`           | JSON com textos/links/status sem disparo                                 |
+| GET       | `/content/items/{id}/media/{kind}`     | PNG privado `square`,`wide`,`story`, foto `original` (WebP) ou EML `eml` |
 
 Todas as rotas requerem sessão do Manager; as rotas de criação têm rate limiting; importação limita JSON a 2 MiB. A API Python interna tem autenticação de segredo independente, rede interna e limite de 5 MiB por entrada. Não publique a porta Python no proxy reverso.
 

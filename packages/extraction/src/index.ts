@@ -11,7 +11,9 @@ function imageUrl(value: string | undefined): string | undefined {
     !raw ||
     raw.length > 2048 ||
     !/^(https?:\/\/|\/\/|\/[^/])/i.test(raw) ||
-    /(?:placeholder|no[-_]?image|sprite|spinner|loading|blank\.|\/pixel[./]|\.svg(?:[?#]|$))/i.test(raw)
+    /(?:placeholder|no[-_]?image|sprite|spinner|loading|blank\.|\/pixel[./]|\.svg(?:[?#]|$))/i.test(
+      raw,
+    )
   )
     return undefined;
   return raw;
@@ -24,7 +26,9 @@ function lastSrcset(value: string | undefined): string | undefined {
     .map((entry) => entry.trim().split(/\s+/)[0])
     .filter(Boolean);
   // A maioria dos sites publica srcset em ordem crescente de resolução.
-  return candidates.length ? imageUrl(candidates[candidates.length - 1]) : undefined;
+  return candidates.length
+    ? imageUrl(candidates[candidates.length - 1])
+    : undefined;
 }
 
 export function extractHtml(
@@ -93,7 +97,9 @@ export function extractHtml(
             imageUrl(img.attr("data-image")),
             lastSrcset(img.attr("data-srcset")),
             lastSrcset(img.attr("srcset")),
-            lastSrcset(img.parent("picture").find("source").first().attr("srcset")),
+            lastSrcset(
+              img.parent("picture").find("source").first().attr("srcset"),
+            ),
             imageUrl(img.attr("src")),
           ];
           const found = candidates.find(Boolean);
@@ -104,7 +110,12 @@ export function extractHtml(
       let photo = photoIn(anchor);
       // E-commerces com foto e descrição em links irmãos: procura apenas no
       // cartão que contém exatamente um destino de produto, nunca na lista toda.
-      if (!photo && /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(href)) {
+      if (
+        !photo &&
+        /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(
+          href,
+        )
+      ) {
         const card = anchor.closest(
           "article, li, [data-testid*='product'], [data-testid*='Product'], " +
             "[class*='product-card'], [class*='productCard'], [class*='ProductCard'], " +
@@ -117,7 +128,12 @@ export function extractHtml(
               .toArray()
               .map((link) => $(link).attr("href")?.split("?")[0])
               .filter((link): link is string =>
-                Boolean(link && /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(link)),
+                Boolean(
+                  link &&
+                  /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(
+                    link,
+                  ),
+                ),
               ),
           );
           if (targets.size === 1 && targets.has(href.split("?")[0] ?? ""))
