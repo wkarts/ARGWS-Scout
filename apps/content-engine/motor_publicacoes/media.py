@@ -57,11 +57,11 @@ def safe_online_image_url(spec: object) -> str | None:
     """URL HTTPS de imagem com destino DNS público para prévia opcional."""
     if not isinstance(spec, str) or len(spec) > 2048:
         return None
-    parsed = urlparse(spec.strip())
-    if (parsed.scheme != "https" or not parsed.hostname or
-            parsed.username or parsed.password or parsed.port not in (None, 443)):
-        return None
     try:
+        parsed = urlparse(spec.strip())
+        if (parsed.scheme != "https" or not parsed.hostname or
+                parsed.username or parsed.password or parsed.port not in (None, 443)):
+            return None
         _resolve_public_ip(parsed.hostname)
     except (OSError, ValueError, OverflowError):
         return None
