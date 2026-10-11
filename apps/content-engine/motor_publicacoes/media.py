@@ -339,8 +339,8 @@ def image_from_product_html(page: str, url: str, expected_title: str = "") -> st
     def matches(value: str) -> bool:
         if not expected_title:
             return True
-        actual = {t for t in re.findall(r"\\w+", compact(value).casefold()) if len(t) >= 4}
-        expected = {t for t in re.findall(r"\\w+", compact(expected_title).casefold()) if len(t) >= 4}
+        actual = {t for t in re.findall(r"\w+", compact(value).casefold()) if len(t) >= 4}
+        expected = {t for t in re.findall(r"\w+", compact(expected_title).casefold()) if len(t) >= 4}
         return len(actual & expected) >= (2 if len(expected) >= 3 else 1)
 
     parser = HTMLMetadata()
@@ -368,7 +368,7 @@ def image_from_product_html(page: str, url: str, expected_title: str = "") -> st
             continue
         safe = safe_http_url(raw, url)
         if safe and safe.startswith("https://") and not re.search(
-            r"(?:placeholder|no[-_]?image|spinner|logo|\\.svg(?:[?#]|$))", safe, re.I
+            r"(?:placeholder|no[-_]?image|spinner|logo|\.svg(?:[?#]|$))", safe, re.I
         ):
             return safe
     return None
