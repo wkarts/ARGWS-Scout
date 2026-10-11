@@ -74,6 +74,8 @@ const batches = ref<Batch[]>([]);
 const batchId = ref("");
 const entries = ref<Entry[]>([]);
 const selectedItem = ref<Entry | null>(null);
+const brokenPhotos = ref<Record<string, boolean>>({});
+const enlargedPhoto = ref<string | null>(null);
 const jobId = ref("");
 const importText = ref("");
 const showImport = ref(false);
@@ -87,8 +89,42 @@ const canAdmin = computed(() => ["OWNER", "ADMIN"].includes(props.role));
 const selectedBatch = computed(() =>
   batches.value.find((b) => b.id === batchId.value),
 );
-function media(id: string, kind: "square" | "story" | "wide" | "eml") {
+function media(
+  id: string,
+  kind: "original" | "square" | "story" | "wide" | "eml",
+) {
   return `${API_PREFIX}/content/items/${id}/media/${kind}`;
+}
+function onlinePhoto(item: Entry): string | null {
+  // Apenas URLs que o motor validou para prévia online são oferecidas.
+  const value = item.normalized?.image_online_url;
+  if (typeof value !== "string" || !value.startsWith("https://")) return null;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && parsed.port !== "443")
+    )
+      return null;
+    if (
+      parsed.hostname === "localhost" ||
+      /^127\.|^10\.|^192\.168\.|^169\.254\./.test(parsed.hostname)
+    )
+      return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+function officialPhoto(item: Entry): string | null {
+  if (brokenPhotos.value[item.id]) return null;
+  return item.images?.original ? media(item.id, "original") : onlinePhoto(item);
+}
+function photoLabel(item: Entry): string {
+  return item.images?.original
+    ? "Fotografia original armazenada"
+    : "Fotografia online (disponibilidade sujeita à origem)";
 }
 function date(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString("pt-BR") : "—";
@@ -104,6 +140,8 @@ function toast(error: unknown) {
 async function loadBatch(id: string) {
   batchId.value = id;
   selectedItem.value = null;
+  brokenPhotos.value = {};
+  enlargedPhoto.value = null;
   try {
     const result = await api<{ batch: { entries: Entry[] } }>(
       `/content/batches/${id}`,
@@ -218,6 +256,22 @@ async function refine() {
     await refresh();
   } catch (e) {
     toast(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function refreshImages(id: string) {
+  if (!canOperate.value || busy.value) return;
+  busy.value = true;
+  try {
+    await api(`/content/batches/${id}/refresh-images`, { method: "POST" });
+    emit(
+      "notify",
+      "Nova busca de fotografias iniciada. O lote anterior permanece intacto.",
+    );
+    await refresh();
+  } catch (error) {
+    toast(error);
   } finally {
     busy.value = false;
   }
@@ -457,7 +511,20 @@ async function exportItem(item: Entry) {
       </div>
     </div>
     <div v-if="selectedBatch" class="batch-section">
-      <h3>Publicações individuais · {{ selectedBatch.status }}</h3>
+      <div class="batch-toolbar">
+        <h3>Publicações individuais · {{ selectedBatch.status }}</h3>
+        <button
+          v-if="
+            selectedBatch.status === 'SUCCEEDED' ||
+            selectedBatch.status === 'FAILED'
+          "
+          class="button outline"
+          :disabled="!enabled || !canOperate || busy"
+          @click="refreshImages(selectedBatch.id)"
+        >
+          <RefreshCw :size="15" /> Atualizar fotografias oficiais
+        </button>
+      </div>
       <p
         v-if="
           selectedBatch.status === 'QUEUED' ||
@@ -478,10 +545,19 @@ async function exportItem(item: Entry) {
           :key="item.id"
           class="publication-tile"
         >
+          <figure v-if="officialPhoto(item)" class="tile-photo">
+            <img
+              :src="officialPhoto(item)!"
+              :alt="`Fotografia do produto: ${item.title}`"
+              loading="lazy"
+              @error="brokenPhotos[item.id] = true"
+            />
+            <figcaption>{{ photoLabel(item) }}</figcaption>
+          </figure>
           <img
-            v-if="item.images.square"
+            v-else-if="item.images.square"
             :src="media(item.id, 'square')"
-            :alt="item.title"
+            :alt="`Arte ilustrativa da publicação: ${item.title}`"
             loading="lazy"
           />
           <div class="publication-details">
@@ -516,11 +592,50 @@ async function exportItem(item: Entry) {
         </button>
       </div>
       <div class="preview-layout">
-        <img
-          :src="media(selectedItem.id, 'square')"
-          :alt="selectedItem.title"
-          class="preview-media"
-        />
+        <div class="preview-images">
+          <div v-if="officialPhoto(selectedItem)" class="preview-image-block">
+            <strong>{{ photoLabel(selectedItem) }}</strong>
+            <img
+              :src="officialPhoto(selectedItem)!"
+              :alt="`Fotografia original: ${selectedItem.title}`"
+              class="preview-media"
+              @error="brokenPhotos[selectedItem!.id] = true"
+              @click="enlargedPhoto = officialPhoto(selectedItem!)"
+            />
+            <button
+              class="button outline"
+              @click="enlargedPhoto = officialPhoto(selectedItem!)"
+            >
+              Ampliar fotografia
+            </button>
+            <a
+              v-if="selectedItem.normalized.image_source_url"
+              :href="String(selectedItem.normalized.image_source_url)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="source-link"
+              >Ver imagem na origem</a
+            >
+          </div>
+          <div v-else class="notice">
+            Fotografia original indisponível. A arte abaixo é ilustrativa.
+          </div>
+          <div v-if="selectedItem.images.square" class="preview-image-block">
+            <strong>Arte preparada para publicação</strong>
+            <img
+              :src="media(selectedItem.id, 'square')"
+              :alt="`Arte de publicação: ${selectedItem.title}`"
+              class="preview-media"
+              @click="enlargedPhoto = media(selectedItem!.id, 'square')"
+            />
+            <button
+              class="button outline"
+              @click="enlargedPhoto = media(selectedItem!.id, 'square')"
+            >
+              Ampliar arte
+            </button>
+          </div>
+        </div>
         <div class="preview-copy">
           <h3>{{ selectedItem.title }}</h3>
           <p v-if="selectedItem.warnings?.length" class="warning">
@@ -592,6 +707,22 @@ async function exportItem(item: Entry) {
         Aprovação não realiza envio. As mensagens são rascunhos para uso nos
         canais autorizados.
       </p>
+    </div>
+    <div
+      v-if="enlargedPhoto"
+      class="image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pré-visualização ampliada"
+      @click.self="enlargedPhoto = null"
+    >
+      <button
+        class="button outline lightbox-close"
+        @click="enlargedPhoto = null"
+      >
+        Fechar prévia
+      </button>
+      <img :src="enlargedPhoto" alt="Prévia ampliada da imagem selecionada" />
     </div>
   </section>
 </template>
@@ -726,12 +857,82 @@ async function exportItem(item: Entry) {
   min-width: 0;
   background: #fff;
 }
-.publication-tile > img {
+.publication-tile > img,
+.tile-photo img {
   display: block;
   width: 100%;
   aspect-ratio: 1;
   object-fit: contain;
   background: #f5f7fa;
+}
+.tile-photo {
+  margin: 0;
+}
+.tile-photo figcaption {
+  font-size: 11px;
+  padding: 6px 10px;
+  line-height: 1.5;
+  color: #3c5970;
+  border-bottom: 1px solid #e7eef4;
+}
+.batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.batch-toolbar h3 {
+  margin: 0;
+}
+.preview-images {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.preview-image-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-image-block > strong {
+  font-size: 13px;
+}
+.preview-image-block img {
+  cursor: zoom-in;
+}
+.preview-image-block .button {
+  align-self: flex-start;
+}
+.source-link {
+  font-size: 12px;
+  color: #0868ae;
+  overflow-wrap: anywhere;
+}
+.image-lightbox {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  background: rgb(12 19 31 / 90%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 72px 20px 24px;
+}
+.image-lightbox img {
+  display: block;
+  max-width: 96vw;
+  max-height: calc(100dvh - 100px);
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+}
+.lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  background: #fff;
 }
 .publication-details {
   padding: 14px;

@@ -13,8 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .ingestion import brl, normalize
-from .media import read_media, render_card, fetch_public_html, image_from_product_html
+from .ingestion import brl, normalize, registrable_host
+from .media import (read_media, render_card, fetch_public_html, image_from_product_html,
+                    safe_online_image_url, save_original_preview)
 from .publications import safe_slug, write_index, write_post_files
 
 
@@ -32,7 +33,7 @@ class Options:
     create_wide: bool = True
     create_excel: bool = False
     enrich_images: bool = False
-    enrich_limit: int = 20
+    enrich_limit: int = 100
     enrich_delay: float = 0.3
 
     def check(self):
@@ -70,8 +71,9 @@ def create_report(snapshot: dict, media_counts: Counter, opts: Options) -> str:
     categories = Counter(r["category"] for r in snapshot["items"])
     page = ["# Relatório de refinamento e publicações", "", f"- Itens preparados: **{total}**",
             f"- Itens sujeitos a revisão: **{review}**", f"- Sem bloqueios encontrados: **{total-review}**",
-            f"- Imagens fornecidas ou obtidas dos metadados: **{media_counts['originais']}**",
-            f"- Artes sem fotografia original: **{media_counts['ilustrativas']}**",
+            f"- Fotografias originais obtidas e armazenadas: **{media_counts['originais']}**",
+             f"- Fontes online disponíveis para prévia (sem download confirmado): **{media_counts['online']}**",
+            f"- Artes sem fotografia original incorporada: **{media_counts['ilustrativas']}**",
             f"- Filtro de relevância: **{opts.query or 'não informado'}**",
             f"- Apenas relevantes: **{'sim' if opts.only_relevant else 'não'}**", "",
             "## Categorias", ""]
@@ -111,6 +113,7 @@ def process(source: object, output_root: Path, opts: Options | None = None) -> t
     media_counts: Counter = Counter()
     warnings_media = Counter()
     enriched_pages = 0
+    blocked_hosts: set[str] = set()
     for record in normalized["items"]:
         slug = safe_slug(record)
         slugs[record["id"]] = slug
@@ -119,46 +122,90 @@ def process(source: object, output_root: Path, opts: Options | None = None) -> t
         sources = []
         notes = []
         image_inputs = list(record.get("image_inputs", []))
-        if not image_inputs and opts.enrich_images and enriched_pages < opts.enrich_limit and record.get("url"):
-            source_host = urlparse((record.get("source") or {}).get("url") or "").hostname
-            product_host = urlparse(record["url"]).hostname
-            if source_host and product_host == source_host:
-                enriched_pages += 1
-                try:
-                    page = fetch_public_html(record["url"])
-                    image_url = image_from_product_html(page,record["url"])
-                    if image_url:
-                        image_inputs.append(image_url)
-                        record["image_input"] = image_url
-                        record["image_inputs"] = [image_url]
-                    else:
-                        notes.append("pagina_sem_imagem_og_ou_jsonld")
-                except (OSError, ValueError, RuntimeError) as exc:
-                    notes.append(f"enriquecimento_falhou:{type(exc).__name__}")
-                if opts.enrich_delay:
-                    time.sleep(opts.enrich_delay)
-            else:
-                notes.append("enriquecimento_host_diferente_da_origem")
-        for spec in image_inputs[:4]:
-            img, source_label, issue = read_media(spec, media_root=opts.media_root, fetch_images=(opts.fetch_images or opts.enrich_images))
-            if img is not None:
-                originals.append(img)
-                sources.append(source_label)
+        checked: set[str] = set()
+
+        def load_image(spec: str) -> None:
+            if spec in checked:
+                return
+            checked.add(spec)
+            image, source, issue = read_media(
+                spec, media_root=opts.media_root,
+                fetch_images=(opts.fetch_images or opts.enrich_images),
+            )
+            if image is not None:
+                originals.append(image)
+                sources.append(source)
             if issue:
                 notes.append(issue)
                 warnings_media[issue] += 1
+
+        for spec in image_inputs[:4]:
+            load_image(spec)
+
+        # Tenta a página oficial se a foto da captura está ausente OU falhou.
+        # O limite cobre o lote solicitado, não apenas os dez primeiros itens.
+        if not originals and opts.enrich_images and enriched_pages < opts.enrich_limit and record.get("url"):
+            source_host = registrable_host(urlparse((record.get("source") or {}).get("url") or "").hostname)
+            product_host = registrable_host(urlparse(record["url"]).hostname)
+            product_url = record["url"]
+            if source_host and source_host == product_host and product_host not in blocked_hosts and product_url.startswith("https://"):
+                enriched_pages += 1
+                try:
+                    page = fetch_public_html(product_url)
+                    image_url = image_from_product_html(page, product_url, record["title"])
+                    if image_url:
+                        if image_url not in image_inputs:
+                            image_inputs.append(image_url)
+                        record["image_input"] = image_inputs[0]
+                        record["image_inputs"] = image_inputs
+                        load_image(image_url)
+                    else:
+                        notes.append("pagina_sem_fotografia_do_produto")
+                except (OSError, ValueError, RuntimeError) as exc:
+                    notes.append(f"enriquecimento_falhou:{type(exc).__name__}")
+                    # Evita dezenas de requisições quando o site bloqueia a coleta.
+                    if any(code in str(exc) for code in ("HTTP 401", "HTTP 403", "HTTP 429")):
+                        blocked_hosts.add(product_host)
+                if opts.enrich_delay:
+                    time.sleep(opts.enrich_delay)
+            elif product_host in blocked_hosts:
+                notes.append("site_bloqueou_enriquecimento")
+            else:
+                notes.append("enriquecimento_domino_nao_autorizado")
+
+        if originals:
+            save_original_preview(originals[0], folder / "original.webp")
+            record["image_status"] = "stored"
+            record["image_source_url"] = next(
+                (src for src in sources if isinstance(src, str) and src.startswith("https://")),
+                None,
+            )
+            media_counts["originais"] += 1
+        else:
+            remote = None
+            if opts.fetch_images or opts.enrich_images:
+                for spec in image_inputs:
+                    remote = safe_online_image_url(spec)
+                    if remote:
+                        break
+            record["image_online_url"] = remote
+            record["image_status"] = "online" if remote else "illustrative"
+            media_counts["ilustrativas"] += 1
+            if remote:
+                media_counts["online"] += 1
+
         square = render_card(record, folder / "card-square.png", kind="square", original=originals, accent=opts.accent)
         if opts.create_wide:
             render_card(record, folder / "card-wide.png", kind="wide", original=originals, accent=opts.accent)
         if opts.create_story:
             render_card(record, folder / "card-story.png", kind="story", original=originals, accent=opts.accent)
-        for img in originals:
-            img.close()
-        if originals:
-            media_counts["originais"] += 1
-        else:
-            media_counts["ilustrativas"] += 1
-        image_info = {**square, "source_image_references": sources, "warnings": notes}
+        for image in originals:
+            image.close()
+        image_info = {**square, "source_image_references": sources,
+                      "online_preview_url": record.get("image_online_url"),
+                      "original_file": "original.webp" if originals else None,
+                      "warnings": notes}
+        record["image_warnings"] = notes
         entry = write_post_files(record, folder, public_base_url=opts.public_base_url,
                                  image_info=image_info, status=record["publication_status"])
         manifest_items.append(entry)

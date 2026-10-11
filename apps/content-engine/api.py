@@ -60,7 +60,7 @@ async def process_request(req: Request):
                        create_wide=True, fetch_images=config.get("fetch_images") is True,
                        create_excel=False,
                        enrich_images=config.get("enrich_images") is True,
-                       enrich_limit=min(25, max(0, int(config.get("enrich_limit", 10)))),
+                       enrich_limit=min(max_items, max(0, int(config.get("enrich_limit", max_items)))),
                        enrich_delay=0.5)
         # Geração em diretório isolado por requisição: erros de processamento
         # não deixam PNG/HTML temporários órfãos nem expõem lotes parciais.
