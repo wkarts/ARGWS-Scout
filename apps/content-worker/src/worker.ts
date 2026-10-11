@@ -191,6 +191,9 @@ async function processBatch(batchId: string, tenantId: string): Promise<void> {
         ...(options.createStory === false
           ? []
           : [["story", "card-story.png", "image/png", 4_000_000]]),
+        ...(output.image?.original_file === "original.webp"
+          ? [["original", "original.webp", "image/webp", 5_000_000]]
+          : []),
         ["eml", "email.eml", "message/rfc822", 5_000_000],
       ] as Array<[string, string, string, number]>) {
         const bytes = await engineFile(path + file, limit);

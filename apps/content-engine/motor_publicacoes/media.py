@@ -52,6 +52,32 @@ def _resolve_public_ip(host: str) -> str:
     return options[0]
 
 
+
+def safe_online_image_url(spec: object) -> str | None:
+    """URL HTTPS de imagem com destino DNS público para prévia opcional."""
+    if not isinstance(spec, str) or len(spec) > 2048:
+        return None
+    try:
+        parsed = urlparse(spec.strip())
+        if (parsed.scheme != "https" or not parsed.hostname or
+                parsed.username or parsed.password or parsed.port not in (None, 443)):
+            return None
+        _resolve_public_ip(parsed.hostname)
+    except (OSError, ValueError, OverflowError):
+        return None
+    return parsed._replace(fragment="").geturl()
+
+
+def save_original_preview(image: Image.Image, out: Path) -> dict:
+    """Fotografia capturada para consulta privada, sem arte promocional."""
+    photo = image.copy()
+    photo.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    photo.save(out, format="WEBP", quality=90, method=5)
+    return {"file": out.name, "width": photo.width, "height": photo.height}
+
+
+
 def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
     """HTTPS com TLS verificado e IP de destino fixado contra DNS rebinding."""
     for _ in range(max_redirects + 1):
@@ -66,7 +92,7 @@ def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
                 if parsed.query:
                     path += "?" + parsed.query
                 tls.sendall((f"GET {path} HTTP/1.1\r\nHost: {parsed.hostname}\r\n"
-                             f"User-Agent: MotorPublicacoes/2.0\r\nAccept: image/jpeg,image/png,image/webp\r\n"
+                             f"User-Agent: MotorPublicacoes/2.0\r\nAccept: image/avif,image/webp,image/jpeg,image/png\r\n"
                              "Connection: close\r\n\r\n").encode("utf-8"))
                 response = http.client.HTTPResponse(tls)
                 response.begin()
@@ -79,7 +105,7 @@ def fetch_public_image(url: str, max_redirects: int = 3) -> bytes:
                 if response.status != 200:
                     raise ValueError(f"Falha HTTP ao consultar imagem: {response.status}")
                 content_type = (response.getheader("Content-Type", "").split(";")[0]).lower()
-                if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+                if content_type not in {"image/png", "image/jpeg", "image/webp", "image/avif"}:
                     raise ValueError("O recurso não é uma imagem PNG/JPEG/WebP")
                 length = response.getheader("Content-Length")
                 if length and int(length) > MAX_IMAGE_BYTES:
@@ -117,7 +143,7 @@ def read_media(spec: object, *, media_root: Path | None, fetch_images: bool) -> 
         Image.MAX_IMAGE_PIXELS = 35_000_000
         img = Image.open(io.BytesIO(data))
         img.load()
-        if img.format not in {"PNG", "JPEG", "WEBP"}:
+        if img.format not in {"PNG", "JPEG", "WEBP", "AVIF"}:
             return None, source, "formato_de_imagem_invalido"
         return ImageOps.exif_transpose(img).convert("RGB"), source, None
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError, OverflowError) as err:
@@ -287,8 +313,9 @@ def fetch_public_html(url: str, max_redirects: int = 3) -> str:
                     if not redirect:
                         raise ValueError("Redirect inválido")
                     new_url=urljoin(url,redirect)
-                    if urlparse(new_url).hostname != p.hostname:
-                        raise ValueError("Redirect para outro host não permitido")
+                    from .ingestion import registrable_host
+                    if registrable_host(urlparse(new_url).hostname) != registrable_host(p.hostname):
+                        raise ValueError("Redirect para outro domínio não permitido")
                     url=new_url
                     continue
                 if response.status!=200:
@@ -306,17 +333,43 @@ def fetch_public_html(url: str, max_redirects: int = 3) -> str:
     raise ValueError("Limite de redirects do HTML excedido")
 
 
-def image_from_product_html(page: str, url: str) -> str | None:
-    """Ordem: imagem de produto JSON-LD; depois og:image da página."""
-    from .ingestion import HTMLMetadata, _html_to_source, safe_http_url
-    parser=HTMLMetadata()
+def image_from_product_html(page: str, url: str, expected_title: str = "") -> str | None:
+    """Busca foto do produto correto; evita imagens de produtos recomendados."""
+    from .ingestion import HTMLMetadata, _html_to_source, compact, safe_http_url
+
+    def matches(value: str) -> bool:
+        if not expected_title:
+            return True
+        actual = {t for t in re.findall(r"\w+", compact(value).casefold()) if len(t) >= 4}
+        expected = {t for t in re.findall(r"\w+", compact(expected_title).casefold()) if len(t) >= 4}
+        return len(actual & expected) >= (2 if len(expected) >= 3 else 1)
+
+    parser = HTMLMetadata()
     parser.feed(page)
-    payload=_html_to_source(page,url)
+    payload = _html_to_source(page, url)
     for row in payload["items"]:
-        if row.get("kind")=="produto" and row.get("image_url"):
-            safe=safe_http_url(row["image_url"],url)
-            if safe and safe.startswith("https://"):
-                return safe
-    og=parser.meta.get("og:image:secure_url") or parser.meta.get("og:image") or parser.meta.get("twitter:image")
-    safe=safe_http_url(og,url)
-    return safe if safe and safe.startswith("https://") else None
+        if row.get("kind") != "produto" or not row.get("image_url"):
+            continue
+        if not matches(str(row.get("title") or "")):
+            continue
+        safe = safe_http_url(row["image_url"], url)
+        if safe and safe.startswith("https://"):
+            return safe
+
+    title = parser.meta.get("og:title") or compact("".join(parser.title_parts))
+    if matches(title):
+        og = (parser.meta.get("og:image:secure_url") or
+              parser.meta.get("og:image") or parser.meta.get("twitter:image"))
+        safe = safe_http_url(og, url)
+        if safe and safe.startswith("https://"):
+            return safe
+
+    for alt, raw in parser.image_candidates:
+        if not alt or not matches(alt):
+            continue
+        safe = safe_http_url(raw, url)
+        if safe and safe.startswith("https://") and not re.search(
+            r"(?:placeholder|no[-_]?image|spinner|logo|\.svg(?:[?#]|$))", safe, re.I
+        ):
+            return safe
+    return None

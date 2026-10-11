@@ -17,6 +17,38 @@ describe("refinamento sem mudar a coleta original", () => {
     );
     expect((data.structuredData as unknown[]).length).toBe(1);
   });
+  it("associa srcset da galeria ao produto correto, mesmo fora do link textual", () => {
+    const result = extractHtml(`<div class="catalog">
+      <article class="product-card">
+        <a href="/produto/1">Placa de vídeo modelo A R$ 1.099,00</a>
+        <a href="/produto/1" aria-label="Foto da placa">
+          <picture><source srcset="https://cdn.exemplo.com/a-350.webp 350w, https://cdn.exemplo.com/a-900.webp 900w">
+          <img src="/placeholder.svg" alt="Placa modelo A"></picture>
+        </a>
+      </article>
+      <article class="product-card">
+        <a href="/produto/2">Placa de vídeo modelo B R$ 1.299,00</a>
+        <img data-src="https://cdn.exemplo.com/b.webp" src="/loading.svg">
+      </article>
+    </div>`);
+    const links = result.links as Array<{ href: string; image_url?: string }>;
+    expect(links.find((x) => x.href === "/produto/1")?.image_url).toBe(
+      "https://cdn.exemplo.com/a-900.webp",
+    );
+    expect(links.find((x) => x.href === "/produto/2")?.image_url).toBe(
+      "https://cdn.exemplo.com/b.webp",
+    );
+  });
+  it("não atribui fotos de outro produto ou placeholders ao link", () => {
+    const result = extractHtml(`<article>
+      <a href="/produto/1">Notebook primeiro</a>
+      <a href="/produto/2">Notebook segundo</a>
+      <img src="/placeholder.svg">
+    </article>`);
+    const links = result.links as Array<{ href: string; image_url?: string }>;
+    expect(links[0]?.image_url).toBeUndefined();
+    expect(links[1]?.image_url).toBeUndefined();
+  });
   it("mantém refinamento e download de imagens desativados por padrão", () => {
     const cfg = contentSettings({});
     expect(cfg.autoProcess).toBe(false);

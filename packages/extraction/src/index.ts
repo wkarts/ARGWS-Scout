@@ -1,5 +1,36 @@
 import { load } from "cheerio";
 
+/**
+ * Escolhe a URL da fotografia presente no HTML capturado, sem requisitar mídia.
+ * Preferência por srcsets/originais lazy load; nunca usa placeholders, ícones
+ * ou imagens base64 como uma suposta fotografia de produto.
+ */
+function imageUrl(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (
+    !raw ||
+    raw.length > 2048 ||
+    !/^(https?:\/\/|\/\/|\/[^/])/i.test(raw) ||
+    /(?:placeholder|no[-_]?image|sprite|spinner|loading|blank\.|\/pixel[./]|\.svg(?:[?#]|$))/i.test(
+      raw,
+    )
+  )
+    return undefined;
+  return raw;
+}
+
+function lastSrcset(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const candidates = value
+    .split(",")
+    .map((entry) => entry.trim().split(/\s+/)[0])
+    .filter(Boolean);
+  // A maioria dos sites publica srcset em ordem crescente de resolução.
+  return candidates.length
+    ? imageUrl(candidates[candidates.length - 1])
+    : undefined;
+}
+
 export function extractHtml(
   html: string,
   selector?: string,
@@ -44,26 +75,75 @@ export function extractHtml(
     .map((_index, node) => $(node).text().trim().slice(0, 500))
     .get()
     .filter(Boolean);
+
   const links = $("a[href]")
     .slice(0, 600)
     .map((_index, node) => {
-      // A mídia original pertence ao link/cartão capturado. Preserva o
-      // contrato anterior (href/text) e adiciona somente image_url opcional.
       const anchor = $(node);
-      const thumbnail = anchor.find("img").first();
-      const src =
-        thumbnail.attr("data-src") ||
-        thumbnail.attr("data-lazy-src") ||
-        thumbnail.attr("src") ||
-        thumbnail.attr("srcset")?.split(",")[0]?.trim().split(/\s+/)[0];
-      const image_url =
-        src && /^(https?:\/\/|\/\/|\/[^/])/i.test(src) && src.length <= 2048
-          ? src
-          : undefined;
+      const href = anchor.attr("href")?.slice(0, 2048) ?? "";
+      // Preserva href/text, adicionando somente image_url ao link correto.
+      const photoIn = (scope: typeof anchor): string | undefined => {
+        for (const node of scope.find("img").slice(0, 12).toArray()) {
+          const img = $(node);
+          const width = Number(img.attr("width") || 0);
+          const height = Number(img.attr("height") || 0);
+          if ((width > 0 && width <= 2) || (height > 0 && height <= 2))
+            continue;
+          const candidates = [
+            imageUrl(img.attr("data-zoom-image")),
+            imageUrl(img.attr("data-original")),
+            imageUrl(img.attr("data-src")),
+            imageUrl(img.attr("data-lazy-src")),
+            imageUrl(img.attr("data-image")),
+            lastSrcset(img.attr("data-srcset")),
+            lastSrcset(img.attr("srcset")),
+            lastSrcset(
+              img.parent("picture").find("source").first().attr("srcset"),
+            ),
+            imageUrl(img.attr("src")),
+          ];
+          const found = candidates.find(Boolean);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      let photo = photoIn(anchor);
+      // E-commerces com foto e descrição em links irmãos: procura apenas no
+      // cartão que contém exatamente um destino de produto, nunca na lista toda.
+      if (
+        !photo &&
+        /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(
+          href,
+        )
+      ) {
+        const card = anchor.closest(
+          "article, li, [data-testid*='product'], [data-testid*='Product'], " +
+            "[class*='product-card'], [class*='productCard'], [class*='ProductCard'], " +
+            "[class*='product-item']",
+        );
+        if (card.length) {
+          const targets = new Set(
+            card
+              .find("a[href]")
+              .toArray()
+              .map((link) => $(link).attr("href")?.split("?")[0])
+              .filter((link): link is string =>
+                Boolean(
+                  link &&
+                  /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(
+                    link,
+                  ),
+                ),
+              ),
+          );
+          if (targets.size === 1 && targets.has(href.split("?")[0] ?? ""))
+            photo = photoIn(card as typeof anchor);
+        }
+      }
       return {
         text: anchor.text().trim().slice(0, 1200),
-        href: anchor.attr("href")?.slice(0, 2048) ?? "",
-        ...(image_url ? { image_url } : {}),
+        href,
+        ...(photo ? { image_url: photo } : {}),
       };
     })
     .get();
