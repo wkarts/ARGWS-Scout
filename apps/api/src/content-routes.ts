@@ -406,6 +406,70 @@ export async function registerContentRoutes(
       return reply.code(202).send({ jobId: job.id, batch: result.batch });
     },
   );
+  // Reprocessa uma captura sem sobrescrever aprovações, legendas ou artes do
+  // lote anterior. É uma ação explícita: visitar sites consome recursos.
+  app.post(
+    "/content/batches/:id/refresh-images",
+    {
+      preHandler: authenticated(),
+      config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (!canOperate(request, reply) || !featureAvailable(reply)) return;
+      const { id } = request.params as { id: string };
+      if (!uuid.safeParse(id).success)
+        return fail(reply, 400, "INVALID_ID", "Lote inválido.");
+      const original = await prisma.contentBatch.findFirst({
+        where: { id, tenantId: tid(request) },
+        include: { job: true },
+      });
+      if (!original || original.job.status !== JobStatus.SUCCEEDED || !original.job.result)
+        return fail(reply, 404, "BATCH_NOT_FOUND", "Coleta original indisponível.");
+      if (original.status === ContentBatchStatus.QUEUED || original.status === ContentBatchStatus.RUNNING)
+        return fail(reply, 409, "BATCH_RUNNING", "Aguarde o processamento atual.");
+
+      const previous = original.options as Record<string, unknown> | null;
+      const options: Prisma.InputJsonValue = {
+        ...(previous && typeof previous === "object" && !Array.isArray(previous) ? previous : {}),
+        fetchImages: true,
+        enrichImages: true,
+      };
+      const copy = await prisma.$transaction(async (tx) => {
+        const job = await tx.job.create({
+          data: {
+            tenantId: original.tenantId,
+            instanceId: original.instanceId,
+            sourceId: original.job.sourceId,
+            createdById: request.principal!.userId,
+            status: JobStatus.SUCCEEDED,
+            input: { refreshImagesFrom: original.jobId },
+            result: original.job.result as Prisma.InputJsonValue,
+            startedAt: new Date(),
+            finishedAt: new Date(),
+          },
+        });
+        const batch = await tx.contentBatch.create({
+          data: {
+            jobId: job.id,
+            tenantId: original.tenantId,
+            instanceId: original.instanceId,
+            options,
+          },
+        });
+        await enqueue(tx, batch);
+        return { jobId: job.id, batch };
+      });
+      await audit({
+        tenantId: tid(request),
+        actorUserId: request.principal!.userId,
+        action: "content.images.refresh_requested",
+        resourceType: "content-batch",
+        resourceId: copy.batch.id,
+        metadata: { previousBatchId: original.id },
+      });
+      return reply.code(202).send(copy);
+    },
+  );
   app.get(
     "/content/batches",
     { preHandler: authenticated() },
@@ -559,6 +623,7 @@ export async function registerContentRoutes(
         media: {
           square: `/content/items/${id}/media/square`,
           wide: `/content/items/${id}/media/wide`,
+          original: `/content/items/${id}/media/original`,
           story: `/content/items/${id}/media/story`,
           eml: `/content/items/${id}/media/eml`,
         },
@@ -574,7 +639,7 @@ export async function registerContentRoutes(
       const { id, kind } = request.params as { id: string; kind: string };
       if (
         !uuid.safeParse(id).success ||
-        !["square", "wide", "story", "eml"].includes(kind)
+        !["square", "wide", "story", "original", "eml"].includes(kind)
       )
         return fail(reply, 404, "FILE_NOT_FOUND", "Mídia não encontrada.");
       const item = await prisma.contentEntry.findFirst({
@@ -607,7 +672,7 @@ export async function registerContentRoutes(
           "content-disposition",
           kind === "eml"
             ? 'attachment; filename="publicacao.eml"'
-            : `inline; filename="${kind}.png"`,
+            : `inline; filename="${kind}.${kind === "original" ? "webp" : "png"}"`,
         )
         .send(object.Body as never);
     },
