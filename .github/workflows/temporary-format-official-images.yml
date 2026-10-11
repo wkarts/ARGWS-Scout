@@ -1,0 +1,42 @@
+name: Temporary PR formatter (official images)
+on:
+  pull_request:
+    branches: [develop]
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.head_ref == 'fix/content-official-images-preview' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format only the five changed files
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/content-routes.ts \
+            apps/manager/src/views/ContentConsole.vue \
+            docs/content-refinement.md \
+            packages/extraction/src/index.ts \
+            test/content-refinement.test.ts
+      - name: Commit formatting to the feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- apps/api/src/content-routes.ts apps/manager/src/views/ContentConsole.vue docs/content-refinement.md packages/extraction/src/index.ts test/content-refinement.test.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "style(content): apply repository Prettier format"
+          git push origin HEAD:fix/content-official-images-preview
