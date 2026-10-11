@@ -99,7 +99,9 @@ assert model["services"]["api"]["depends_on"]["bootstrap"]["condition"] == "serv
     f"{folder}: API must not start before OWNER provisioning is checked"
 )
 # A senha do bootstrap não pode vazar para os serviços permanentes.
-for protected_service in ("migrate", "api", "dispatcher", "worker", "browser-worker", "scheduler", "webhook-worker"):
+for protected_service in ("migrate", "api", "dispatcher", "worker", "browser-worker", "scheduler", "webhook-worker", "content-worker"):
+    if protected_service not in model["services"]:  # Compose may omit inactive profiles.
+        continue
     service_environment = model["services"][protected_service].get("environment", {})
     assert service_environment.get("SCOUT_BOOTSTRAP_ADMIN_PASSWORD") == "", (
         f"{folder}/{protected_service}: bootstrap credentials must not be available in runtime services"
@@ -119,6 +121,12 @@ for connect_key in ("SCOUT_CONNECT_API_URL", "SCOUT_CONNECT_API_TOKEN"):
             assert service.get("environment", {}).get(connect_key) == "", (
                 f"{folder}/{service_name}: global Connect|API credential must be masked"
             )
+for name in ("content-engine", "content-worker"):
+    if name not in model["services"]:
+        continue
+    assert model["services"][name].get("profiles") == ["content"], (folder, name)
+    assert not model["services"][name].get("ports"), (folder, name)
+assert model["services"]["api"].get("environment", {}).get("SCOUT_CONTENT_ENGINE_KEY") == "", (folder, "private key leaked to api")
 browser_environment = model["services"]["browser-worker"].get("environment", {})
 assert browser_environment.get("SCOUT_BROWSER_CONCURRENCY") == env["SCOUT_BROWSER_CONCURRENCY"], (
     f"{folder}: browser concurrency was not propagated"
@@ -140,6 +148,8 @@ app_images = {
     "browser-worker": "browser-worker",
     "scheduler": "scheduler",
     "webhook-worker": "webhook-worker",
+    "content-engine": "content-engine",
+    "content-worker": "content-worker",
 }
 for name, service in model["services"].items():
     assert service.get("pull_policy") == "always", name

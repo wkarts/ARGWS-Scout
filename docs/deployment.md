@@ -2,6 +2,26 @@
 
 Cada pacote em `deploy/{docker,dockge,cloudpanel,portainer}/{develop,production}` contém apenas `compose.yaml` e `.env.example`. Os manifests não fazem build no host nem pedem scripts, arquivos de configuração ou serviços externos. Aplicação e dependências de infraestrutura são baixadas do GHCR.
 
+## S3/MinIO opcional via GHCR
+
+O armazenamento permanece **Garage** por padrão, para preservar as instalações existentes. Os dez Compose também incluem MinIO como opção de serviço, sem portas externas, com imagem espelhada em **`ghcr.io/wkarts/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z`** e volume local **`./volumes/minio/data:/data`**.
+
+O MinIO utiliza o mesmo protocolo S3 do SDK atual. Para testar com uma stack NOVA, use:
+
+```dotenv
+ARGWS_SCOUT_MINIO_IMAGE=ghcr.io/wkarts/argws-scout-minio:RELEASE.2025-09-07T16-13-09Z
+COMPOSE_PROFILES=minio,content
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY_ID=scout-artifacts
+S3_SECRET_ACCESS_KEY=UMA_SENHA_FORTE_NOVA
+S3_BUCKET=scout-artifacts
+S3_REGION=us-east-1
+```
+
+Execute `docker compose --profile minio config --quiet` e `docker compose --profile minio up -d`. O Scout verifica a disponibilidade do bucket S3 e pode criá-lo quando permitido pelas credenciais. Não é publicada a interface administrativa do MinIO no host por padrão.
+
+**Atualizações:** ligar MinIO **não copia** automaticamente objetos antes gravados em Garage. Antes de trocar `S3_ENDPOINT` faça backup, copie objetos com utilitário S3 confiável, compare contagens/checksums e teste a leitura/restauração dos artefatos. Mantenha volumes originais até concluir o corte. Por retrocompatibilidade, Garage continua subindo nos Compose existentes, mesmo quando MinIO é habilitado para armazenamento; a remoção de dependências legadas deve ocorrer apenas em uma migração operacional separada e homologada, nunca durante este upgrade. Não use `docker compose down -v`.
+
 ## Perfil por plataforma
 
 | Plataforma           | Persistência                                                 | Ambiente               | Porta padrão (develop / production) |
@@ -264,3 +284,7 @@ O formato incorreto impede a criação do serviço e pode interromper o deploy c
 Execute `docker compose --env-file .env -f compose.yaml config --format json` e confirme que `services.browser-worker.tmpfs` tem um único item antes de iniciar o stack. O contrato em `scripts/validate-compose-model.py` valida também destinos absolutos para todos os volumes.
 
 Para recuperar o Dockge Production, **atualize a definição Compose do stack** com o arquivo da versão corrigida. Não basta trocar o tag da imagem: essa falha está na configuração de montagem, não no código da imagem. Após conferir `config --quiet`, recrie apenas o serviço afetado quando possível; serviços que dependem de migrations/bootstraps devem respeitar a ordem de inicialização. Não execute `docker compose down -v`, não altere `COMPOSE_PROJECT_NAME` e mantenha os volumes existentes.
+
+## Serviços opcionais de refinamento
+
+Esta integração candidata acrescenta dois serviços privados a cada variante de deploy: `content-engine` (Python e Pillow) e `content-worker` (Node, consumidor dedicado de `content.refine`). Esses serviços ficam no perfil `content` e não alteram portas externas, redes ou bind mounts. Para ativá-los, use `SCOUT_CONTENT_ENABLED=true`, `COMPOSE_PROFILES=content` e gere `SCOUT_CONTENT_ENGINE_KEY` via `openssl rand -hex 32`. Recomenda-se validar primeiro no ambiente `develop`. O Manager possui nova seção **Publicações** e as configurações de refinamento são isoladas por instância, desabilitadas por padrão. Consulte [refinamento e publicações](content-refinement.md).

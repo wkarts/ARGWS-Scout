@@ -22,6 +22,7 @@ DOCKERFILE_BASES = {
     "Dockerfile.browser-worker": "argws-scout-playwright",
     "Dockerfile.docs": "argws-scout-nginx",
     "Dockerfile.garage-init": "argws-scout-garage",
+    "Dockerfile.content-engine": "argws-scout-python",
 }
 
 
@@ -51,17 +52,37 @@ def load_catalog(owner):
             raise ValueError(f"duplicate GHCR target: {package}:{tag}")
         targets.add(target)
 
-    available_packages = {image["package"] for image in images}
+    # The MinIO container source registries are archived or no longer accessible.
+    # Build the same immutable upstream GitHub Release with verified SHA-256 instead.
+    built = catalog.get("built_images", [])
+    if len(built) != 1 or built[0].get("package") != "argws-scout-minio":
+        raise ValueError("MinIO must be declared as a verified built image")
+    minio = built[0]
+    tag = "RELEASE.2025-09-07T16-13-09Z"
+    if (minio.get("tag") != tag or minio.get("dockerfile") != "Dockerfile.minio"
+            or minio.get("source_release") != f"https://github.com/minio/minio/releases/tag/{tag}"):
+        raise ValueError("unexpected MinIO release or Dockerfile")
+    dockerfile_content = (ROOT / "Dockerfile.minio").read_text(encoding="utf-8")
+    if "ghcr.io/wkarts/argws-scout-alpine:3.23" not in dockerfile_content:
+        raise ValueError("MinIO must build on the pinned GHCR Alpine base")
+    for architecture in ("amd64", "arm64"):
+        digest = minio.get("sha256", {}).get(architecture, "")
+        if not re.fullmatch(r"[a-f0-9]{64}", digest) or digest not in dockerfile_content:
+            raise ValueError(f"MinIO {architecture} SHA-256 missing from Dockerfile")
+
+    available_packages = {image["package"] for image in images} | {minio["package"]}
     required_packages = {
         "argws-scout-postgres",
         "argws-scout-redis",
         "argws-scout-rabbitmq",
         "argws-scout-garage",
+        "argws-scout-minio",
         "argws-scout-node",
         "argws-scout-nginx",
         "argws-scout-alpine",
         "argws-scout-playwright",
         "argws-scout-buildkit",
+        "argws-scout-python",
     }
     missing = required_packages - available_packages
     if missing:

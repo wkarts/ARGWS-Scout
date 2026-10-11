@@ -1,0 +1,14 @@
+ARG PYTHON_BASE=ghcr.io/wkarts/argws-scout-python:3.13-slim-bookworm
+FROM ${PYTHON_BASE}
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OUTPUT_ROOT=/app/output
+RUN groupadd --system --gid 11010 content && useradd --system --uid 11010 --gid content --home /app content \
+  && apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY apps/content-engine/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY apps/content-engine/ ./
+RUN mkdir -p /app/output && chown -R content:content /app
+USER content
+EXPOSE 8088
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8088", "--workers", "1"]

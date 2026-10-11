@@ -4,6 +4,8 @@
 
 A plataforma ARGWS Scout organiza fontes web por organização e instância, executa coletas HTTP ou por navegador e entrega dados, artefatos e eventos de execução por uma API autenticada. A unidade de operação é o fluxo completo: Manager, API, banco, cache, fila, scheduler, dispatcher, workers, armazenamento, documentação e implantação.
 
+A versão **0.8.0** acrescenta o **refinamento opcional de conteúdo e o preparo de publicações por canal**, com processamento genérico de JSON/HTML/JSON-LD, histórico de itens por instância, mídia no Garage/S3, versões de imagem, rascunhos e revisão humana. O módulo é desabilitado por padrão e **não envia mensagens automaticamente**. As configurações existentes e o catálogo de modelos permanecem preservados. Consulte as [notas da v0.8.0](docs/release-v0.8.0.md) e o [manual de refinamento](docs/content-refinement.md).
+
 A versão **0.7.0** acrescenta um **catálogo de dez modelos prontos e personalizáveis**: Mercado Livre, Shopee, Amazon Brasil, Magalu, AliExpress, KaBuM!, OLX, Buscapé, eBay e sites genéricos. O usuário pode criar uma instância com fonte pré-configurada, editar a busca, o mecanismo e os seletores e executar quando desejar. Os guias ficam disponíveis no visualizador online e no OpenAPI. São modelos de acesso a páginas públicas, **não integrações oficiais autenticadas dos marketplaces**; verifique robots.txt e regras de acesso. Leia as [notas v0.7.0](docs/release-v0.7.0.md) e o [manual dos modelos](docs/instance-templates.md).
 
 A versão **0.6.1** corrige definitivamente a largura e a responsividade do Manager e centraliza a Connect|API com **uma única URL e token administrativos no `.env`**, mantendo instâncias WhatsApp individualizadas por espaço e vínculo remoto protegido. A documentação OpenAPI e os manuais Markdown agora podem ser **consultados em páginas online**, incluindo pesquisa de endpoints e exemplos de contrato, sem downloads automáticos nem bibliotecas externas carregadas pelo navegador. Veja as [notas da v0.6.1](docs/release-v0.6.1.md). Os bancos e domínios físicos exclusivos ainda não foram implementados (issue #30).
@@ -30,6 +32,10 @@ A versão **0.5.4** corrige o provisionamento inicial do OWNER nas oito distribu
 - Containers separados para API, Manager, documentação, dispatcher, workers HTTP e browser, scheduler, webhook worker e bootstrap do Garage.
 - PostgreSQL, Redis, RabbitMQ e Garage com sondagens de saúde e armazenamento persistente isolado por projeto e plataforma.
 
+## Refinamento e publicações (integração candidata)
+
+O módulo opcional de **Publicações** normaliza dados coletados pelos motores HTTP/browser, JSON e HTML de sites variados, preserva o retorno original, mantém identidades e histórico por instância e produz artes individuais e rascunhos de WhatsApp, e-mail, Telegram e outras redes. **Não realiza envios automáticos.** Usa serviço Python privado, content-worker Node, filas e o Garage/S3 existentes, com configuração por instância e aprovação manual. Veja [guia técnico, rotas, políticas e ativação](docs/content-refinement.md). A publicação da v0.8.0 depende da aprovação de todos os gates, GHCR, SemVer Release e artefatos Windows; a homologação operacional das coletas e envios é realizada na stack do usuário.
+
 ## Gerenciador
 
 O Manager agrupa operação em Visão geral, Instâncias, Execuções, WhatsApp, Agendamentos, Webhooks, Acesso e auditoria, Saúde da plataforma e Configurações. OWNER e ADMIN administram a conexão Connect API e instâncias; OWNER, ADMIN e OPERATOR podem publicar coletas concluídas após revisar instância, telefone e mensagem. O painel de saúde testa PostgreSQL, Redis, RabbitMQ e Garage, e mostra backlog de jobs, falhas recentes, uptime e memória da API. Consulte [o guia WhatsApp](docs/whatsapp-connect-api.md) para configuração e operação.
@@ -41,7 +47,8 @@ O histórico operacional do Manager usa as rotas da API. Para uma instalação m
 - apps/api: REST, autenticação, RBAC, auditoria, health/readiness e operações.
 - apps/manager: Vue 3 + TypeScript, console de operação.
 - apps/docs: documentação HTML e OpenAPI.
-- apps/worker, apps/browser-worker, apps/dispatcher, apps/scheduler e apps/webhook-worker: processos isolados por função; `Dockerfile.garage-init` cria o bootstrap idempotente do armazenamento.
+- apps/content-engine: serviço Python privado de normalização, geração de imagens e rascunhos, sem disparos.
+- apps/worker, apps/browser-worker, apps/dispatcher, apps/scheduler, apps/webhook-worker e apps/content-worker: processos isolados por função; `Dockerfile.garage-init` cria o bootstrap idempotente do armazenamento.
 - packages: schemas, SDK de conectores, execução HTTP/browser, extração, core e utilitários compartilhados.
 - prisma: modelo PostgreSQL, migrações e seed inicial.
 - deploy/docker, deploy/dockge, deploy/cloudpanel e deploy/portainer: canais develop e production independentes.
@@ -75,7 +82,7 @@ Para instalar um alvo:
 
 1. Docker Compose, Dockge e CloudPanel: copie `.env.example` para `.env` e preencha URL e segredos. Portainer Standalone: carregue o `.env.example` na seção de variáveis do stack.
 2. Preserve `COMPOSE_PROJECT_NAME` em atualizações. Ele define nome da rede e volumes persistentes.
-3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou `stable` (recomendado) ou `latest` para produção. Essa única tag atualiza as dez imagens da Scout.
+3. Defina `SCOUT_IMAGE_OWNER=wkarts` e escolha `SCOUT_TAG=develop` para staging ou `stable` (recomendado) ou `latest` para produção. Essa única tag seleciona as doze imagens da Scout; as duas imagens de conteúdo são serviços opt-in e exigem publicação prévia no GHCR.
 4. Valide a stack com `docker compose --env-file .env -f compose.yaml config --quiet` ou use a validação do stack no Portainer.
 5. Baixe e inicie os serviços com `docker compose pull` e `docker compose up -d`. O serviço `bootstrap` cria o primeiro OWNER automaticamente **apenas se o banco não possuir usuários**. Em upgrades não recria contas, não muda senhas, permissões ou MFA; confira `SCOUT_BOOTSTRAP_ADMIN_EMAIL` e `SCOUT_BOOTSTRAP_ADMIN_PASSWORD` antes da primeira instalação.
 
@@ -83,8 +90,8 @@ Em produção, defina `SCOUT_PUBLIC_URL` para o domínio HTTPS e mantenha a port
 
 ## Imagens e entrega
 
-- Aplicações: argws-scout-api, argws-scout-migrate, argws-scout-dispatcher, argws-scout-worker, argws-scout-scheduler, argws-scout-webhook-worker, argws-scout-manager, argws-scout-docs, argws-scout-browser-worker e argws-scout-garage-init. Os processos Node usam o mesmo conteúdo de runtime sob tags funcionais distintas.
-- Bases sincronizadas para GHCR: PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, Nginx e Playwright.
+- Aplicações: argws-scout-api, argws-scout-migrate, argws-scout-dispatcher, argws-scout-worker, argws-scout-scheduler, argws-scout-webhook-worker, argws-scout-manager, argws-scout-docs, argws-scout-browser-worker, argws-scout-garage-init, argws-scout-content-worker e argws-scout-content-engine. Os processos Node usam o mesmo conteúdo de runtime sob tags funcionais distintas.
+- Bases sincronizadas para GHCR: PostgreSQL, Redis, RabbitMQ, Garage, Alpine, Node, Nginx, Python e Playwright.
 - O fluxo de sincronização de infraestrutura roda manualmente e semanalmente; tags upstream ficam explícitas e só mudam por revisão.
 - A publicação de aplicações espera todos os quality gates. develop publica somente o canal develop. main exige SemVer estável e publica a versão mais os aliases `stable` e `latest`.
 - A tag Git e o GitHub Release só são criados depois que o workflow de imagens termina com sucesso.

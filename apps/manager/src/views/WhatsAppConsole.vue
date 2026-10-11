@@ -13,6 +13,7 @@ import {
   Smartphone,
 } from "@lucide/vue";
 import { api } from "../api";
+import WhatsAppActions from "./WhatsAppActions.vue";
 
 type WhatsAppInstance = {
   id: string;
@@ -463,11 +464,19 @@ async function instanceAction(instance: WhatsAppInstance, action: string) {
 
 async function deleteInstance(instance: WhatsAppInstance) {
   const label = instance.displayName || instance.name;
-  const localOnly = !instance.usable;
-  const question = localOnly
-    ? `Remover “${label}” deste espaço de trabalho? A instância remota não será excluída, pois seu vínculo não está validado.`
-    : `Excluir definitivamente “${label}” da Connect|API e remover seu vínculo neste espaço? Esta ação não pode ser desfeita.`;
-  if (!window.confirm(question)) return;
+  if (!instance.usable) {
+    emit(
+      "error",
+      "O vínculo remoto precisa ser validado. Use Desvincular do espaço para remover somente o registro local.",
+    );
+    return;
+  }
+  if (
+    !window.confirm(
+      `Excluir definitivamente “${label}” da Connect|API e remover o vínculo? Esta ação não pode ser desfeita.`,
+    )
+  )
+    return;
   busy.value = true;
   try {
     const result = await api<{
@@ -492,6 +501,34 @@ async function deleteInstance(instance: WhatsAppInstance) {
       error instanceof Error
         ? error.message
         : "Não foi possível excluir a instância.",
+    );
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function unlinkInstance(instance: WhatsAppInstance) {
+  if (
+    !window.confirm(
+      `Desvincular “${instance.displayName || instance.name}” apenas deste espaço? A instância remota e o WhatsApp permanecerão ativos na Connect|API.`,
+    )
+  )
+    return;
+  busy.value = true;
+  try {
+    await api(
+      `/whatsapp/instances/${encodeURIComponent(instance.name)}?mode=unlink`,
+      { method: "DELETE" },
+    );
+    emit(
+      "notify",
+      "A instância foi desvinculada deste espaço. Nenhuma sessão remota foi apagada.",
+    );
+    await refresh();
+  } catch (error) {
+    emit(
+      "error",
+      error instanceof Error ? error.message : "Não foi possível desvincular.",
     );
   } finally {
     busy.value = false;
@@ -730,14 +767,21 @@ onUnmounted(() => {
           </button>
           <button
             v-if="canManage"
-            class="button danger small-button"
+            class="button outline small-button"
             :disabled="busy"
-            :aria-label="`${instance.usable ? 'Excluir' : 'Remover vínculo de'} ${instance.displayName || instance.name}`"
+            :aria-label="`Desvincular ${instance.displayName || instance.name} do espaço`"
+            @click="unlinkInstance(instance)"
+          >
+            <Unplug :size="14" /> Desvincular do espaço
+          </button>
+          <button
+            v-if="canManage"
+            class="button danger small-button"
+            :disabled="busy || !instance.usable"
+            :aria-label="`Excluir ${instance.displayName || instance.name} da Connect|API`"
             @click="deleteInstance(instance)"
           >
-            <Trash2 :size="14" />{{
-              instance.usable ? "Excluir" : "Remover vínculo"
-            }}
+            <Trash2 :size="14" />Excluir na Connect|API
           </button>
           <form
             v-if="claimName === instance.name && !instance.usable"
@@ -783,6 +827,14 @@ onUnmounted(() => {
         </p>
       </div>
     </section>
+
+    <WhatsAppActions
+      v-if="configured"
+      :instances="usableInstances"
+      :role="props.role"
+      @error="emit('error', $event)"
+      @notify="emit('notify', $event)"
+    />
 
     <section v-if="configured" class="panel">
       <div class="panel-header">
