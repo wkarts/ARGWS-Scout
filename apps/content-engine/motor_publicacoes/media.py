@@ -332,17 +332,43 @@ def fetch_public_html(url: str, max_redirects: int = 3) -> str:
     raise ValueError("Limite de redirects do HTML excedido")
 
 
-def image_from_product_html(page: str, url: str) -> str | None:
-    """Ordem: imagem de produto JSON-LD; depois og:image da página."""
-    from .ingestion import HTMLMetadata, _html_to_source, safe_http_url
-    parser=HTMLMetadata()
+def image_from_product_html(page: str, url: str, expected_title: str = "") -> str | None:
+    """Busca foto do produto correto; evita imagens de produtos recomendados."""
+    from .ingestion import HTMLMetadata, _html_to_source, compact, safe_http_url
+
+    def matches(value: str) -> bool:
+        if not expected_title:
+            return True
+        actual = {t for t in re.findall(r"\\w+", compact(value).casefold()) if len(t) >= 4}
+        expected = {t for t in re.findall(r"\\w+", compact(expected_title).casefold()) if len(t) >= 4}
+        return len(actual & expected) >= (2 if len(expected) >= 3 else 1)
+
+    parser = HTMLMetadata()
     parser.feed(page)
-    payload=_html_to_source(page,url)
+    payload = _html_to_source(page, url)
     for row in payload["items"]:
-        if row.get("kind")=="produto" and row.get("image_url"):
-            safe=safe_http_url(row["image_url"],url)
-            if safe and safe.startswith("https://"):
-                return safe
-    og=parser.meta.get("og:image:secure_url") or parser.meta.get("og:image") or parser.meta.get("twitter:image")
-    safe=safe_http_url(og,url)
-    return safe if safe and safe.startswith("https://") else None
+        if row.get("kind") != "produto" or not row.get("image_url"):
+            continue
+        if not matches(str(row.get("title") or "")):
+            continue
+        safe = safe_http_url(row["image_url"], url)
+        if safe and safe.startswith("https://"):
+            return safe
+
+    title = parser.meta.get("og:title") or compact("".join(parser.title_parts))
+    if matches(title):
+        og = (parser.meta.get("og:image:secure_url") or
+              parser.meta.get("og:image") or parser.meta.get("twitter:image"))
+        safe = safe_http_url(og, url)
+        if safe and safe.startswith("https://"):
+            return safe
+
+    for alt, raw in parser.image_candidates:
+        if not alt or not matches(alt):
+            continue
+        safe = safe_http_url(raw, url)
+        if safe and safe.startswith("https://") and not re.search(
+            r"(?:placeholder|no[-_]?image|spinner|logo|\\.svg(?:[?#]|$))", safe, re.I
+        ):
+            return safe
+    return None
