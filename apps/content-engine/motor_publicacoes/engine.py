@@ -71,8 +71,9 @@ def create_report(snapshot: dict, media_counts: Counter, opts: Options) -> str:
     categories = Counter(r["category"] for r in snapshot["items"])
     page = ["# Relatório de refinamento e publicações", "", f"- Itens preparados: **{total}**",
             f"- Itens sujeitos a revisão: **{review}**", f"- Sem bloqueios encontrados: **{total-review}**",
-            f"- Imagens fornecidas ou obtidas dos metadados: **{media_counts['originais']}**",
-            f"- Artes sem fotografia original: **{media_counts['ilustrativas']}**",
+            f"- Fotografias originais obtidas e armazenadas: **{media_counts['originais']}**",
+             f"- Fontes online disponíveis para prévia (sem download confirmado): **{media_counts['online']}**",
+            f"- Artes sem fotografia original incorporada: **{media_counts['ilustrativas']}**",
             f"- Filtro de relevância: **{opts.query or 'não informado'}**",
             f"- Apenas relevantes: **{'sim' if opts.only_relevant else 'não'}**", "",
             "## Categorias", ""]
@@ -181,14 +182,17 @@ def process(source: object, output_root: Path, opts: Options | None = None) -> t
             )
             media_counts["originais"] += 1
         else:
-            remote = next(
-                (safe_online_image_url(spec) for spec in image_inputs if
-                 isinstance(spec, str) and (opts.fetch_images or opts.enrich_images)),
-                None,
-            )
+            remote = None
+            if opts.fetch_images or opts.enrich_images:
+                for spec in image_inputs:
+                    remote = safe_online_image_url(spec)
+                    if remote:
+                        break
             record["image_online_url"] = remote
             record["image_status"] = "online" if remote else "illustrative"
-            media_counts["online" if remote else "ilustrativas"] += 1
+            media_counts["ilustrativas"] += 1
+            if remote:
+                media_counts["online"] += 1
 
         square = render_card(record, folder / "card-square.png", kind="square", original=originals, accent=opts.accent)
         if opts.create_wide:
