@@ -154,9 +154,11 @@ def _jsonld_records(documents: list[object], source_url: str) -> list[dict]:
             if not isinstance(offers, dict):
                 offers = {}
             images = node.get("image") or []
-            if isinstance(images, str):
+            if isinstance(images, (str, dict)):
                 images = [images]
             image = images[0] if isinstance(images, list) and images else None
+            image_url = (image.get("contentUrl") or image.get("url"))
+            if isinstance(image, dict) else image
             items.append({
                 "kind": ("produto" if "Product" in types or "Offer" in types else
                          "evento" if "Event" in types else
@@ -169,7 +171,7 @@ def _jsonld_records(documents: list[object], source_url: str) -> list[dict]:
                 "title": node.get("name") or node.get("headline") or node.get("title"),
                 "description": node.get("description"),
                 "url": node.get("url") or source_url,
-                "image_url": image if isinstance(image, str) else (image or {}).get("url"),
+                "image_url": image_url if isinstance(image_url, str) else None,
                 "price": offers.get("price"),
                 "currency": offers.get("priceCurrency", "BRL"),
                 "brand": (node.get("brand") or {}).get("name") if isinstance(node.get("brand"), dict) else node.get("brand"),
@@ -354,13 +356,28 @@ def normalize(source: object, query: str = "", media_map: dict | None = None,
             continue
         image_input = media_map.get(item_id) or media_map.get(link or "") or media_map.get(title)
         if image_input is None:
-            image_input = p.get("image_url") or p.get("imagem_url") or p.get("image") or p.get("images") or p.get("media") or p.get("image_urls")
+            image_input = (p.get("image_url") or p.get("imagem_url") or p.get("image")
+                           or p.get("images") or p.get("image_urls") or p.get("primaryImage")
+                           or p.get("thumbnail") or p.get("media"))
         candidate_images = image_input if isinstance(image_input, list) else ([image_input] if image_input else [])
-        image_inputs = [(entry.get("path") or entry.get("url")) if isinstance(entry, dict) else entry for entry in candidate_images]
-        image_inputs = [s for s in image_inputs if isinstance(s, str) and s][:4]
-        # Caminhos absolutos e relativos provenientes do HTML usam a origem.
-        # Caminhos de arquivo locais continuam possíveis para o modo CLI.
-        image_inputs = [safe_http_url(spec, base) if spec.startswith("/") and base else spec for spec in image_inputs]
+        image_inputs = []
+        for entry in candidate_images:
+            if isinstance(entry, dict):
+                # APIs de marketplaces e schema.org podem usar ImageObject.
+                entry = next((entry[k] for k in ("contentUrl", "url", "image_url",
+                              "original", "large", "src", "path")
+                              if isinstance(entry.get(k), str) and entry[k]), None)
+            if not isinstance(entry, str) or not entry.strip():
+                continue
+            spec = entry.strip()
+            # Caminhos de URL relativos/sem esquema usam a origem da captura.
+            # Nomes de arquivo simples permanecem válidos no modo CLI.
+            if spec.startswith("/") and base:
+                spec = safe_http_url(spec, base)
+            if spec and spec not in image_inputs:
+                image_inputs.append(spec)
+            if len(image_inputs) >= 4:
+                break
         image_input = image_inputs[0] if image_inputs else None
         warnings = list(p.get("alertas") or p.get("warnings") or [])
         if was_duplicated:
