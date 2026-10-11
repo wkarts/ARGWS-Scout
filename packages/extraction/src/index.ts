@@ -120,8 +120,8 @@ export function extractHtml(
                 Boolean(link && /\/(?:produto|product|products|item|listing|p|dp)\/|\/MLB-\d+/i.test(link)),
               ),
           );
-          if (targets.size === 1 && targets.has(href.split("?")[0]))
-            photo = photoIn(card);
+          if (targets.size === 1 && targets.has(href.split("?")[0] ?? ""))
+            photo = photoIn(card as typeof anchor);
         }
       }
       return {
