@@ -831,12 +831,82 @@ async function exportItem(item: Entry) {
   min-width: 0;
   background: #fff;
 }
-.publication-tile > img {
+.publication-tile > img,
+.tile-photo img {
   display: block;
   width: 100%;
   aspect-ratio: 1;
   object-fit: contain;
   background: #f5f7fa;
+}
+.tile-photo {
+  margin: 0;
+}
+.tile-photo figcaption {
+  font-size: 11px;
+  padding: 6px 10px;
+  line-height: 1.5;
+  color: #3c5970;
+  border-bottom: 1px solid #e7eef4;
+}
+.batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.batch-toolbar h3 {
+  margin: 0;
+}
+.preview-images {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.preview-image-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-image-block > strong {
+  font-size: 13px;
+}
+.preview-image-block img {
+  cursor: zoom-in;
+}
+.preview-image-block .button {
+  align-self: flex-start;
+}
+.source-link {
+  font-size: 12px;
+  color: #0868ae;
+  overflow-wrap: anywhere;
+}
+.image-lightbox {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  background: rgb(12 19 31 / 90%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 72px 20px 24px;
+}
+.image-lightbox img {
+  display: block;
+  max-width: 96vw;
+  max-height: calc(100dvh - 100px);
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+}
+.lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  background: #fff;
 }
 .publication-details {
   padding: 14px;
