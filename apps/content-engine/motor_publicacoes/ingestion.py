@@ -157,8 +157,7 @@ def _jsonld_records(documents: list[object], source_url: str) -> list[dict]:
             if isinstance(images, (str, dict)):
                 images = [images]
             image = images[0] if isinstance(images, list) and images else None
-            image_url = (image.get("contentUrl") or image.get("url"))
-            if isinstance(image, dict) else image
+            image_url = (image.get("contentUrl") or image.get("url")) if isinstance(image, dict) else image
             items.append({
                 "kind": ("produto" if "Product" in types or "Offer" in types else
                          "evento" if "Event" in types else
