@@ -93,6 +93,7 @@ class HTMLMetadata(HTMLParser):
         self.meta: dict[str, str] = {}
         self.title_parts: list[str] = []
         self.scripts: list[str] = []
+        self.image_candidates: list[tuple[str, str]] = []
         self._in_title = False
         self._in_jsonld = False
         self._script_buffer: list[str] = []
@@ -103,6 +104,17 @@ class HTMLMetadata(HTMLParser):
             key = vals.get("property") or vals.get("name")
             if key and vals.get("content"):
                 self.meta[key.lower()] = str(vals["content"])
+        if tag == "img" and len(self.image_candidates) < 80:
+            # Imagens do HTML do produto: srcset e lazy-loading são comuns.
+            image = (vals.get("data-original") or vals.get("data-zoom-image") or
+                     vals.get("data-src") or vals.get("data-lazy-src") or
+                     vals.get("data-image") or vals.get("srcset") or vals.get("src"))
+            if image:
+                if "srcset" in image and image.startswith("srcset:"):
+                    image = image[7:]
+                if "," in image and not image.startswith("data:"):
+                    image = image.split(",")[-1].strip().split()[0]
+                self.image_candidates.append((str(vals.get("alt") or ""), image))
         if tag == "title":
             self._in_title = True
         if tag == "script" and "ld+json" in (vals.get("type") or "").lower():
